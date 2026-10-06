@@ -219,7 +219,7 @@ Thirteen MySQL tables cover every feature; flexible LLM output (plans, rubrics, 
 | users | id, email, password_hash, name, created_at | Auth via Flask + JWT |
 | documents | id, user_id, kind (resume / job_description), raw_text, parsed_json, expires_at | Original files deleted after parsing |
 | jd_analyses | id, document_id, field, seniority, competencies_json, formats_json, decoder_json | Shared by setup and the decoder |
-| sessions | id, user_id, resume_id, jd_id, mode (standard / reverse / pressure / peer / debrief), duration_min, difficulty, persona, pressure_level, plan_json, rubric_json, status, started_at, ended_at | One row per interview |
+| sessions | id, user_id, resume_id, jd_id, mode (standard / reverse / pressure / peer / debrief / panel / negotiation), duration_min, difficulty, persona, pressure_level, plan_json, rubric_json, status, started_at, ended_at | One row per interview |
 | questions | id, session_id, section, order_no, text, budget_sec, is_bonus | The question plan |
 | answers | id, question_id, transcript, started_ms, ended_ms, attempt_no, hints_used | attempt_no supports "Try again" |
 | evaluations | id, answer_id, score, rubric_scores_json, missing_points_json, stronger_version, changes_json, delivery_json | Recommendations live here |
