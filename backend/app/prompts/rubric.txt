@@ -1,0 +1,18 @@
+Build the scoring rubric for a mock interview.
+
+Role analysis (JSON): $role
+Difficulty: $difficulty
+
+Return JSON with exactly this shape:
+{
+  "criteria": [
+    {"name": "criterion name", "kind": "role", "weight": 0.2, "description": "what is being judged", "strong_answer": "what a strong answer shows"}
+  ]
+}
+
+Rules:
+- 3 to 5 role criteria (kind "role") taken from the role's competencies.
+- Exactly 3 universal criteria (kind "universal"): Structure, Clarity, Relevance.
+- Weights are between 0 and 1; role criteria together should carry about 70% of the weight.
+- Calibrate "strong_answer" to the difficulty level.
+- Keep descriptions short, concrete and fair: this is practice feedback, not a hiring decision.

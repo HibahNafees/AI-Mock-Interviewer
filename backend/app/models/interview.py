@@ -26,8 +26,11 @@ class Session(db.Model):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = fk("users.id")
-    resume_id: Mapped[int | None] = fk("documents.id", nullable=True)
-    jd_id: Mapped[int | None] = fk("documents.id", nullable=True)
+    # SET NULL: a deleted (or auto-expired) document must not take the history with it.
+    resume_id: Mapped[int | None] = fk(
+        "documents.id", nullable=True, ondelete="SET NULL"
+    )
+    jd_id: Mapped[int | None] = fk("documents.id", nullable=True, ondelete="SET NULL")
     mode: Mapped[str] = mapped_column(
         Enum(*SESSION_MODES, name="session_mode"), nullable=False, default="standard"
     )
@@ -59,6 +62,11 @@ class Question(db.Model):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     budget_sec: Mapped[int | None] = mapped_column(Integer)
     is_bonus: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Set for follow-ups the interviewer asks about a planned question.
+    follow_up_of_id: Mapped[int | None] = fk("questions.id", nullable=True)
+    # When and how the interviewer actually asked it (null = not asked yet).
+    asked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    asked_text: Mapped[str | None] = mapped_column(Text)
 
 
 class Answer(db.Model):

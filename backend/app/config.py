@@ -22,6 +22,15 @@ class Config:
     FIRE_API_KEY = os.environ.get("FIRE_API_KEY")
     FIRE_BASE_URL = os.environ.get("FIRE_BASE_URL", "https://fire.prosaga.net")
     FIRE_MONTHLY_BUDGET_USD = float(os.environ.get("FIRE_MONTHLY_BUDGET_USD", "1"))
+    # Cheap model by default: the whole app runs on a $1/month Fire budget.
+    FIRE_CHAT_MODEL = os.environ.get("FIRE_CHAT_MODEL", "gpt-4o-mini")
+    FIRE_TIMEOUT_SEC = float(os.environ.get("FIRE_TIMEOUT_SEC", "60"))
+    # Per-user daily caps (usage_limits).
+    DAILY_INTERVIEW_MINUTES = int(os.environ.get("DAILY_INTERVIEW_MINUTES", "60"))
+    DAILY_LONG_SESSIONS = int(os.environ.get("DAILY_LONG_SESSIONS", "1"))
+    DAILY_PLANS = int(os.environ.get("DAILY_PLANS", "10"))
+    MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+    MAX_CONTENT_LENGTH = 6 * 1024 * 1024
 
 
 class TestConfig(Config):

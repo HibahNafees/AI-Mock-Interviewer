@@ -6,6 +6,7 @@ from pydantic import BaseModel, ValidationError, field_validator
 
 from ..extensions import db
 from ..models import User
+from .common import first_error
 
 bp = Blueprint("auth", __name__)
 
@@ -48,14 +49,6 @@ class LoginBody(BaseModel):
     password: str
 
 
-def _first_error(err: ValidationError) -> str:
-    first = err.errors()[0]
-    msg = first["msg"].removeprefix("Value error, ")
-    if first["type"] == "missing":
-        return f"{first['loc'][0]} is required"
-    return msg
-
-
 def _token_response(user: User, status: int = 200):
     token = create_access_token(identity=str(user.id))
     return jsonify(access_token=token, user=user.to_dict()), status
@@ -66,7 +59,7 @@ def signup():
     try:
         body = SignupBody.model_validate(request.get_json(silent=True) or {})
     except ValidationError as err:
-        return jsonify(error=_first_error(err)), 400
+        return jsonify(error=first_error(err)), 400
 
     if db.session.scalar(db.select(User).filter_by(email=body.email)):
         return jsonify(error="An account with this email already exists"), 409
@@ -83,7 +76,7 @@ def login():
     try:
         body = LoginBody.model_validate(request.get_json(silent=True) or {})
     except ValidationError as err:
-        return jsonify(error=_first_error(err)), 400
+        return jsonify(error=first_error(err)), 400
 
     user = db.session.scalar(
         db.select(User).filter_by(email=body.email.strip().lower())

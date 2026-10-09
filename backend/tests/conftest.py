@@ -6,8 +6,16 @@ from app.extensions import db
 
 
 @pytest.fixture()
-def app():
+def fire():
+    from tests.fakes import FakeFire
+
+    return FakeFire()
+
+
+@pytest.fixture()
+def app(fire):
     app = create_app(TestConfig)
+    app.extensions["fire"] = fire
     with app.app_context():
         db.create_all()
         yield app
@@ -29,3 +37,10 @@ def signup(client):
         )
 
     return _signup
+
+
+@pytest.fixture()
+def auth(signup):
+    """Authorization header for a fresh user."""
+    token = signup().get_json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
