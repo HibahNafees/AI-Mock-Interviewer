@@ -124,7 +124,7 @@ Flexible LLM output is stored in JSON columns. No table stores audio/video. Docu
 11. Optional: real-time voice with LiveKit (interruptions, peer practice)
 12. Optional: Hume EVI experiment
 
-**Current phase:** 2 done (text-only brain, typed answers). Next: 3.
+**Current phase:** 3 done in code (speak in, text out); live transcribe check pending. Next: 4.
 
 ## Running locally
 
