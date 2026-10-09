@@ -332,3 +332,23 @@ def test_character_never_sees_the_next_planned_question(client, auth, docs, fire
     assert r.get_json()["turn"]["message"] == (
         f"Deal. Talk Thursday. {ROLEPLAY_EXIT} {warm_up['questions'][0]}"
     )
+
+
+def test_character_that_reaches_the_goal_ends_the_role_play(client, auth, docs, fire):
+    # Live (T-21): the character kept raising new objections after the candidate
+    # booked the meeting. goal_reached ends the role-play even if it said follow_up.
+    fire.analysis = SALES_ANALYSIS
+    roleplay, warm_up = SALES_PLAN["sections"][1], SALES_PLAN["sections"][0]
+    fire.plan = {**SALES_PLAN, "sections": [roleplay, warm_up]}
+    sid = create(client, auth, docs).get_json()["session"]["id"]
+    started(client, auth, sid)
+
+    fire.turns = [
+        {"goal_reached": True, "action": "follow_up", "message": "Fine, Thursday."}
+    ]
+    r = answer(client, auth, sid, "Can we book Thursday with your finance lead?")
+    assert '"goal_reached"' in fire.calls[-1]["prompt"]
+    turn = r.get_json()["turn"]
+    assert turn["message"] == (
+        f"Fine, Thursday. {ROLEPLAY_EXIT} {warm_up['questions'][0]}"
+    )

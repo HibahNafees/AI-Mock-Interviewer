@@ -142,6 +142,12 @@ class TurnOut(BaseModel):
     message: str = Field(min_length=1, max_length=1500)
 
 
+class RoleplayTurnOut(TurnOut):
+    # Asked for first so the character decides before it writes (T-21: without it,
+    # the character kept inventing new objections and never accepted a next step).
+    goal_reached: bool = False
+
+
 def asked_questions(session: Session) -> list[Question]:
     return list(
         db.session.scalars(
@@ -336,7 +342,16 @@ def take_turn(
                 nudges=nudges(timer, opts, root_budget, answer_sec) or ["none"],
                 **common,
             )
-        out = chat_json(user_id, prompt, TurnOut, max_tokens=500, temperature=0.6)
+        schema = TurnOut if scenario is None else RoleplayTurnOut
+        out = chat_json(user_id, prompt, schema, max_tokens=500, temperature=0.6)
+        if getattr(out, "goal_reached", False) and out.action == "follow_up":
+            # The candidate got there: the character's reply is its closing line.
+            exit_ = next(
+                (a for a in ("next_question", "bonus", "wrap_up") if a in opts), None
+            )
+            if exit_:
+                log.info("Role-play goal reached; ending with %s", exit_)
+                out.action = exit_
         if scenario is None:
             # In character, praise or agreement is part of the role-play.
             out.message = neutralize(out.message)
