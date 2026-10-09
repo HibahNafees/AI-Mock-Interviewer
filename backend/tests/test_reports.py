@@ -7,9 +7,18 @@ from app.models import Answer, Evaluation, Report, UsageLimit
 from app.services.analytics import Clip, delivery, filler_counts, session_summary
 from app.services.fire import FireError
 from app.services.limits import today
-from app.services.scoring import CriterionScore, verdict_for, weighted_score
+from app.services.scoring import (
+    FALLBACK_REWRITE,
+    CriterionScore,
+    Sentence,
+    grounding_problems,
+    split_sentences,
+    verdict_for,
+    weighted_score,
+)
 
 from tests.conftest import RESUME
+from tests.fakes import SCORE
 from tests.test_transcription import CLIP
 from tests.test_sessions import answer, started
 
@@ -83,6 +92,76 @@ def test_weighted_score_uses_rubric_weights():
     assert weighted_score([CriterionScore(name="X", score=4)], rubric)[0] == 4
 
 
+def test_untested_criteria_are_left_out_of_the_score():
+    rubric = {
+        "criteria": [
+            {"name": "SQL", "weight": 0.5},
+            {"name": "Mentoring", "weight": 0.3},
+            {"name": "Clarity", "weight": 0.2},
+        ]
+    }
+    scores = [
+        CriterionScore(name="SQL", score=None),
+        CriterionScore(name="Mentoring", score=4),
+        CriterionScore(name="Clarity", score=2),
+    ]
+    score, rows = weighted_score(scores, rubric)
+    assert score == pytest.approx(3.2)  # (4×0.3 + 2×0.2) / 0.5, SQL ignored
+    assert [r["name"] for r in rows] == ["Mentoring", "Clarity"]
+
+
+LIVE_RESUME = (
+    "Acme Payments: Built the refunds API in Python/Flask serving 2M requests/day; "
+    "moved reporting queries from MySQL replicas to a nightly ETL, cutting p95 "
+    "latency from 1.8s to 300ms; mentored two junior engineers."
+)
+
+
+@pytest.mark.parametrize(
+    "text,source,problem",
+    [
+        # Grounded rewording of the résumé.
+        (
+            "At Acme Payments I built the refunds API in Python and Flask.",
+            "Built the refunds API in Python/Flask",
+            "",
+        ),
+        ("That cut latency by [add the % improvement].", None, ""),
+        # Invented in the live check (T-15).
+        (
+            "I also collaborated closely with product teams to gather requirements.",
+            None,
+            "it has no source and no [placeholder]",
+        ),
+        (
+            "I designed the endpoints to be stateless, allowing easy horizontal scaling.",
+            "Built the refunds API",
+            "it adds details that aren't in its source",
+        ),
+        (
+            "I organized regular one-on-one sessions with [names] every week.",
+            None,
+            "it adds details that aren't in its source",
+        ),
+        (
+            "It served 5 million requests a day.",
+            "serving 2M requests/day",
+            "it uses numbers the candidate never gave (5)",
+        ),
+        (
+            "I mentored juniors.",
+            "mentored four junior engineers",
+            "its source is not copied from the résumé or answers",
+        ),
+    ],
+)
+def test_grounding_flags_invented_sentences(text, source, problem):
+    sentence = Sentence(text=text, source=source)
+    assert grounding_problems([sentence], [LIVE_RESUME, "I set up the alerts."]) == [
+        problem
+    ]
+
+
 def test_verdicts():
     assert [verdict_for(s) for s in (4.2, 3.0, 2.9)] == ["hire", "lean hire", "no hire"]
 
@@ -105,13 +184,23 @@ def test_report_scores_each_question_then_summarizes(client, auth, planned, fire
     assert report["overall_score"] == pytest.approx(3.4)
     assert report["verdict"] == "lean hire"
     assert report["takeaways"] == SUMMARY_TAKEAWAYS
+    # The untested criterion isn't shown or counted.
+    ev0 = report["questions"][0]["evaluation"]
+    assert [c["name"] for c in ev0["criteria"]] == [
+        "API design",
+        "Structure",
+        "Clarity",
+        "Relevance",
+    ]
     assert report["verdict_reason"].startswith("Solid ownership")
 
     first = report["questions"][0]
     assert first["text"] == "Walk me through your Acme project."
     assert [e["is_follow_up"] for e in first["exchange"]] == [False, True]
     ev = first["evaluation"]
-    assert ev["stronger_version"].endswith("[add the result you achieved].")
+    assert ev["stronger_version"] == (
+        "At Acme I built the billing API. That led to [add the result you achieved]."
+    )
     # Only quotes the candidate actually said survive (for highlighting).
     assert [w["quote"] for w in ev["weak_moments"]] == []
     second = report["questions"][1]["evaluation"]
@@ -157,6 +246,74 @@ def test_invalid_scorer_json_is_retried_once(client, auth, planned, fire):
     sid = planned["id"]
     finished(client, auth, fire, sid)
     fire.scores = ['{"criteria": []}']
+    report = build(client, auth, sid).get_json()["report"]
+    assert report["status"] == "ready"
+    assert fire.kinds().count("score") == 3
+
+
+def test_paragraph_items_are_checked_sentence_by_sentence():
+    item = Sentence(
+        text="I built the refunds API. I also added caching strategies everywhere.",
+        source="Built the refunds API",
+    )
+    parts = split_sentences([item])
+    assert [p.text for p in parts] == [
+        "I built the refunds API.",
+        "I also added caching strategies everywhere.",
+    ]
+    assert grounding_problems(parts, [LIVE_RESUME]) == [
+        "",
+        "it adds details that aren't in its source",
+    ]
+
+
+def invented(*sentences: dict) -> dict:
+    return {**SCORE, "stronger_version": list(sentences)}
+
+
+GOOD = {
+    "text": "At Acme I built the billing API.",
+    "source": "Built the Acme billing API",
+}
+MADE_UP = {"text": "It handled 9 million requests a day.", "source": None}
+
+
+def test_invented_rewrite_is_repaired_once(client, auth, planned, fire):
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    fire.scores = [invented(GOOD, MADE_UP), invented(GOOD)]
+    before = len(fire.calls)
+    report = build(client, auth, sid).get_json()["report"]
+    assert fire.kinds()[before:] == ["score", "repair", "score", "summary"]
+    repair = fire.calls[before + 1]["prompt"]
+    assert "Sentence 2: it has no source and no [placeholder]." in repair
+    assert "Sentence 1:" not in repair
+    first = report["questions"][0]["evaluation"]["stronger_version"]
+    assert (
+        first
+        == "I built the Acme billing API. The result was [add the result you achieved]."
+    )
+    second = report["questions"][1]["evaluation"]["stronger_version"]
+    assert second == "At Acme I built the billing API."
+
+
+def test_still_invented_sentences_are_dropped(client, auth, planned, fire):
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    fire.scores = [invented(GOOD, MADE_UP), invented(MADE_UP)]
+    fire.repairs = [invented(MADE_UP, GOOD), invented(MADE_UP)]
+    report = build(client, auth, sid).get_json()["report"]
+    assert fire.kinds().count("repair") == 2
+    evs = [q["evaluation"]["stronger_version"] for q in report["questions"]]
+    # Never shown: the invented sentence. Nothing grounded left → a placeholder.
+    assert evs == ["At Acme I built the billing API.", FALLBACK_REWRITE]
+
+
+def test_all_criteria_untested_is_retried(client, auth, planned, fire):
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    none = [{**c, "score": None} for c in SCORE["criteria"]]
+    fire.scores = [{**SCORE, "criteria": none}]
     report = build(client, auth, sid).get_json()["report"]
     assert report["status"] == "ready"
     assert fire.kinds().count("score") == 3
@@ -242,7 +399,7 @@ SCORE_ALL_FIVE = {
         for n in ("API design", "Structure", "Clarity", "Relevance")
     ],
     "summary": "Clear and complete.",
-    "stronger_version": "Already strong.",
+    "stronger_version": [GOOD],
 }
 
 

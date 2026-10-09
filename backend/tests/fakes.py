@@ -55,6 +55,7 @@ SCORE = {
         {"name": "Structure", "score": 3, "comment": "Wandered a little."},
         {"name": "clarity", "score": 4, "comment": "Easy to follow."},
         {"name": "Relevance", "score": 2, "comment": "Drifted off topic."},
+        {"name": "Not in the rubric", "score": None, "comment": ""},
     ],
     "summary": "Good ownership; the result was missing.",
     "weak_moments": [
@@ -72,9 +73,25 @@ SCORE = {
         "result": False,
         "note": "No result given.",
     },
-    "stronger_version": "At Acme I built the billing API [add the result you achieved].",
+    "stronger_version": [
+        {
+            "text": "At Acme I built the billing API.",
+            "source": "Built the Acme billing API",
+        },
+        {"text": "That led to [add the result you achieved].", "source": None},
+    ],
     "changes": [{"kind": "added", "text": "A result", "reason": "Shows impact."}],
     "tips": ["Name the scale you worked at."],
+}
+
+REPAIR = {
+    "stronger_version": [
+        {
+            "text": "I built the Acme billing API.",
+            "source": "Built the Acme billing API",
+        },
+        {"text": "The result was [add the result you achieved].", "source": None},
+    ]
 }
 
 SUMMARY = {
@@ -93,6 +110,8 @@ class FakeFire:
         self.turns: list[dict | str] = []
         # Queued scorer replies; an Exception instance is raised instead.
         self.scores: list[dict | str | Exception] = []
+        # Queued rewrite-repair replies (default: one grounded sentence).
+        self.repairs: list[dict | str] = []
         self.transcripts: list[str] = []
         self.audio: list[str] = []
 
@@ -113,6 +132,8 @@ class FakeFire:
                 raise body
         elif "summary for a mock-interview" in prompt:
             body = SUMMARY
+        elif 'Fix a "stronger version"' in prompt:
+            body = self.repairs.pop(0) if self.repairs else REPAIR
         elif self.turns:
             body = self.turns.pop(0)
         else:
@@ -135,6 +156,7 @@ class FakeFire:
                 ("scoring rubric", "rubric"),
                 ("Score one question", "score"),
                 ("summary for a mock-interview", "summary"),
+                ('Fix a "stronger version"', "repair"),
             ):
                 if marker in p:
                     out.append(kind)
