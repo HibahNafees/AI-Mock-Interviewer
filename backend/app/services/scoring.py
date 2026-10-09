@@ -38,6 +38,13 @@ HYPOTHETICAL_RE = re.compile(
     re.IGNORECASE,
 )
 SOURCE_SENTENCE_RE = re.compile(r"[^.!?\n]+[.!?]?")
+# A stronger version doesn't hedge: "I'm not sure about that one; I'd look at…" keeps
+# only the point (live check, T-24).
+HEDGE_RE = re.compile(
+    r"\bi(?:(?:'|\u2019)?m| am) not (?:sure|certain)\b[^,;:.!?]*(?:[,;:.!?]+|$)\s*(?:but\s+)?"
+    r"|\bi (?:don(?:'|\u2019)?t|do not) (?:know|remember)\b[^,;:.!?]*(?:[,;:.!?]+|$)\s*(?:but\s+)?",
+    re.IGNORECASE,
+)
 CLAUSE_RE = re.compile(r"[,;:\u2014]|\s(?:which|while|ensuring|allowing|so that)\s")
 # A rewrite sentence must share at least this share of its content words with the
 # résumé + answers. Calibrated on live gpt-4o-mini rewrites: invented sentences
@@ -161,13 +168,21 @@ def _adds_details(text: str, stems: set[str]) -> bool:
     return False
 
 
+def _without_hedge(text: str) -> str:
+    text = HEDGE_RE.sub("", text).strip()
+    return text[:1].upper() + text[1:]
+
+
 def split_sentences(items: list[Sentence]) -> list[Sentence]:
-    """The model sometimes returns a paragraph as one item: check it sentence by sentence."""
+    """The model sometimes returns a paragraph as one item: check it sentence by
+    sentence. Hedges ("I'm not sure, but…") are cut; a sentence that was only a
+    hedge is dropped.
+    """
     return [
-        Sentence(text=part, source=item.source)
+        Sentence(text=_without_hedge(part), source=item.source)
         for item in items
         for part in SENTENCE_END_RE.split(item.text.strip())
-        if part.strip()
+        if _without_hedge(part)
     ]
 
 

@@ -120,6 +120,23 @@ LIVE_RESUME = (
 )
 
 
+def test_hedges_are_cut_from_the_stronger_version():
+    # Live (T-24): "I'm not sure about that one; I'd look at…" was copied verbatim.
+    out = split_sentences(
+        [
+            Sentence(
+                text="I'm not sure about that one; I'd check the pool size first."
+            ),
+            Sentence(text="I don't know."),
+            Sentence(text="I made sure the pool was sized right."),
+        ]
+    )
+    assert [s.text for s in out] == [
+        "I'd check the pool size first.",
+        "I made sure the pool was sized right.",
+    ]
+
+
 def test_hypothetical_answers_are_not_turned_into_experience():
     answer = "I'd use a token bucket per API key in Redis, with a Lua script."
     claimed = Sentence(text="At Acme I built a token bucket per API key in Redis.")

@@ -262,3 +262,56 @@ def test_roleplay_intro_names_character_setting_and_goal():
         "Your goal: book a follow-up meeting with her finance lead. "
         "I'm in character from now on."
     )
+
+
+@pytest.mark.parametrize(
+    "line,reversed_",
+    [
+        # Live (T-23): the customer opened as the support agent, with the
+        # candidate's name.
+        (
+            "Hello, this is Priya from ShopNest. Can you tell me what went wrong?",
+            True,
+        ),
+        ("Hi, how can I assist you today?", True),
+        ("Hi Priya, I ordered a blue jacket and got shoes. What now?", False),
+        (OPENING, False),
+    ],
+)
+def test_opening_line_spoken_as_the_candidate_is_replaced(line, reversed_):
+    from app.services.planning import candidate_names, fix_reversed_opener
+
+    section = PlanSectionOut(
+        name="Call", module="roleplay", minutes=5, questions=[line], scenario=SCENARIO
+    )
+    names = candidate_names("Priya Nair — Customer Support\nShopNest…", "Live Test")
+    assert names == {"priya", "live"}
+    fix_reversed_opener(section, names)
+    expected = "Hi, this is Dana. So, what did you want to talk about?"
+    assert (section.questions[0] == expected) is reversed_
+
+
+def test_unnamed_character_gets_a_plain_opener():
+    from app.services.planning import Scenario, neutral_opener
+
+    scenario = Scenario(character="a frustrated customer", goal="resolve it")
+    assert neutral_opener(scenario) == "Hi. So, what did you want to talk about?"
+
+
+def test_rubric_drops_roleplay_prefix_and_merges_duplicates():
+    from app.services.planning import Criterion, dedupe_criteria
+
+    def crit(name, weight):
+        return Criterion(name=name, kind="role", weight=weight, description="d")
+
+    out = dedupe_criteria(
+        [
+            crit("Objection Handling", 0.2),
+            crit("Roleplay: Objection Handling", 0.1),
+            crit("Role-play - Rapport", 0.1),
+        ]
+    )
+    assert [(c.name, c.weight) for c in out] == [
+        ("Objection Handling", pytest.approx(0.3)),
+        ("Rapport", 0.1),
+    ]

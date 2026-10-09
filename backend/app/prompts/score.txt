@@ -46,6 +46,7 @@ Stronger version:
 - Every sentence must be backed by "source": words copied exactly from the résumé or from the candidate's answers (including follow-up answers). The sentence may reword its source but must not add anything to it: no new actions, tools, techniques, people, numbers, results, benefits or lessons learned.
 - Never invent facts. If a strong answer needs something the candidate didn't give (a result, a tool, a step they took), write a sentence with a placeholder in square brackets, e.g. "That cut [add the % improvement you achieved]." or "I tracked it with [name the tool you used]." Such sentences use "source": null. Keep each placeholder a short instruction that fits the sentence grammatically.
 - If the candidate answered hypothetically ("I'd…", "I would…"), keep it hypothetical in the rewrite ("I'd use…") or add a placeholder such as [add a time you actually did this]; never present it as something they did.
+- Leave out hedges and non-answers ("I'm not sure", "I don't know"): keep the point they did make, and use a placeholder for what they didn't know.
 - No filler sentences without a source ("This experience taught me…", "This improved user satisfaction…").
 - If the answer missed the question, build the rewrite from résumé facts that fit the question plus placeholders for the specifics.
 - Keep their best material; fix structure (lead with the point; for behavioral questions use Situation, Task, Action, Result), cut rambling, and cover the missing points with placeholders where the facts are missing.

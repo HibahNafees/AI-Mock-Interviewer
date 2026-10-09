@@ -7,11 +7,21 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .. import modules
 from ..extensions import db
-from ..models import Document, JdAnalysis, Question, Session
+from ..models import Document, JdAnalysis, Question, Session, User
 from .llm import chat_json, render
 
 ALL_MODULES = tuple(modules.MODULES) + modules.LATER
 MIXED = "mixed"
+# "Roleplay: Objection Handling" next to "Objection Handling" (live check, T-21).
+ROLEPLAY_PREFIX_RE = re.compile(
+    r"^\s*role[- ]?play\s*[:\-\u2013\u2014]\s*", re.IGNORECASE
+)
+# The character speaking as the candidate's side ("Hi, I'm Priya from ShopNest, how
+# can I assist you?"), live check T-23.
+HELPER_LINE_RE = re.compile(
+    r"\bhow (?:can|may) i (?:help|assist)\b|\bthanks? (?:you )?for (?:calling|contacting)\b",
+    re.IGNORECASE,
+)
 
 SYSTEM = (
     "You are an expert interview coach who designs realistic, fair job interviews. "
@@ -77,14 +87,46 @@ class PlanSectionOut(BaseModel):
         if self.module != "roleplay":
             self.scenario = None
         elif not self.questions:
-            # No opening line: the character starts the conversation neutrally.
-            name = re.split(r"[,(—-]", self.scenario.character)[0].strip()
-            self.questions = [
-                f"Hi, this is {name}. So, what did you want to talk about?"
-            ]
+            self.questions = [neutral_opener(self.scenario)]
         if not self.questions:
             raise ValueError("Each section needs at least one question")
         return self
+
+
+def neutral_opener(scenario: Scenario) -> str:
+    """An opening line for a character whose planned one is missing or unusable."""
+    name = re.split(r"[,(\u2014-]", scenario.character)[0].strip()
+    if name[:1].isupper() and not re.match(r"(?:A|An|The)\b", name):
+        return f"Hi, this is {name}. So, what did you want to talk about?"
+    return "Hi. So, what did you want to talk about?"
+
+
+def candidate_names(resume: str, user_name: str = "") -> set[str]:
+    """First names that identify the candidate: the résumé's first word and the account name."""
+    first_line = resume.strip().split("\n", 1)[0] if resume.strip() else ""
+    words = [
+        first_line.split()[0] if first_line.split() else "",
+        *user_name.split()[:1],
+    ]
+    return {w.strip(",.").lower() for w in words if w[:1].isupper() and w.isalpha()}
+
+
+def fix_reversed_opener(section: PlanSectionOut, names: set[str]) -> None:
+    """Swap an opening line spoken as the candidate's side (introducing themselves by
+    the candidate's name, offering help) for a neutral one."""
+    if section.module != "roleplay" or section.scenario is None:
+        return
+    line = section.questions[0]
+    said_by_candidate = HELPER_LINE_RE.search(line) or any(
+        re.search(
+            rf"\b(?:this is|i(?:'|\u2019)m|i am|my name is) {re.escape(n)}\b",
+            line,
+            re.IGNORECASE,
+        )
+        for n in names
+    )
+    if said_by_candidate:
+        section.questions[0] = neutral_opener(section.scenario)
 
 
 class BonusOut(BaseModel):
@@ -188,11 +230,14 @@ def build_plan(
         question_count=str(question_target(duration_min)),
     )
     plan = chat_json(user_id, prompt, PlanOut, SYSTEM, max_tokens=2000)
+    user = db.session.get(User, user_id)
+    names = candidate_names(resume.raw_text, user.name if user else "")
     for section in plan.sections:
         if section.module not in allowed:
             section.module = allowed[0]
             if section.module == "roleplay" and section.scenario is None:
                 section.module = modules.DEFAULT
+        fix_reversed_opener(section, names)
     plan.sections = normalize_minutes(plan.sections, duration_min)
     return plan
 
@@ -211,10 +256,24 @@ def build_rubric(
         ),
     )
     rubric = chat_json(user_id, prompt, RubricOut, SYSTEM)
+    rubric.criteria = dedupe_criteria(rubric.criteria)
     total = sum(c.weight for c in rubric.criteria)
     for c in rubric.criteria:
         c.weight = round(c.weight / total, 3)
     return rubric
+
+
+def dedupe_criteria(criteria: list[Criterion]) -> list[Criterion]:
+    """Drop "Role-play:" prefixes and merge criteria that then share a name."""
+    kept: dict[str, Criterion] = {}
+    for c in criteria:
+        c.name = ROLEPLAY_PREFIX_RE.sub("", c.name).strip() or c.name
+        key = c.name.lower()
+        if key in kept:
+            kept[key].weight = min(1.0, kept[key].weight + c.weight)
+        else:
+            kept[key] = c
+    return list(kept.values())
 
 
 # ---- Plan bookkeeping (no Fire calls) -------------------------------------

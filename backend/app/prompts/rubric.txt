@@ -13,7 +13,7 @@ Return JSON with exactly this shape:
 
 Rules:
 - 3 to 5 role criteria (kind "role") taken from the role's competencies, favouring the ones this interview can actually test.
-- If the interview includes role-play (formats include "roleplay"), include the skill the role-play tests as a role criterion, named after the skill itself (e.g. "Objection handling" for sales, "De-escalation" for customer service), never "role-play skill".
+- If the interview includes role-play (formats include "roleplay"), include the skill the role-play tests as a role criterion, named after the skill itself (e.g. "Objection handling" for sales, "De-escalation" for customer service), never "role-play skill" and with no "Role-play:" prefix. If that skill is already a criterion, don't add it twice.
 - Exactly 3 universal criteria (kind "universal"): Structure, Clarity, Relevance.
 - Weights are between 0 and 1; role criteria together should carry about 70% of the weight.
 - Calibrate "strong_answer" to the difficulty level.
