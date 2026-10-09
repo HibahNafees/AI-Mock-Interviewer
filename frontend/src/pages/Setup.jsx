@@ -35,10 +35,10 @@ function Choice({ name, options, value, onChange }) {
           role="radio"
           aria-checked={value === key}
           onClick={() => onChange(key)}
-          className={`rounded-md border px-3 py-1.5 text-sm ${
+          className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
             value === key
-              ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-              : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+              ? 'border-transparent bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-md shadow-violet-500/25'
+              : 'border-slate-200 bg-white text-slate-700 hover:border-violet-300 hover:text-violet-700'
           }`}
         >
           {label}
@@ -89,7 +89,13 @@ export default function Setup() {
 
   return (
     <form onSubmit={submit} className="space-y-6">
-      <h1 className="text-2xl font-semibold">New interview</h1>
+      <header>
+        <p className="eyebrow">Step 1 of 2</p>
+        <h1 className="mt-1 text-3xl font-extrabold text-slate-900">New interview</h1>
+        <p className="mt-2 text-slate-600">
+          Add your résumé and the job you're going for, then choose how you want to practice.
+        </p>
+      </header>
 
       <div className="grid gap-4 md:grid-cols-2">
         <DocumentInput kind="resume" value={resumeId} onChange={setResumeId} />
@@ -107,8 +113,8 @@ export default function Setup() {
         </p>
       )}
       {job.status === 'ready' && (
-        <section className="space-y-2">
-          <h2 className="font-medium">Interview type</h2>
+        <section className="card space-y-3 p-5">
+          <h2 className="font-semibold text-slate-900">Interview type</h2>
           <p className="text-sm text-slate-600">
             {job.analysis.role_title} · {job.analysis.field}
             {job.analysis.competencies.length > 0 &&
@@ -131,59 +137,62 @@ export default function Setup() {
         </section>
       )}
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Length</h2>
-        <Choice
-          name="Length"
-          options={[...DURATIONS.map((d) => [d, `${d} min`]), ['custom', 'Custom']]}
-          value={custom ? 'custom' : duration}
-          onChange={(v) => {
-            setCustom(v === 'custom')
-            if (v !== 'custom') setDuration(v)
-          }}
-        />
-        {custom && (
-          <label className="flex items-center gap-3 text-sm">
-            <input
-              type="range"
-              min={5}
-              max={60}
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              aria-label="Custom length in minutes"
-            />
-            <span>{duration} minutes</span>
-          </label>
-        )}
-      </section>
+      <div className="card grid gap-6 p-5 md:grid-cols-3">
+        <section className="space-y-3">
+          <h2 className="font-semibold text-slate-900">Length</h2>
+          <Choice
+            name="Length"
+            options={[...DURATIONS.map((d) => [d, `${d} min`]), ['custom', 'Custom']]}
+            value={custom ? 'custom' : duration}
+            onChange={(v) => {
+              setCustom(v === 'custom')
+              if (v !== 'custom') setDuration(v)
+            }}
+          />
+          {custom && (
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="range"
+                min={5}
+                max={60}
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+                aria-label="Custom length in minutes"
+                className="accent-violet-600"
+              />
+              <span>{duration} minutes</span>
+            </label>
+          )}
+        </section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Difficulty</h2>
-        <Choice
-          name="Difficulty"
-          options={[
-            ['entry', 'Entry'],
-            ['mid', 'Mid'],
-            ['senior', 'Senior'],
-          ]}
-          value={difficulty}
-          onChange={setDifficulty}
-        />
-      </section>
+        <section className="space-y-3">
+          <h2 className="font-semibold text-slate-900">Difficulty</h2>
+          <Choice
+            name="Difficulty"
+            options={[
+              ['entry', 'Entry'],
+              ['mid', 'Mid'],
+              ['senior', 'Senior'],
+            ]}
+            value={difficulty}
+            onChange={setDifficulty}
+          />
+        </section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Interviewer</h2>
-        <Choice
-          name="Interviewer"
-          options={[
-            ['friendly', 'Friendly'],
-            ['neutral', 'Neutral'],
-            ['tough', 'Tough'],
-          ]}
-          value={persona}
-          onChange={setPersona}
-        />
-      </section>
+        <section className="space-y-3">
+          <h2 className="font-semibold text-slate-900">Interviewer</h2>
+          <Choice
+            name="Interviewer"
+            options={[
+              ['friendly', 'Friendly'],
+              ['neutral', 'Neutral'],
+              ['tough', 'Tough'],
+            ]}
+            value={persona}
+            onChange={setPersona}
+          />
+        </section>
+      </div>
 
       {error && (
         <p role="alert" className="text-sm text-red-600">
@@ -193,7 +202,7 @@ export default function Setup() {
       <button
         type="submit"
         disabled={busy || !resumeId || !jdId || job.status !== 'ready'}
-        className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+        className="btn-primary"
       >
         {busy ? 'Building your interview plan…' : 'Build my interview plan'}
       </button>

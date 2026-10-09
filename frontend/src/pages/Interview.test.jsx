@@ -151,7 +151,16 @@ describe('role-play', () => {
             status: 'active',
             timer: { ...TIMER, section: 'Sales call' },
             transcript: [
-              { question_id: 1, section: 'Sales call', interviewer: "Let's switch to a role-play. This looks expensive.", answer: 'What would it need to save you?' },
+              {
+                question_id: 1,
+                section: 'Sales call',
+                interviewer: "Let's switch to a role-play. This looks expensive.",
+                segments: [
+                  { who: 'interviewer', text: "Let's switch to a role-play." },
+                  { who: 'character', text: 'This looks expensive.' },
+                ],
+                answer: 'What would it need to save you?',
+              },
               { question_id: 2, section: 'Sales call', is_follow_up: true, interviewer: 'About ten hours a week.', answer: null },
             ],
           },
@@ -164,7 +173,10 @@ describe('role-play', () => {
     expect(screen.getByText(SCENARIO.goal)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Start interview' }))
-    expect(await screen.findByText('Dana · role-play')).toBeInTheDocument()
+    // The app's announcement and the character's line are separate bubbles.
+    expect(await screen.findByText("Let's switch to a role-play.")).toBeInTheDocument()
+    expect(screen.getByText('This looks expensive.')).toBeInTheDocument()
+    expect(screen.getAllByText('Dana · role-play')).toHaveLength(2)
     expect(screen.getByText(/the interviewer is playing/)).toHaveTextContent(
       `Role-play: the interviewer is playing ${SCENARIO.character}. Your goal: ${SCENARIO.goal}`,
     )
@@ -281,7 +293,7 @@ describe('interview', () => {
     })
     renderAt('/interview/7')
     await userEvent.click(await screen.findByRole('button', { name: 'Start interview' }))
-    await screen.findByText('Hi Ada! Tell me about Acme.')
+    await screen.findByText('Tell me about Acme.')
     expect(spoken.map((u) => [u.text, u.voice.name])).toEqual([
       ['Hi Ada!', 'Alex'],
       ['Tell me about Acme.', 'Sam'],

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { moduleLabel } from '../lib/modules'
 
-const input = 'rounded-md border border-slate-300 px-2 py-1 text-sm'
+const input =
+  'rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 focus:outline-none'
 
 // Edit the question plan before the interview starts. onSave(plan) persists it.
 export default function PlanEditor({ plan, duration, onSave }) {
@@ -39,7 +40,7 @@ export default function PlanEditor({ plan, duration, onSave }) {
   return (
     <div className="space-y-4">
       {sections.map((s, i) => (
-        <section key={i} className="rounded-lg border border-slate-200 bg-white p-4">
+        <section key={i} className="card border-l-4 border-l-violet-400 p-5">
           <div className="flex flex-wrap items-center gap-2">
             <input
               aria-label={`Section ${i + 1} name`}
@@ -57,12 +58,12 @@ export default function PlanEditor({ plan, duration, onSave }) {
               className={`${input} w-16`}
             />
             <span className="text-sm text-slate-500">min</span>
-            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+            <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-700">
               {moduleLabel(s.module)}
             </span>
           </div>
           {s.scenario && (
-            <dl className="mt-3 grid gap-1 rounded-md bg-amber-50 p-3 text-sm text-amber-900 sm:grid-cols-[auto_1fr] sm:gap-x-3">
+            <dl className="mt-3 grid gap-1 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200 sm:grid-cols-[auto_1fr] sm:gap-x-3">
               <dt className="font-medium">Interviewer plays</dt>
               <dd>{s.scenario.character}</dd>
               {s.scenario.setting && (
@@ -107,7 +108,7 @@ export default function PlanEditor({ plan, duration, onSave }) {
           <button
             type="button"
             onClick={() => update(i, { questions: [...s.questions, ''] })}
-            className="mt-2 text-sm text-indigo-700 hover:underline"
+            className="mt-3 text-sm font-semibold text-violet-700 hover:underline"
           >
             + Add question
           </button>
@@ -133,7 +134,7 @@ export default function PlanEditor({ plan, duration, onSave }) {
           type="button"
           onClick={save}
           disabled={busy || total !== duration}
-          className="rounded-md border border-indigo-600 px-3 py-1.5 text-sm text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+          className="btn-secondary"
         >
           {busy ? 'Saving…' : 'Save changes'}
         </button>

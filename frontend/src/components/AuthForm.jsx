@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Logo } from './Layout'
 
 export default function AuthForm({ title, fields, submitLabel, onSubmit, footer }) {
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.name, ''])))
@@ -19,15 +20,16 @@ export default function AuthForm({ title, fields, submitLabel, onSubmit, footer 
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
-      >
-        <h1 className="text-xl font-semibold">{title}</h1>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 px-4 py-10">
+      <div className="text-center">
+        <Logo />
+        <p className="mt-3 text-sm text-slate-600">Practice interviews for any job, out loud.</p>
+      </div>
+      <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-7">
+        <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
         {fields.map((f) => (
           <label key={f.name} className="block text-sm">
-            <span className="text-slate-700">{f.label}</span>
+            <span className="font-medium text-slate-700">{f.label}</span>
             <input
               type={f.type}
               name={f.name}
@@ -36,7 +38,7 @@ export default function AuthForm({ title, fields, submitLabel, onSubmit, footer 
               minLength={f.minLength}
               value={values[f.name]}
               onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-              className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:outline-none"
+              className="field mt-1.5"
             />
           </label>
         ))}
@@ -48,7 +50,7 @@ export default function AuthForm({ title, fields, submitLabel, onSubmit, footer 
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+          className="btn-primary w-full"
         >
           {busy ? 'Please wait…' : submitLabel}
         </button>

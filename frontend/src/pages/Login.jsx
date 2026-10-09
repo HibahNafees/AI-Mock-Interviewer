@@ -22,7 +22,7 @@ export default function Login() {
       }}
       footer={
         <>
-          New here? <Link to="/signup" className="text-indigo-600 underline">Create an account</Link>
+          New here? <Link to="/signup" className="font-semibold text-violet-700 hover:underline">Create an account</Link>
         </>
       }
     />

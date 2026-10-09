@@ -28,16 +28,42 @@ function fmtTime(sec) {
 
 function scoreColor(s) {
   if (s == null) return 'bg-slate-100 text-slate-500'
-  if (s >= 4) return 'bg-green-100 text-green-800'
+  if (s >= 4) return 'bg-emerald-100 text-emerald-800'
   if (s >= 3) return 'bg-amber-100 text-amber-800'
-  return 'bg-red-100 text-red-800'
+  return 'bg-rose-100 text-rose-800'
+}
+
+function barColor(s) {
+  if (s >= 4) return 'from-emerald-400 to-teal-500'
+  if (s >= 3) return 'from-amber-300 to-orange-400'
+  return 'from-rose-400 to-red-500'
+}
+
+// The overall score as a ring that fills to score/5.
+function ScoreRing({ value }) {
+  const pct = value == null ? 0 : (value / 5) * 100
+  return (
+    <div
+      role="img"
+      aria-label={`Overall ${fmtScore(value)} out of 5`}
+      className="grid h-28 w-28 shrink-0 place-items-center rounded-full"
+      style={{ background: `conic-gradient(#8b5cf6, #d946ef ${pct}%, #ede9fe ${pct}%)` }}
+    >
+      <div className="grid h-[5.5rem] w-[5.5rem] place-items-center rounded-full bg-white">
+        <p className="text-center">
+          <span className="block text-3xl font-extrabold tabular-nums text-slate-900">{fmtScore(value)}</span>
+          <span className="text-xs font-medium text-slate-500">out of 5</span>
+        </p>
+      </div>
+    </div>
+  )
 }
 
 function Score({ value, label = 'Score' }) {
   return (
     <span
       aria-label={`${label} ${fmtScore(value)} out of 5`}
-      className={`inline-block rounded-md px-2 py-0.5 font-semibold tabular-nums ${scoreColor(value)}`}
+      className={`inline-block rounded-full px-2.5 py-0.5 font-bold tabular-nums ${scoreColor(value)}`}
     >
       {fmtScore(value)}
       <span className="text-xs font-normal"> / 5</span>
@@ -123,7 +149,7 @@ function Star({ star }) {
         {['situation', 'task', 'action', 'result'].map((k) => (
           <li
             key={k}
-            className={`rounded-full px-2 py-0.5 capitalize ${star[k] ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-500 line-through'}`}
+            className={`rounded-full px-2.5 py-0.5 font-medium capitalize ${star[k] ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500 line-through'}`}
           >
             {k}
           </li>
@@ -140,8 +166,8 @@ function Evaluation({ e, said, roleplay }) {
       {e.summary && <p className="text-slate-700">{e.summary}</p>}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-md bg-slate-50 p-3 ring-1 ring-slate-200">
-          <h4 className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+        <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+          <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
             What you said
           </h4>
           {said.map((s, i) => (
@@ -157,9 +183,9 @@ function Evaluation({ e, said, roleplay }) {
             </div>
           ))}
         </div>
-        <div className="rounded-md bg-indigo-50 p-3 ring-1 ring-indigo-100">
-          <h4 className="mb-1 text-xs font-medium uppercase tracking-wide text-indigo-700">
-            A stronger version
+        <div className="rounded-2xl bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4 ring-1 ring-violet-200">
+          <h4 className="mb-2 text-xs font-semibold tracking-wide text-violet-700 uppercase">
+            <span aria-hidden="true">✨ </span>A stronger version
           </h4>
           <p className="whitespace-pre-wrap">{e.stronger_version}</p>
           <p className="mt-2 text-xs text-indigo-700">
@@ -218,11 +244,20 @@ function Evaluation({ e, said, roleplay }) {
         )}
         <div>
           <h4 className="text-sm font-medium">Rubric</h4>
-          <ul className="mt-1 space-y-1 text-sm">
+          <ul className="mt-2 space-y-2.5 text-sm">
             {e.criteria.map((c) => (
               <li key={c.name}>
-                <span className="font-medium tabular-nums">{c.score}/5</span> {c.name}
-                {c.comment && <span className="text-slate-600"> — {c.comment}</span>}
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium text-slate-800">{c.name}</span>
+                  <span className="font-semibold tabular-nums">{c.score}/5</span>
+                </div>
+                <div aria-hidden="true" className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className={`h-full rounded-full bg-gradient-to-r ${barColor(c.score)}`}
+                    style={{ width: `${(c.score / 5) * 100}%` }}
+                  />
+                </div>
+                {c.comment && <p className="mt-1 text-slate-600">{c.comment}</p>}
               </li>
             ))}
           </ul>
@@ -298,8 +333,8 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
   return (
     <div className="space-y-3 print:hidden">
       {question.attempts.length > 0 && (
-        <div className="rounded-md bg-slate-50 p-3 text-sm ring-1 ring-slate-200">
-          <p className="font-medium">
+        <div className="rounded-2xl bg-teal-50/70 p-4 text-sm ring-1 ring-teal-200">
+          <p className="font-semibold">
             Try again: <Score value={beforeScore} label="Before" /> →{' '}
             <Score value={last.evaluation?.score} label="After" />
             <span className="ml-2 font-normal text-slate-500">
@@ -309,7 +344,7 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
           <p className="mt-2 whitespace-pre-wrap text-slate-700">{last.answer}</p>
           {last.evaluation && (
             <details className="mt-2">
-              <summary className="cursor-pointer text-indigo-700">Feedback on this attempt</summary>
+              <summary className="cursor-pointer font-medium text-violet-700">Feedback on this attempt</summary>
               <div className="mt-3">
                 <Evaluation e={last.evaluation} said={[{ answer: last.answer }]} />
               </div>
@@ -324,12 +359,12 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
             setOpen(true)
             setStarted(Date.now())
           }}
-          className="rounded-md border border-indigo-600 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50"
+          className="btn-secondary"
         >
-          Try again
+          <span aria-hidden="true">↻</span>Try again
         </button>
       ) : (
-        <div className="space-y-2 rounded-md border border-slate-200 p-3">
+        <div className="space-y-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-4">
           <p className="text-sm text-slate-600">Answer “{question.text}” again.</p>
           {mode === 'voice' ? (
             <Recorder onRecorded={onRecorded} disabled={busy} />
@@ -341,12 +376,12 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
                 value={text}
                 disabled={busy}
                 onChange={(e) => setText(e.target.value)}
-                className="block w-full rounded-md border border-slate-300 px-3 py-2"
+                className="field"
               />
               <button
                 type="submit"
                 disabled={busy || !text.trim()}
-                className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                className="btn-primary text-sm"
               >
                 Score my new answer
               </button>
@@ -368,7 +403,7 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
                 type="button"
                 disabled={busy}
                 onClick={() => setMode((m) => (m === 'voice' ? 'text' : 'voice'))}
-                className="text-slate-600 underline hover:text-slate-900 disabled:opacity-50"
+                className="btn-link"
               >
                 {mode === 'voice' ? 'Type instead' : 'Speak instead'}
               </button>
@@ -377,7 +412,7 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
               type="button"
               disabled={busy}
               onClick={() => setOpen(false)}
-              className="text-slate-600 underline hover:text-slate-900 disabled:opacity-50"
+              className="btn-link"
             >
               Close
             </button>
@@ -391,14 +426,14 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
 function QuestionCard({ q, index, sessionId, onAttempt }) {
   const e = q.evaluation
   return (
-    <article className="space-y-4 rounded-lg border border-slate-200 bg-white p-5 break-inside-avoid">
+    <article className="card space-y-5 p-6 break-inside-avoid">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+          <p className="eyebrow">
             Question {index + 1} · {q.section}
             {q.is_bonus ? ' · bonus' : ''}
           </p>
-          <h3 className="mt-1 font-medium">{q.text}</h3>
+          <h3 className="mt-1 text-lg font-semibold text-slate-900">{q.text}</h3>
           {q.scenario && (
             <p className="mt-1 text-sm text-amber-900">
               Role-play with {q.scenario.character}. Your goal: {q.scenario.goal}
@@ -430,32 +465,34 @@ function Summary({ report }) {
   const fillers = Object.entries(a?.fillers ?? {})
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-slate-200 bg-white p-5">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Overall</p>
-          <p className="text-3xl font-semibold tabular-nums">
-            {fmtScore(report.overall_score)}
-            <span className="text-base font-normal text-slate-500"> / 5</span>
-          </p>
+      <div className="card flex flex-wrap items-center gap-6 p-6">
+        <ScoreRing value={report.overall_score} />
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className="eyebrow">Overall</p>
+          <span className={`inline-block rounded-full px-3 py-1 text-sm font-bold ${color}`}>{label}</span>
+          {report.verdict_reason && <p className="text-slate-700">{report.verdict_reason}</p>}
         </div>
-        <span className={`rounded-full px-3 py-1 font-medium ${color}`}>{label}</span>
-        {report.verdict_reason && <p className="basis-full text-slate-700">{report.verdict_reason}</p>}
       </div>
 
       {report.takeaways.length > 0 && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-5">
-          <h2 className="font-medium">Top 3 takeaways</h2>
-          <ol className="mt-2 list-decimal space-y-1 pl-5">
-            {report.takeaways.map((t) => (
-              <li key={t}>{t}</li>
+        <div className="rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-pink-500 p-6 text-white shadow-lg shadow-fuchsia-500/20">
+          <h2 className="text-lg font-bold">Top 3 takeaways</h2>
+          <ol className="mt-3 space-y-2">
+            {report.takeaways.map((t, i) => (
+              <li key={t} className="flex gap-3">
+                <span aria-hidden="true" className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white/20 text-sm font-bold">
+                  {i + 1}
+                </span>
+                <span className="text-white/95">{t}</span>
+              </li>
             ))}
           </ol>
         </div>
       )}
 
       {a && (
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="font-medium">Delivery</h2>
+        <div className="card p-6">
+          <h2 className="font-bold text-slate-900">Delivery</h2>
           <dl className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <div>
               <dt className="text-slate-500">Answer time</dt>
@@ -556,22 +593,23 @@ export default function Report() {
     <section className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Your report</h1>
+          <p className="eyebrow">Interview report</p>
+          <h1 className="mt-1 text-3xl font-extrabold text-slate-900">Your report</h1>
           <p className="mt-1 text-slate-600">
             {report.role_title} · {report.duration_min} minutes · {report.difficulty}
           </p>
         </div>
         <div className="flex gap-3 text-sm print:hidden">
-          <Link to={`/interview/${id}`} className="text-slate-600 underline hover:text-slate-900">
+          <Link to={`/interview/${id}`} className="btn-secondary">
             Transcript
           </Link>
-          <button type="button" onClick={() => window.print()} className="text-slate-600 underline hover:text-slate-900">
+          <button type="button" onClick={() => window.print()} className="btn-secondary">
             Print / save as PDF
           </button>
         </div>
       </header>
 
-      <p className="rounded-md bg-slate-100 p-3 text-sm text-slate-600">
+      <p className="rounded-xl bg-white/70 p-3 text-sm text-slate-600 ring-1 ring-slate-200">
         Scores are practice feedback from an AI coach, not a hiring assessment.
         {report.licensed_field &&
           ' For licensed or specialized professions, they are not a professional evaluation of your competence.'}

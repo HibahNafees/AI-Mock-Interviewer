@@ -130,9 +130,12 @@ export default function Recorder({ onRecorded, onStart, disabled }) {
           type="button"
           onClick={start}
           disabled={disabled || state === 'starting'}
-          className="flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2.5 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+          className="btn-primary px-6 py-3 text-base"
         >
-          <span aria-hidden="true" className="h-3 w-3 rounded-full bg-white" />
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v3" strokeLinecap="round" />
+          </svg>
           {state === 'starting' ? 'Starting microphone…' : 'Record answer'}
         </button>
         {error && (
@@ -150,28 +153,29 @@ export default function Recorder({ onRecorded, onStart, disabled }) {
         <button
           type="button"
           onClick={() => finish(true)}
-          className="flex items-center gap-2 rounded-full bg-red-600 px-5 py-2.5 font-medium text-white hover:bg-red-700"
+          className="relative inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-red-500 px-6 py-3 font-semibold text-white shadow-md shadow-rose-500/30 transition hover:from-rose-600 hover:to-red-600"
         >
+          <span aria-hidden="true" className="absolute inset-0 animate-ping rounded-full bg-rose-400/30" />
           <span aria-hidden="true" className="h-3 w-3 rounded-sm bg-white" />
           Done
         </button>
         <button
           type="button"
           onClick={() => finish(false)}
-          className="text-sm text-slate-600 underline hover:text-slate-900"
+          className="btn-link"
         >
           Cancel
         </button>
-        <span aria-label="Recording time" className="font-mono tabular-nums text-slate-700">
+        <span aria-label="Recording time" className="rounded-full bg-slate-100 px-3 py-1 font-mono text-sm tabular-nums text-slate-700">
           {clock(elapsed)} / {clock(MAX_ANSWER_MS)}
         </span>
         <span
           aria-hidden="true"
-          className="h-2 w-24 overflow-hidden rounded-full bg-slate-200"
+          className="h-2.5 w-28 overflow-hidden rounded-full bg-slate-200"
           title="Microphone level"
         >
           <span
-            className="block h-full bg-green-500 transition-[width] duration-100"
+            className="block h-full rounded-full bg-gradient-to-r from-teal-400 to-emerald-500 transition-[width] duration-100"
             style={{ width: `${Math.min(100, level * 400)}%` }}
           />
         </span>

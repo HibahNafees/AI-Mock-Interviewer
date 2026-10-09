@@ -22,14 +22,19 @@ export default function Timer({ timer, running }) {
   const sectionLeft = timer.section_remaining_sec - ticked
 
   return (
-    <div className="flex items-center gap-3 text-sm">
+    <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
       {hidden ? null : (
         <>
-          <span aria-label="Time left" className="font-mono text-lg tabular-nums">
+          <span
+            aria-label="Time left"
+            className={`rounded-lg px-2.5 py-0.5 font-mono text-lg font-semibold tabular-nums ${
+              remaining <= 60 ? 'bg-rose-100 text-rose-700' : 'bg-violet-100 text-violet-700'
+            }`}
+          >
             {clock(remaining)}
           </span>
           {timer.section && (
-            <span className="text-slate-600">
+            <span className={sectionLeft > 0 ? 'text-slate-600' : 'font-medium text-rose-600'}>
               {timer.section}
               {sectionLeft > 0 ? ` · ${clock(sectionLeft)} left` : ' · over time'}
             </span>
@@ -39,7 +44,7 @@ export default function Timer({ timer, running }) {
       <button
         type="button"
         onClick={() => setHidden((h) => !h)}
-        className="text-slate-500 underline hover:text-slate-800"
+        className="btn-link text-xs"
       >
         {hidden ? 'Show timer' : 'Hide timer'}
       </button>

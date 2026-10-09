@@ -1,1 +1,59 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* Brand: violet. Every "indigo" class in the app uses these. */
+  --color-indigo-50: #f5f3ff;
+  --color-indigo-100: #ede9fe;
+  --color-indigo-200: #ddd6fe;
+  --color-indigo-300: #c4b5fd;
+  --color-indigo-500: #8b5cf6;
+  --color-indigo-600: #7c3aed;
+  --color-indigo-700: #6d28d9;
+  --color-indigo-800: #5b21b6;
+}
+
+@layer base {
+  body {
+    background-color: #faf8ff;
+    background-image:
+      radial-gradient(60rem 30rem at 0% -10%, rgb(196 181 253 / 0.35), transparent 60%),
+      radial-gradient(50rem 28rem at 100% 0%, rgb(249 168 212 / 0.28), transparent 60%),
+      radial-gradient(40rem 30rem at 50% 110%, rgb(153 246 228 / 0.25), transparent 60%);
+    background-attachment: fixed;
+  }
+  h1 {
+    letter-spacing: -0.02em;
+  }
+  ::selection {
+    background: rgb(196 181 253 / 0.6);
+  }
+}
+
+@layer components {
+  /* Main call to action. */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 px-5 py-2.5 font-semibold text-white shadow-md shadow-violet-500/25 transition hover:from-violet-700 hover:to-fuchsia-600 hover:shadow-lg hover:shadow-violet-500/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none;
+  }
+  /* Secondary action. */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-semibold text-violet-700 shadow-sm transition hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  /* Quiet text button. */
+  .btn-link {
+    @apply text-sm font-medium text-slate-500 underline-offset-4 transition hover:text-violet-700 hover:underline disabled:opacity-50;
+  }
+  .card {
+    @apply rounded-2xl border border-white/70 bg-white/85 shadow-sm shadow-violet-900/5 ring-1 ring-slate-900/5 backdrop-blur;
+  }
+  .field {
+    @apply block w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-slate-800 shadow-inner shadow-slate-900/[0.02] transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100 focus:outline-none disabled:bg-slate-50;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold tracking-wider text-violet-600 uppercase;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-violet-700 via-fuchsia-600 to-pink-500 bg-clip-text text-transparent;
+  }
+}

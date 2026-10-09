@@ -15,27 +15,80 @@ function speaker(t, plan) {
   return `Interviewer${t.is_follow_up ? ' · follow-up' : t.is_bonus ? ' · bonus' : ''}`
 }
 
+const BUBBLES = {
+  interviewer: {
+    avatar: 'from-violet-600 to-fuchsia-500',
+    box: 'bg-white ring-violet-100',
+    label: 'text-violet-700',
+  },
+  character: {
+    avatar: 'from-amber-400 to-orange-500',
+    box: 'bg-amber-50/90 ring-amber-200',
+    label: 'text-amber-800',
+  },
+}
+
+// One interviewer (or role-play character) message, with an avatar.
+function Bubble({ who = 'interviewer', label, children }) {
+  const style = BUBBLES[who]
+  return (
+    <div className="flex max-w-[88%] items-start gap-3">
+      <span
+        aria-hidden="true"
+        className={`mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br text-sm font-bold text-white shadow-sm ${style.avatar}`}
+      >
+        {label[0]}
+      </span>
+      <div className={`rounded-2xl rounded-tl-md p-4 shadow-sm ring-1 ${style.box}`}>
+        <p className={`mb-1 text-xs font-semibold tracking-wide uppercase ${style.label}`}>{label}</p>
+        <p className="leading-relaxed text-slate-800">{children}</p>
+      </div>
+    </div>
+  )
+}
+
 function Transcript({ items, plan }) {
   return (
-    <ol className="space-y-4">
-      {items.map((t) => (
-        <li key={t.question_id} className="space-y-2">
-          <div className="max-w-[85%] rounded-lg bg-white p-3 shadow-sm ring-1 ring-slate-200">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-              {speaker(t, plan)}
-            </p>
-            <p>{t.interviewer}</p>
-          </div>
-          {t.answer && (
-            <div className="ml-auto max-w-[85%] rounded-lg bg-indigo-50 p-3 ring-1 ring-indigo-100">
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-indigo-700">
-                You{t.input_mode === 'voice' ? ' · transcribed' : ''}
-              </p>
-              <p className="whitespace-pre-wrap">{t.answer}</p>
-            </div>
-          )}
-        </li>
-      ))}
+    <ol className="space-y-5">
+      {items.map((t) => {
+        const scenario = scenarioFor(plan, t.section)
+        // Each speaker's part in its own bubble ("Deal." from the character, then
+        // the interviewer stepping out); older messages have no segments.
+        const parts =
+          t.segments?.length > 1
+            ? t.segments.map((seg) => ({
+                who: seg.who,
+                text: seg.text,
+                label:
+                  seg.who === 'character' && scenario
+                    ? `${characterName(scenario)} · role-play`
+                    : 'Interviewer',
+              }))
+            : [
+                {
+                  who: scenario && t.is_follow_up ? 'character' : 'interviewer',
+                  text: t.interviewer,
+                  label: speaker(t, plan),
+                },
+              ]
+        return (
+          <li key={t.question_id} className="space-y-3">
+            {parts.map((p, i) => (
+              <Bubble key={i} who={p.who} label={p.label}>
+                {p.text}
+              </Bubble>
+            ))}
+            {t.answer && (
+              <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md bg-gradient-to-br from-teal-500 to-sky-500 p-4 text-white shadow-md shadow-teal-500/20">
+                <p className="mb-1 text-xs font-semibold tracking-wide text-white/85 uppercase">
+                  You{t.input_mode === 'voice' ? ' · transcribed' : ''}
+                </p>
+                <p className="leading-relaxed whitespace-pre-wrap">{t.answer}</p>
+              </div>
+            )}
+          </li>
+        )
+      })}
     </ol>
   )
 }
@@ -71,7 +124,8 @@ function PlanStep({ session, setSession, onGreeting }) {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Your interview plan</h1>
+        <p className="eyebrow">Step 2 of 2</p>
+        <h1 className="mt-1 text-3xl font-extrabold text-slate-900">Your interview plan</h1>
         <p className="mt-1 text-slate-600">
           {session.role_title} · {session.duration_min} minutes · {session.difficulty} ·{' '}
           {session.persona} interviewer
@@ -82,7 +136,7 @@ function PlanStep({ session, setSession, onGreeting }) {
           </p>
         )}
         {analysis.licensed_field && (
-          <p className="mt-2 rounded-md bg-amber-50 p-2 text-sm text-amber-800">
+          <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">
             Feedback for licensed or specialized professions is for practice only, not a
             professional assessment.
           </p>
@@ -106,7 +160,7 @@ function PlanStep({ session, setSession, onGreeting }) {
         type="button"
         onClick={start}
         disabled={busy}
-        className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+        className="btn-primary"
       >
         {busy ? 'Starting…' : 'Start interview'}
       </button>
@@ -261,23 +315,23 @@ function LiveStep({ session, setSession, greeting }) {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+      <header className="card flex flex-wrap items-center justify-between gap-3 px-5 py-4">
         <div>
-          <h1 className="text-xl font-semibold">{session.role_title || 'Interview'}</h1>
+          <h1 className="text-xl font-bold text-slate-900">{session.role_title || 'Interview'}</h1>
           {active && <Timer timer={session.timer} running={!busy && !speaking} />}
         </div>
         {active && (
           <div className="flex flex-wrap items-center gap-4">
             {hasVoice && (
-              <label className="flex items-center gap-2 text-sm text-slate-600">
-                <input type="checkbox" checked={voiceOn} onChange={toggleVoice} />
+              <label className="flex cursor-pointer items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 ring-1 ring-violet-100">
+                <input type="checkbox" checked={voiceOn} onChange={toggleVoice} className="accent-violet-600" />
                 Interviewer voice
               </label>
             )}
             <button
               type="button"
               onClick={endEarly}
-              className="text-sm text-slate-600 underline hover:text-slate-900"
+              className="btn-link hover:text-red-600"
             >
               End interview
             </button>
@@ -286,28 +340,31 @@ function LiveStep({ session, setSession, greeting }) {
       </header>
 
       {roleplay && (
-        <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">
-          <span className="font-medium">Role-play:</span> the interviewer is playing{' '}
+        <p className="rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
+          <span aria-hidden="true">🎭 </span>
+          <span className="mr-1 font-bold">Role-play:</span> the interviewer is playing{' '}
           {roleplay.character}. Your goal: {roleplay.goal}
         </p>
       )}
       <Transcript items={session.transcript} plan={session.plan} />
       {closing && !active && (
-        <div className="max-w-[85%] rounded-lg bg-white p-3 shadow-sm ring-1 ring-slate-200">
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Interviewer</p>
-          <p>{closing}</p>
-        </div>
+        <Bubble label="Interviewer">{closing}</Bubble>
       )}
       {speaking && !busy && (
-        <p role="status" className="flex items-center gap-3 text-sm text-slate-500">
-          <span className="animate-pulse">Interviewer is speaking…</span>
-          <button type="button" onClick={stopSpeaking} className="underline hover:text-slate-900">
+        <p role="status" className="flex items-center gap-3 text-sm font-medium text-violet-700">
+          <span className="flex items-end gap-0.5" aria-hidden="true">
+            {[0, 150, 300].map((d) => (
+              <span key={d} className="h-3 w-1 animate-bounce rounded-full bg-violet-500" style={{ animationDelay: `${d}ms` }} />
+            ))}
+          </span>
+          <span>Interviewer is speaking…</span>
+          <button type="button" onClick={stopSpeaking} className="btn-link">
             Stop
           </button>
         </p>
       )}
       {voiceFailed && voiceOn && active && (
-        <p className="text-sm text-amber-800">
+        <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">
           Your browser couldn't play the interviewer's voice (it may have no voices installed,
           or it blocked sound until you click). Try &ldquo;Repeat the question&rdquo;, or read
           the text.
@@ -321,7 +378,7 @@ function LiveStep({ session, setSession, greeting }) {
       <div ref={bottom} />
 
       {active ? (
-        <div className="space-y-3">
+        <div className="card space-y-4 p-5">
           {mode === 'voice' ? (
             <Recorder onRecorded={onRecorded} onStart={stopSpeaking} disabled={busy} />
           ) : (
@@ -336,12 +393,12 @@ function LiveStep({ session, setSession, greeting }) {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendTyped(e)
                 }}
                 placeholder="Type your answer… (Ctrl+Enter to send)"
-                className="block w-full rounded-md border border-slate-300 px-3 py-2"
+                className="field"
               />
               <button
                 type="submit"
                 disabled={busy || !text.trim()}
-                className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                className="btn-primary"
               >
                 Send answer
               </button>
@@ -352,14 +409,10 @@ function LiveStep({ session, setSession, greeting }) {
               {error}
             </p>
           )}
+          <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
           {hasVoice && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={repeat}
-              className="mr-4 text-sm text-slate-600 underline hover:text-slate-900 disabled:opacity-50"
-            >
-              Repeat the question
+            <button type="button" disabled={busy} onClick={repeat} className="btn-link">
+              <span aria-hidden="true">↻ </span>Repeat the question
             </button>
           )}
           {canRecord() && (
@@ -371,26 +424,30 @@ function LiveStep({ session, setSession, greeting }) {
                 spoken.current = null
                 setMode((m) => (m === 'voice' ? 'text' : 'voice'))
               }}
-              className="text-sm text-slate-600 underline hover:text-slate-900 disabled:opacity-50"
+              className="btn-link"
             >
               {mode === 'voice' ? 'Type instead' : 'Speak instead'}
             </button>
           )}
+          </div>
         </div>
       ) : (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <p className="font-medium">Interview finished.</p>
+        <div className="rounded-2xl bg-gradient-to-br from-violet-50 via-fuchsia-50 to-teal-50 p-6 ring-1 ring-violet-100">
+          <p className="text-lg font-bold text-slate-900">
+            <span aria-hidden="true">🎉 </span>
+            <span>Interview finished.</span>
+          </p>
           <p className="mt-1 text-sm text-slate-600">
             Your report scores each answer and shows a stronger version of it.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-4">
             <Link
               to={`/report/${session.id}`}
-              className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700"
+              className="btn-primary"
             >
               See your report
             </Link>
-            <Link to="/setup" className="text-sm text-indigo-700 underline">
+            <Link to="/setup" className="btn-link">
               Start another interview
             </Link>
           </div>
