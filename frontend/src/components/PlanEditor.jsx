@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { moduleLabel } from '../lib/modules'
 
 const input =
-  'rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 focus:outline-none'
+  'rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm transition focus:border-brand-400 focus:ring-4 focus:ring-brand-100 focus:outline-none'
 
 // Edit the question plan before the interview starts. onSave(plan) persists it.
 export default function PlanEditor({ plan, duration, onSave }) {
@@ -40,7 +40,7 @@ export default function PlanEditor({ plan, duration, onSave }) {
   return (
     <div className="space-y-4">
       {sections.map((s, i) => (
-        <section key={i} className="card border-l-4 border-l-violet-400 p-5">
+        <section key={i} className="card border-l-4 border-l-brand-400 p-5">
           <div className="flex flex-wrap items-center gap-2">
             <input
               aria-label={`Section ${i + 1} name`}
@@ -58,7 +58,7 @@ export default function PlanEditor({ plan, duration, onSave }) {
               className={`${input} w-16`}
             />
             <span className="text-sm text-slate-500">min</span>
-            <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-700">
+            <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-semibold text-brand-700">
               {moduleLabel(s.module)}
             </span>
           </div>
@@ -108,7 +108,7 @@ export default function PlanEditor({ plan, duration, onSave }) {
           <button
             type="button"
             onClick={() => update(i, { questions: [...s.questions, ''] })}
-            className="mt-3 text-sm font-semibold text-violet-700 hover:underline"
+            className="mt-3 text-sm font-semibold text-brand-700 hover:underline"
           >
             + Add question
           </button>

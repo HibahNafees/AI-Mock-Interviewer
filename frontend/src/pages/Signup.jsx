@@ -28,7 +28,7 @@ export default function Signup() {
       }}
       footer={
         <>
-          Already have an account? <Link to="/login" className="font-semibold text-violet-700 hover:underline">Log in</Link>
+          Already have an account? <Link to="/login" className="font-semibold text-brand-700 hover:underline">Log in</Link>
         </>
       }
     />

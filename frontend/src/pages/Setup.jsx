@@ -37,8 +37,8 @@ function Choice({ name, options, value, onChange }) {
           onClick={() => onChange(key)}
           className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
             value === key
-              ? 'border-transparent bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-md shadow-violet-500/25'
-              : 'border-slate-200 bg-white text-slate-700 hover:border-violet-300 hover:text-violet-700'
+              ? 'border-transparent bg-gradient-to-r from-brand-600 to-accent-500 text-white shadow-md shadow-brand-500/25'
+              : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700'
           }`}
         >
           {label}
@@ -158,7 +158,7 @@ export default function Setup() {
                 value={duration}
                 onChange={(e) => setDuration(Number(e.target.value))}
                 aria-label="Custom length in minutes"
-                className="accent-violet-600"
+                className="accent-brand-600"
               />
               <span>{duration} minutes</span>
             </label>

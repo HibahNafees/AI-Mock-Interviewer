@@ -1,59 +1,90 @@
 @import "tailwindcss";
 
+/* Warm, friendly palette in the spirit of huru.ai: coral primary, amber accent,
+   deep navy ink on cream. */
 @theme {
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", "Plus Jakarta Sans", ui-sans-serif, sans-serif;
 
-  /* Brand: violet. Every "indigo" class in the app uses these. */
-  --color-indigo-50: #f5f3ff;
-  --color-indigo-100: #ede9fe;
-  --color-indigo-200: #ddd6fe;
-  --color-indigo-300: #c4b5fd;
-  --color-indigo-500: #8b5cf6;
-  --color-indigo-600: #7c3aed;
-  --color-indigo-700: #6d28d9;
-  --color-indigo-800: #5b21b6;
+  --color-brand-50: #fff2f0;
+  --color-brand-100: #ffe5e0;
+  --color-brand-200: #ffcac1;
+  --color-brand-300: #ffa798;
+  --color-brand-400: #fd7c68;
+  --color-brand-500: #f7715c;
+  --color-brand-600: #e56553;
+  --color-brand-700: #cb4e3c;
+  --color-brand-800: #aa392a;
+  --color-brand-900: #882a1e;
+
+  --color-accent-50: #fdf4e5;
+  --color-accent-100: #ffeed3;
+  --color-accent-200: #ffe3b4;
+  --color-accent-300: #ffd48b;
+  --color-accent-400: #fdc458;
+  --color-accent-500: #e0a738;
+  --color-accent-600: #c18a00;
+  --color-accent-700: #9b6e00;
+
+  --color-navy-50: #eff7fd;
+  --color-navy-100: #e0eef9;
+  --color-navy-200: #c3dcf0;
+  --color-navy-300: #a2c6e2;
+  --color-navy-400: #82adce;
+  --color-navy-500: #4f7c9d;
+  --color-navy-600: #39627f;
+  --color-navy-700: #274961;
+  --color-navy-800: #023350;
+  --color-navy-900: #142734;
+
+  --color-cream: #fffaf4;
+  --color-ink: #101319;
 }
 
 @layer base {
   body {
-    background-color: #faf8ff;
+    background-color: var(--color-cream);
     background-image:
-      radial-gradient(60rem 30rem at 0% -10%, rgb(196 181 253 / 0.35), transparent 60%),
-      radial-gradient(50rem 28rem at 100% 0%, rgb(249 168 212 / 0.28), transparent 60%),
-      radial-gradient(40rem 30rem at 50% 110%, rgb(153 246 228 / 0.25), transparent 60%);
+      radial-gradient(55rem 28rem at 0% -10%, rgb(255 202 193 / 0.45), transparent 60%),
+      radial-gradient(45rem 26rem at 100% 0%, rgb(255 227 180 / 0.5), transparent 60%);
     background-attachment: fixed;
+    color: #1d2230;
   }
-  h1 {
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
     letter-spacing: -0.02em;
+    color: var(--color-ink);
   }
   ::selection {
-    background: rgb(196 181 253 / 0.6);
+    background: rgb(255 202 193 / 0.7);
   }
 }
 
 @layer components {
-  /* Main call to action. */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 px-5 py-2.5 font-semibold text-white shadow-md shadow-violet-500/25 transition hover:from-violet-700 hover:to-fuchsia-600 hover:shadow-lg hover:shadow-violet-500/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none;
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-brand-500 px-5 py-2.5 font-semibold text-white shadow-[0_4px_0_0_var(--color-brand-700)] transition hover:-translate-y-px hover:bg-brand-600 active:translate-y-0.5 active:shadow-[0_2px_0_0_var(--color-brand-700)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none;
   }
-  /* Secondary action. */
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-semibold text-violet-700 shadow-sm transition hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-ink/10 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-brand-300 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50;
   }
-  /* Quiet text button. */
   .btn-link {
-    @apply text-sm font-medium text-slate-500 underline-offset-4 transition hover:text-violet-700 hover:underline disabled:opacity-50;
+    @apply text-sm font-semibold text-slate-500 underline-offset-4 transition hover:text-brand-700 hover:underline disabled:opacity-50;
   }
   .card {
-    @apply rounded-2xl border border-white/70 bg-white/85 shadow-sm shadow-violet-900/5 ring-1 ring-slate-900/5 backdrop-blur;
+    @apply rounded-3xl border border-[#f1e6da] bg-white shadow-[0_1px_0_0_#f1e6da,0_12px_32px_-18px_rgb(16_19_25/0.18)];
   }
   .field {
-    @apply block w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-slate-800 shadow-inner shadow-slate-900/[0.02] transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100 focus:outline-none disabled:bg-slate-50;
+    @apply block w-full rounded-2xl border-2 border-[#efe4d8] bg-white px-4 py-2.5 text-slate-800 transition placeholder:text-slate-400 focus:border-brand-300 focus:ring-4 focus:ring-brand-100 focus:outline-none disabled:bg-slate-50;
   }
   .eyebrow {
-    @apply text-xs font-semibold tracking-wider text-violet-600 uppercase;
+    @apply text-xs font-bold tracking-wider text-brand-600 uppercase;
   }
   .gradient-text {
-    @apply bg-gradient-to-r from-violet-700 via-fuchsia-600 to-pink-500 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-brand-500 to-accent-500 bg-clip-text text-transparent;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold;
   }
 }

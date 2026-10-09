@@ -76,7 +76,7 @@ export default function DocumentInput({ kind, value, onChange }) {
     <fieldset className="card p-5">
       <legend className="sr-only">{LABELS[kind]}</legend>
       <p aria-hidden="true" className="mb-3 flex items-center gap-2 font-semibold text-slate-900">
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-violet-100 text-base">{ICONS[kind]}</span>
+        <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-100 text-base">{ICONS[kind]}</span>
         {LABELS[kind]}
       </p>
       <div className="mb-4 inline-flex gap-1 rounded-full bg-slate-100 p-1 text-sm" role="tablist">
@@ -88,7 +88,7 @@ export default function DocumentInput({ kind, value, onChange }) {
             aria-selected={mode === key}
             onClick={() => setMode(key)}
             className={`rounded-full px-3.5 py-1.5 font-medium transition ${
-              mode === key ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              mode === key ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             {label}
@@ -141,15 +141,15 @@ export default function DocumentInput({ kind, value, onChange }) {
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={drop}
-          className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition focus-within:ring-4 focus-within:ring-violet-100 ${
+          className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition focus-within:ring-4 focus-within:ring-brand-100 ${
             dragging
-              ? 'border-violet-500 bg-violet-50'
-              : 'border-violet-200 bg-violet-50/40 hover:border-violet-400 hover:bg-violet-50'
+              ? 'border-brand-500 bg-brand-50'
+              : 'border-brand-200 bg-brand-50/40 hover:border-brand-400 hover:bg-brand-50'
           } ${busy ? 'pointer-events-none opacity-60' : ''}`}
         >
           <span
             aria-hidden="true"
-            className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/30"
+            className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-accent-500 text-white shadow-md shadow-brand-500/30"
           >
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />

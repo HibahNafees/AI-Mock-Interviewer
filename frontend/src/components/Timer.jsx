@@ -28,7 +28,7 @@ export default function Timer({ timer, running }) {
           <span
             aria-label="Time left"
             className={`rounded-lg px-2.5 py-0.5 font-mono text-lg font-semibold tabular-nums ${
-              remaining <= 60 ? 'bg-rose-100 text-rose-700' : 'bg-violet-100 text-violet-700'
+              remaining <= 60 ? 'bg-rose-100 text-rose-700' : 'bg-brand-100 text-brand-700'
             }`}
           >
             {clock(remaining)}

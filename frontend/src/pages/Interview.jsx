@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import PlanEditor from '../components/PlanEditor'
 import Recorder from '../components/Recorder'
+import { Mascot } from '../components/Art'
 import Timer from '../components/Timer'
 import { api } from '../lib/api'
 import { characterName, scenarioFor } from '../lib/modules'
@@ -17,14 +18,14 @@ function speaker(t, plan) {
 
 const BUBBLES = {
   interviewer: {
-    avatar: 'from-violet-600 to-fuchsia-500',
-    box: 'bg-white ring-violet-100',
-    label: 'text-violet-700',
+    avatar: 'from-brand-600 to-accent-500',
+    box: 'bg-white ring-[#f1e6da]',
+    label: 'text-brand-700',
   },
   character: {
-    avatar: 'from-amber-400 to-orange-500',
-    box: 'bg-amber-50/90 ring-amber-200',
-    label: 'text-amber-800',
+    avatar: 'from-accent-300 to-accent-500',
+    box: 'bg-accent-50 ring-accent-200',
+    label: 'text-accent-700',
   },
 }
 
@@ -33,12 +34,16 @@ function Bubble({ who = 'interviewer', label, children }) {
   const style = BUBBLES[who]
   return (
     <div className="flex max-w-[88%] items-start gap-3">
-      <span
-        aria-hidden="true"
-        className={`mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br text-sm font-bold text-white shadow-sm ${style.avatar}`}
-      >
-        {label[0]}
-      </span>
+      {who === 'interviewer' ? (
+        <Mascot className="mt-0.5 h-10 w-10 shrink-0" />
+      ) : (
+        <span
+          aria-hidden="true"
+          className={`mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br text-sm font-bold text-white shadow-sm ${style.avatar}`}
+        >
+          {label[0]}
+        </span>
+      )}
       <div className={`rounded-2xl rounded-tl-md p-4 shadow-sm ring-1 ${style.box}`}>
         <p className={`mb-1 text-xs font-semibold tracking-wide uppercase ${style.label}`}>{label}</p>
         <p className="leading-relaxed text-slate-800">{children}</p>
@@ -79,7 +84,7 @@ function Transcript({ items, plan }) {
               </Bubble>
             ))}
             {t.answer && (
-              <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md bg-gradient-to-br from-teal-500 to-sky-500 p-4 text-white shadow-md shadow-teal-500/20">
+              <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md bg-navy-800 p-4 text-white shadow-md shadow-navy-800/20">
                 <p className="mb-1 text-xs font-semibold tracking-wide text-white/85 uppercase">
                   You{t.input_mode === 'voice' ? ' · transcribed' : ''}
                 </p>
@@ -323,8 +328,8 @@ function LiveStep({ session, setSession, greeting }) {
         {active && (
           <div className="flex flex-wrap items-center gap-4">
             {hasVoice && (
-              <label className="flex cursor-pointer items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 ring-1 ring-violet-100">
-                <input type="checkbox" checked={voiceOn} onChange={toggleVoice} className="accent-violet-600" />
+              <label className="flex cursor-pointer items-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 ring-1 ring-brand-100">
+                <input type="checkbox" checked={voiceOn} onChange={toggleVoice} className="accent-brand-600" />
                 Interviewer voice
               </label>
             )}
@@ -351,10 +356,10 @@ function LiveStep({ session, setSession, greeting }) {
         <Bubble label="Interviewer">{closing}</Bubble>
       )}
       {speaking && !busy && (
-        <p role="status" className="flex items-center gap-3 text-sm font-medium text-violet-700">
+        <p role="status" className="flex items-center gap-3 text-sm font-medium text-brand-700">
           <span className="flex items-end gap-0.5" aria-hidden="true">
             {[0, 150, 300].map((d) => (
-              <span key={d} className="h-3 w-1 animate-bounce rounded-full bg-violet-500" style={{ animationDelay: `${d}ms` }} />
+              <span key={d} className="h-3 w-1 animate-bounce rounded-full bg-brand-500" style={{ animationDelay: `${d}ms` }} />
             ))}
           </span>
           <span>Interviewer is speaking…</span>
@@ -432,7 +437,7 @@ function LiveStep({ session, setSession, greeting }) {
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl bg-gradient-to-br from-violet-50 via-fuchsia-50 to-teal-50 p-6 ring-1 ring-violet-100">
+        <div className="rounded-2xl bg-gradient-to-br from-brand-50 via-accent-50 to-navy-50 p-6 ring-1 ring-brand-100">
           <p className="text-lg font-bold text-slate-900">
             <span aria-hidden="true">🎉 </span>
             <span>Interview finished.</span>

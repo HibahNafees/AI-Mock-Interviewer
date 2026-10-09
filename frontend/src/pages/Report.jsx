@@ -13,7 +13,7 @@ const VERDICT = {
 const CHANGE = {
   added: 'bg-green-100 text-green-800',
   cut: 'bg-red-100 text-red-800',
-  reframed: 'bg-sky-100 text-sky-800',
+  reframed: 'bg-navy-100 text-navy-800',
 }
 const EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a' }
 
@@ -34,7 +34,7 @@ function scoreColor(s) {
 }
 
 function barColor(s) {
-  if (s >= 4) return 'from-emerald-400 to-teal-500'
+  if (s >= 4) return 'from-emerald-400 to-navy-500'
   if (s >= 3) return 'from-amber-300 to-orange-400'
   return 'from-rose-400 to-red-500'
 }
@@ -183,12 +183,12 @@ function Evaluation({ e, said, roleplay }) {
             </div>
           ))}
         </div>
-        <div className="rounded-2xl bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4 ring-1 ring-violet-200">
-          <h4 className="mb-2 text-xs font-semibold tracking-wide text-violet-700 uppercase">
+        <div className="rounded-2xl bg-gradient-to-br from-brand-50 to-accent-50 p-4 ring-1 ring-brand-200">
+          <h4 className="mb-2 text-xs font-semibold tracking-wide text-brand-700 uppercase">
             <span aria-hidden="true">✨ </span>A stronger version
           </h4>
           <p className="whitespace-pre-wrap">{e.stronger_version}</p>
-          <p className="mt-2 text-xs text-indigo-700">
+          <p className="mt-2 text-xs text-brand-700">
             Built only from your résumé and answers. Fill in the [bracketed] parts with your
             real details.
           </p>
@@ -333,7 +333,7 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
   return (
     <div className="space-y-3 print:hidden">
       {question.attempts.length > 0 && (
-        <div className="rounded-2xl bg-teal-50/70 p-4 text-sm ring-1 ring-teal-200">
+        <div className="rounded-2xl bg-navy-50/70 p-4 text-sm ring-1 ring-navy-200">
           <p className="font-semibold">
             Try again: <Score value={beforeScore} label="Before" /> →{' '}
             <Score value={last.evaluation?.score} label="After" />
@@ -344,7 +344,7 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
           <p className="mt-2 whitespace-pre-wrap text-slate-700">{last.answer}</p>
           {last.evaluation && (
             <details className="mt-2">
-              <summary className="cursor-pointer font-medium text-violet-700">Feedback on this attempt</summary>
+              <summary className="cursor-pointer font-medium text-brand-700">Feedback on this attempt</summary>
               <div className="mt-3">
                 <Evaluation e={last.evaluation} said={[{ answer: last.answer }]} />
               </div>
@@ -364,7 +364,7 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
           <span aria-hidden="true">↻</span>Try again
         </button>
       ) : (
-        <div className="space-y-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-4">
+        <div className="space-y-3 rounded-2xl border border-brand-100 bg-brand-50/40 p-4">
           <p className="text-sm text-slate-600">Answer “{question.text}” again.</p>
           {mode === 'voice' ? (
             <Recorder onRecorded={onRecorded} disabled={busy} />
@@ -475,7 +475,7 @@ function Summary({ report }) {
       </div>
 
       {report.takeaways.length > 0 && (
-        <div className="rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-pink-500 p-6 text-white shadow-lg shadow-fuchsia-500/20">
+        <div className="rounded-2xl bg-gradient-to-br from-brand-600 via-accent-600 to-accent-500 p-6 text-white shadow-lg shadow-accent-500/20">
           <h2 className="text-lg font-bold">Top 3 takeaways</h2>
           <ol className="mt-3 space-y-2">
             {report.takeaways.map((t, i) => (
@@ -579,7 +579,7 @@ export default function Report() {
         <p role="alert" className="text-red-600">
           {error}
         </p>
-        <Link to={`/interview/${id}`} className="text-sm text-indigo-700 underline">
+        <Link to={`/interview/${id}`} className="text-sm text-brand-700 underline">
           Back to the interview
         </Link>
       </div>

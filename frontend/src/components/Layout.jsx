@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { Mascot } from './Art'
 
 const NAV = [
   ['/', 'Dashboard'],
@@ -11,18 +12,10 @@ const NAV = [
 
 export function Logo() {
   return (
-    <span className="flex items-center gap-2.5">
-      <span
-        aria-hidden="true"
-        className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-violet-600 via-fuchsia-500 to-pink-400 text-white shadow-md shadow-fuchsia-500/30"
-      >
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="9" y="3" width="6" height="11" rx="3" />
-          <path d="M5 11a7 7 0 0 0 14 0M12 18v3" strokeLinecap="round" />
-        </svg>
-      </span>
-      <span className="text-lg font-bold tracking-tight text-slate-900">
-        Mock<span className="gradient-text">Interviewer</span>
+    <span className="flex items-center gap-2">
+      <Mascot className="h-10 w-10" />
+      <span className="font-display text-xl font-extrabold tracking-tight text-ink">
+        Mock<span className="text-brand-500">Interviewer</span>
       </span>
     </span>
   )
@@ -32,7 +25,7 @@ export default function Layout() {
   const { user, logout } = useAuth()
   return (
     <div className="min-h-screen text-slate-800">
-      <header className="sticky top-0 z-10 border-b border-white/60 bg-white/70 backdrop-blur-md print:hidden">
+      <header className="sticky top-0 z-10 border-b border-[#f1e6da] bg-cream/85 backdrop-blur-md print:hidden">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
           <Link to="/" aria-label="AI Mock Interviewer home">
             <Logo />
@@ -46,7 +39,7 @@ export default function Layout() {
                 className={({ isActive }) =>
                   `rounded-full px-3 py-1.5 font-medium transition ${
                     isActive
-                      ? 'bg-violet-100 text-violet-700'
+                      ? 'bg-brand-100 text-brand-700'
                       : 'text-slate-600 hover:bg-white hover:text-slate-900'
                   }`
                 }
@@ -60,7 +53,7 @@ export default function Layout() {
               <span className="flex items-center gap-2 text-slate-700">
                 <span
                   aria-hidden="true"
-                  className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-teal-400 to-sky-500 text-xs font-bold text-white"
+                  className="grid h-8 w-8 place-items-center rounded-full bg-navy-800 text-xs font-bold text-white"
                 >
                   {user.name?.[0]?.toUpperCase()}
                 </span>

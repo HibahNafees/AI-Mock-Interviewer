@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { HeroScene, Mascot } from './Art'
 import { Logo } from './Layout'
 
 export default function AuthForm({ title, fields, submitLabel, onSubmit, footer }) {
@@ -20,13 +21,28 @@ export default function AuthForm({ title, fields, submitLabel, onSubmit, footer 
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 px-4 py-10">
-      <div className="text-center">
+    <div className="grid min-h-screen lg:grid-cols-2">
+      <aside className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-brand-400 via-brand-500 to-accent-400 p-12 text-white lg:flex">
         <Logo />
-        <p className="mt-3 text-sm text-slate-600">Practice interviews for any job, out loud.</p>
-      </div>
-      <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-7">
-        <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
+        <div>
+          <h2 className="font-display text-4xl leading-tight font-extrabold text-white">
+            AI mock interviews that tell you exactly what to fix.
+          </h2>
+          <ul className="mt-6 space-y-2 text-white/90">
+            <li>🎙️ Answer out loud, like the real thing</li>
+            <li>📊 Scores on what this job looks for</li>
+            <li>✨ A stronger version of every answer</li>
+          </ul>
+        </div>
+        <HeroScene className="h-64" />
+      </aside>
+      <div className="flex flex-col items-center justify-center gap-6 px-4 py-10">
+        <div className="text-center lg:hidden">
+          <Mascot className="mx-auto h-20 w-20" />
+          <p className="mt-2 text-sm text-slate-600">Practice interviews for any job, out loud.</p>
+        </div>
+      <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-8">
+        <h1 className="text-3xl font-extrabold">{title}</h1>
         {fields.map((f) => (
           <label key={f.name} className="block text-sm">
             <span className="font-medium text-slate-700">{f.label}</span>
@@ -56,6 +72,7 @@ export default function AuthForm({ title, fields, submitLabel, onSubmit, footer 
         </button>
         <p className="text-center text-sm text-slate-600">{footer}</p>
       </form>
+      </div>
     </div>
   )
 }

@@ -178,8 +178,8 @@ export default function Recorder({ onRecorded, onStart, disabled }) {
 
   if (state === 'pending') {
     return (
-      <div className="space-y-2 rounded-2xl bg-violet-50 p-4 ring-1 ring-violet-200">
-        <p role="status" className="text-sm font-medium text-violet-800">
+      <div className="space-y-2 rounded-2xl bg-brand-50 p-4 ring-1 ring-brand-200">
+        <p role="status" className="text-sm font-medium text-brand-800">
           Stopped after a pause. Sending your answer in {Math.ceil(sendIn / 1000)}…
         </p>
         <div className="flex flex-wrap items-center gap-3">
@@ -242,7 +242,7 @@ export default function Recorder({ onRecorded, onStart, disabled }) {
           title="Microphone level"
         >
           <span
-            className="block h-full rounded-full bg-gradient-to-r from-teal-400 to-emerald-500 transition-[width] duration-100"
+            className="block h-full rounded-full bg-gradient-to-r from-navy-400 to-emerald-500 transition-[width] duration-100"
             style={{ width: `${Math.min(100, level * 400)}%` }}
           />
         </span>
