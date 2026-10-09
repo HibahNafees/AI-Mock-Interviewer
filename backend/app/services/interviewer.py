@@ -4,6 +4,7 @@ The backend decides which moves are allowed (follow up, next question, bonus,
 wrap up) from the timer; Fire chat only picks among them and words the reply.
 """
 
+import logging
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -13,6 +14,8 @@ from ..models import Answer, Question, Session
 from ..models.base import utcnow
 from .llm import chat_json, render
 from .timer import SECTION_NUDGE_SEC, WRAP_UP_SEC, TimerState, timer_state
+
+log = logging.getLogger(__name__)
 
 MAX_FOLLOW_UPS = 2
 HISTORY_TURNS = 8
@@ -214,6 +217,7 @@ def take_turn(
         )
         out = chat_json(user_id, prompt, TurnOut, max_tokens=500, temperature=0.6)
         if out.action not in opts:
+            log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
             out = _fallback(opts)
 
     now = utcnow()
