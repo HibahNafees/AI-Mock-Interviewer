@@ -23,12 +23,14 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     from .routes.common import register_error_handlers
     from .routes.documents import bp as documents_bp
     from .routes.health import bp as health_bp
+    from .routes.reports import bp as reports_bp
     from .routes.sessions import bp as sessions_bp
 
     app.register_blueprint(health_bp, url_prefix="/api")
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(documents_bp, url_prefix="/api/documents")
     app.register_blueprint(sessions_bp, url_prefix="/api/sessions")
+    app.register_blueprint(reports_bp, url_prefix="/api/sessions")
     register_error_handlers(app)
 
     @jwt.unauthorized_loader

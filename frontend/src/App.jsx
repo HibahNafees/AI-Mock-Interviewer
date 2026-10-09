@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/Dashboard'
 import Interview from './pages/Interview'
 import Login from './pages/Login'
+import Report from './pages/Report'
 import Setup from './pages/Setup'
 import Signup from './pages/Signup'
 
@@ -23,7 +24,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="setup" element={<Setup />} />
         <Route path="interview/:id" element={<Interview />} />
-        <Route path="report/:id" element={<ComingSoon title="Report" phase={4} />} />
+        <Route path="report/:id" element={<Report />} />
         <Route path="stories" element={<ComingSoon title="Story bank" phase={7} />} />
         <Route path="decoder" element={<ComingSoon title="JD decoder" phase={8} />} />
         <Route path="debrief" element={<ComingSoon title="Debrief" phase={8} />} />

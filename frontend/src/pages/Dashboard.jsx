@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
-const STATUS = { planned: 'Plan ready', active: 'In progress', completed: 'Finished', abandoned: 'Cancelled' }
+const STATUS = { planned: 'Plan ready', active: 'In progress', completed: 'Report', abandoned: 'Cancelled' }
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -36,7 +36,7 @@ export default function Dashboard() {
             {sessions.map((s) => (
               <li key={s.id}>
                 <Link
-                  to={`/interview/${s.id}`}
+                  to={s.status === 'completed' ? `/report/${s.id}` : `/interview/${s.id}`}
                   className="flex items-center justify-between px-4 py-3 hover:bg-slate-50"
                 >
                   <span>

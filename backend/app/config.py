@@ -29,6 +29,9 @@ class Config:
     DAILY_INTERVIEW_MINUTES = int(os.environ.get("DAILY_INTERVIEW_MINUTES", "60"))
     DAILY_LONG_SESSIONS = int(os.environ.get("DAILY_LONG_SESSIONS", "1"))
     DAILY_PLANS = int(os.environ.get("DAILY_PLANS", "10"))
+    DAILY_RETRIES = int(os.environ.get("DAILY_RETRIES", "20"))
+    # Tests build reports in the request instead of a background thread.
+    REPORTS_INLINE = False
     MAX_UPLOAD_BYTES = 5 * 1024 * 1024
     # A 5-minute answer at the browser's 32 kbps is ~1.2 MB; Fire accepts ~25 MB.
     MAX_AUDIO_BYTES = 10 * 1024 * 1024
@@ -42,3 +45,4 @@ class TestConfig(Config):
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     SQLALCHEMY_ENGINE_OPTIONS: dict = {}
     FIRE_API_KEY = None
+    REPORTS_INLINE = True

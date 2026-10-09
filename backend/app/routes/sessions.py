@@ -66,7 +66,7 @@ class TurnBody(BaseModel):
         return v
 
 
-def _owned_session(session_id: int) -> Session | None:
+def owned_session(session_id: int) -> Session | None:
     s = db.session.get(Session, session_id)
     return s if s is not None and s.user_id == current_user_id() else None
 
@@ -76,7 +76,9 @@ def _transcript(session: Session) -> list[dict]:
     answers = {
         a.question_id: a
         for a in db.session.scalars(
-            db.select(Answer).where(Answer.question_id.in_([q.id for q in asked]))
+            db.select(Answer)
+            .where(Answer.question_id.in_([q.id for q in asked]))
+            .filter_by(attempt_no=1)
         )
     }
     out = []
@@ -185,7 +187,7 @@ def list_sessions():
 @bp.get("/<int:session_id>")
 @jwt_required()
 def get_session(session_id: int):
-    session = _owned_session(session_id)
+    session = owned_session(session_id)
     if session is None:
         return jsonify(error="Interview not found"), 404
     return jsonify(session=session_dict(session, detail=True))
@@ -195,7 +197,7 @@ def get_session(session_id: int):
 @jwt_required()
 def edit_plan(session_id: int):
     """Replace the question plan before the interview starts."""
-    session = _owned_session(session_id)
+    session = owned_session(session_id)
     if session is None:
         return jsonify(error="Interview not found"), 404
     if session.status != "planned":
@@ -229,7 +231,7 @@ def edit_plan(session_id: int):
 @bp.post("/<int:session_id>/start")
 @jwt_required()
 def start(session_id: int):
-    session = _owned_session(session_id)
+    session = owned_session(session_id)
     if session is None:
         return jsonify(error="Interview not found"), 404
     if session.status != "planned":
@@ -246,7 +248,7 @@ def start(session_id: int):
 @jwt_required()
 def turn(session_id: int):
     """Typed answer to the current question → the interviewer's next message."""
-    session = _owned_session(session_id)
+    session = owned_session(session_id)
     if session is None:
         return jsonify(error="Interview not found"), 404
     if session.status != "active":
@@ -267,13 +269,15 @@ def turn(session_id: int):
 def transcribe_answer(session_id: int):
     """Spoken answer clip (multipart field "audio") → text. The clip is not stored.
 
-    The browser then sends the text to /turns, so a failed chat call can be retried
-    without paying to transcribe the clip again.
+    The browser then sends the text to /turns (or a report's "Try again"), so a
+    failed chat call can be retried without paying to transcribe the clip again.
     """
-    session = _owned_session(session_id)
+    session = owned_session(session_id)
     if session is None:
         return jsonify(error="Interview not found"), 404
-    if session.status != "active":
+    if session.status == "completed":
+        limits.check_can_retry(current_user_id())
+    elif session.status != "active":
         return jsonify(error="This interview is not in progress"), 409
     clip = request.files.get("audio")
     if clip is None:
@@ -297,7 +301,7 @@ def transcribe_answer(session_id: int):
 @bp.post("/<int:session_id>/end")
 @jwt_required()
 def end(session_id: int):
-    session = _owned_session(session_id)
+    session = owned_session(session_id)
     if session is None:
         return jsonify(error="Interview not found"), 404
     if session.status == "planned":

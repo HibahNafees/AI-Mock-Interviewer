@@ -1,7 +1,17 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..extensions import db
@@ -102,16 +112,30 @@ class Evaluation(db.Model):
     stronger_version: Mapped[str | None] = mapped_column(Text)
     changes_json: Mapped[list[Any] | None] = mapped_column(JSON)
     delivery_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # Per-criterion comments, weak moments, STAR check and tips from the scorer.
+    feedback_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = created_at_column()
 
 
+REPORT_STATUSES = ("generating", "ready", "failed")
+
+
 class Report(db.Model):
+    """One report per session, built question by question after the interview."""
+
     __tablename__ = "reports"
+    __table_args__ = (UniqueConstraint("session_id", name="uq_reports_session"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     session_id: Mapped[int] = fk("sessions.id")
     overall_score: Mapped[float | None] = mapped_column(Float)
     verdict: Mapped[str | None] = mapped_column(String(60))
+    verdict_reason: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="generating", server_default="generating"
+    )
+    # When the current generation run started; a stale run may be restarted.
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
     top_takeaways_json: Mapped[list[Any] | None] = mapped_column(JSON)
     analytics_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     # Public share link; set to null to revoke.

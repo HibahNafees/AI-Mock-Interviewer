@@ -6,7 +6,7 @@ from flask import current_app
 from sqlalchemy import func
 
 from ..extensions import db
-from ..models import Session, UsageLimit
+from ..models import Answer, Question, Session, UsageLimit
 
 LONG_SESSION_MIN = 60
 
@@ -112,3 +112,22 @@ def record_session_start(user_id: int, duration_min: int) -> None:
     row.sessions_count += 1
     row.minutes_used += duration_min
     db.session.commit()
+
+
+def check_can_retry(user_id: int) -> None:
+    """Each "Try again" costs a scoring call (and a transcription if spoken)."""
+    check_budget()
+    start = datetime.combine(today(), datetime.min.time())
+    made = db.session.scalar(
+        db.select(func.count(Answer.id))
+        .join(Question, Question.id == Answer.question_id)
+        .join(Session, Session.id == Question.session_id)
+        .where(
+            Session.user_id == user_id,
+            Answer.attempt_no > 1,
+            Answer.created_at >= start,
+        )
+    )
+    cap = current_app.config["DAILY_RETRIES"]
+    if made >= cap:
+        raise LimitReached(f"You've used today's {cap} retries; try again tomorrow.")

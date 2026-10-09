@@ -60,8 +60,8 @@ Turn-based limits to design around: 1–3 s pause per turn (show a thinking indi
   /src/lib         api client
 /backend           Flask API
   /app/routes      auth, documents, sessions, turns, reports, stories, debriefs, decoder
-  /app/services    fire.py, parsing.py, planning.py, interviewer.py, timer.py, scoring.py, stories.py, limits.py
-  /app/prompts     one file per prompt (plan, rubric, interviewer_turn, score, rewrite, story_extract, decoder, ...)
+  /app/services    fire.py, parsing.py, planning.py, interviewer.py, timer.py, scoring.py, analytics.py, reports.py, stories.py, limits.py
+  /app/prompts     one file per prompt (plan, rubric, interviewer_turn, score (incl. rewrite), report_summary, story_extract, decoder, ...)
   /app/modules     behavioral, resume_deepdive, technical, coding, system_design, case, roleplay, scenario, portfolio
   /app/modes       standard, reverse, pressure, panel, negotiation
   /app/models      SQLAlchemy models
@@ -82,7 +82,7 @@ Caddyfile
 - **Format modules** → reusable interviewer behaviors; any job = a mix of modules. New field = new mix, not new code.
 - **A turn** = browser uploads clip + duration → Flask: Fire transcribe → save text → Fire chat (with timer state) → return next interviewer message (text, and audio from stage 3).
 - **Timer lives in the backend**, not the LLM. Each chat call includes elapsed/remaining time per section so the interviewer moves on or wraps up between answers.
-- **Reports generate after the session**, question by question in the background.
+- **Reports generate after the session**, question by question in a background thread (`REPORTS_INLINE` runs them in-request for tests). One Fire chat call per question scores it and writes the stronger version; one more writes the verdict reasoning and top 3 takeaways. Weighted scores, verdict thresholds and delivery analytics (pace, fillers, time vs budget) are computed in Python. A failed run keeps finished questions; re-requesting only pays for the rest. "Try again" saves `attempt_no` > 1 and scores that answer alone (daily cap `DAILY_RETRIES`).
 
 ## Modes
 
@@ -124,7 +124,7 @@ Flexible LLM output is stored in JSON columns. No table stores audio/video. Docu
 11. Optional: real-time voice with LiveKit (interruptions, peer practice)
 12. Optional: Hume EVI experiment
 
-**Current phase:** 3 done and live-verified (speak in, text out). Next: 4.
+**Current phase:** 4 built (report and recommendations; tests pass, not yet live-verified against Fire). Next: live check of 4, then 5.
 
 ## Running locally
 

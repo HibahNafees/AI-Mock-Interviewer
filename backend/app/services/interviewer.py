@@ -217,7 +217,7 @@ def _history(asked: list[Question]) -> list[dict]:
     answers = {
         a.question_id: a.transcript
         for a in db.session.scalars(
-            db.select(Answer).where(Answer.question_id.in_(ids))
+            db.select(Answer).where(Answer.question_id.in_(ids)).filter_by(attempt_no=1)
         )
     }
     return [

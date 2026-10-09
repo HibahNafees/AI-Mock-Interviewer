@@ -13,7 +13,7 @@ export default function Layout() {
   const { user, logout } = useAuth()
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="border-b border-slate-200 bg-white print:hidden">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <span className="font-semibold">AI Mock Interviewer</span>
           <nav className="flex flex-wrap gap-4 text-sm">

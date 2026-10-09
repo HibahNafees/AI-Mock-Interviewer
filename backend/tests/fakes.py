@@ -49,6 +49,40 @@ RUBRIC = {
 }
 
 
+SCORE = {
+    "criteria": [
+        {"name": "API design", "score": 4, "comment": "Clear ownership of the API."},
+        {"name": "Structure", "score": 3, "comment": "Wandered a little."},
+        {"name": "clarity", "score": 4, "comment": "Easy to follow."},
+        {"name": "Relevance", "score": 2, "comment": "Drifted off topic."},
+    ],
+    "summary": "Good ownership; the result was missing.",
+    "weak_moments": [
+        {"quote": "My answer", "why": "Too vague."},
+        {"quote": "something the candidate never said", "why": "Invented."},
+    ],
+    "missing_points": [
+        {"point": "A measurable result", "covered": False},
+        {"point": "Their own role", "covered": True},
+    ],
+    "star": {
+        "situation": True,
+        "task": True,
+        "action": True,
+        "result": False,
+        "note": "No result given.",
+    },
+    "stronger_version": "At Acme I built the billing API [add the result you achieved].",
+    "changes": [{"kind": "added", "text": "A result", "reason": "Shows impact."}],
+    "tips": ["Name the scale you worked at."],
+}
+
+SUMMARY = {
+    "reasoning": "Solid ownership, but results were missing.",
+    "takeaways": ["Quantify results.", "Lead with the point.", "Keep answers tight."],
+}
+
+
 class FakeFire:
     """Answers by prompt type; interviewer turns come from `turns` (else next_question)."""
 
@@ -57,6 +91,8 @@ class FakeFire:
     def __init__(self):
         self.calls: list[dict] = []
         self.turns: list[dict | str] = []
+        # Queued scorer replies; an Exception instance is raised instead.
+        self.scores: list[dict | str | Exception] = []
         self.transcripts: list[str] = []
         self.audio: list[str] = []
 
@@ -71,6 +107,12 @@ class FakeFire:
             body = PLAN
         elif "scoring rubric" in prompt:
             body = RUBRIC
+        elif "Score one question" in prompt:
+            body = self.scores.pop(0) if self.scores else SCORE
+            if isinstance(body, Exception):
+                raise body
+        elif "summary for a mock-interview" in prompt:
+            body = SUMMARY
         elif self.turns:
             body = self.turns.pop(0)
         else:
@@ -87,13 +129,16 @@ class FakeFire:
         out = []
         for c in self.calls:
             p = c["prompt"]
-            out.append(
-                "analysis"
-                if "Analyze this job description" in p
-                else (
-                    "plan"
-                    if "question plan" in p
-                    else "rubric" if "scoring rubric" in p else "turn"
-                )
-            )
+            for marker, kind in (
+                ("Analyze this job description", "analysis"),
+                ("question plan", "plan"),
+                ("scoring rubric", "rubric"),
+                ("Score one question", "score"),
+                ("summary for a mock-interview", "summary"),
+            ):
+                if marker in p:
+                    out.append(kind)
+                    break
+            else:
+                out.append("turn")
         return out

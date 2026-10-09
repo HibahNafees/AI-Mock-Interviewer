@@ -249,11 +249,19 @@ function LiveStep({ session, setSession }) {
         <div className="rounded-lg border border-slate-200 bg-white p-4">
           <p className="font-medium">Interview finished.</p>
           <p className="mt-1 text-sm text-slate-600">
-            Scored reports with stronger versions of your answers are coming soon.
+            Your report scores each answer and shows a stronger version of it.
           </p>
-          <Link to="/setup" className="mt-3 inline-block text-sm text-indigo-700 underline">
-            Start another interview
-          </Link>
+          <div className="mt-3 flex flex-wrap items-center gap-4">
+            <Link
+              to={`/report/${session.id}`}
+              className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700"
+            >
+              See your report
+            </Link>
+            <Link to="/setup" className="text-sm text-indigo-700 underline">
+              Start another interview
+            </Link>
+          </div>
         </div>
       )}
     </div>
