@@ -1,5 +1,6 @@
 """JD analysis, question plan and rubric (Fire chat), plus plan bookkeeping."""
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -53,8 +54,16 @@ class PlanSectionOut(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     module: str
     minutes: int = Field(ge=1, le=60)
-    questions: list[str] = Field(min_length=1, max_length=8)
+    questions: list[str] = Field(default_factory=list, max_length=8)
     scenario: Scenario | None = None
+
+    @field_validator("questions", mode="before")
+    @classmethod
+    def only_text(cls, v: object) -> object:
+        # gpt-4o-mini sometimes puts the role-play scenario object in "questions".
+        if isinstance(v, list):
+            return [q for q in v if isinstance(q, str)]
+        return v
 
     @field_validator("module")
     @classmethod
@@ -67,6 +76,14 @@ class PlanSectionOut(BaseModel):
             raise ValueError("A role-play section needs a scenario")
         if self.module != "roleplay":
             self.scenario = None
+        elif not self.questions:
+            # No opening line: the character starts the conversation neutrally.
+            name = re.split(r"[,(—-]", self.scenario.character)[0].strip()
+            self.questions = [
+                f"Hi, this is {name}. So, what did you want to talk about?"
+            ]
+        if not self.questions:
+            raise ValueError("Each section needs at least one question")
         return self
 
 

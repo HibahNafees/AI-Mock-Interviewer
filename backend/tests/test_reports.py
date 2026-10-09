@@ -120,6 +120,16 @@ LIVE_RESUME = (
 )
 
 
+def test_hypothetical_answers_are_not_turned_into_experience():
+    answer = "I'd use a token bucket per API key in Redis, with a Lua script."
+    claimed = Sentence(text="At Acme I built a token bucket per API key in Redis.")
+    kept_hypothetical = Sentence(text="I'd use a token bucket per API key in Redis.")
+    assert grounding_problems([claimed, kept_hypothetical], [LIVE_RESUME, answer]) == [
+        "it presents what the candidate said they would do as something they did",
+        "",
+    ]
+
+
 @pytest.mark.parametrize(
     "text,source,problem",
     [

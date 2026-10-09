@@ -235,3 +235,30 @@ def test_plan_edits_keep_the_scenario(client, auth, sales):
     plan["sections"][1]["scenario"] = None
     res = client.put(f"/api/sessions/{sid}/plan", json=plan, headers=auth)
     assert res.status_code == 400
+
+
+def test_scenario_object_in_questions_is_replaced_by_a_neutral_opener():
+    # Live: gpt-4o-mini put the scenario dict where the opening line belongs.
+    section = PlanSectionOut(
+        name="Call",
+        module="roleplay",
+        minutes=5,
+        questions=[SCENARIO],
+        scenario=SCENARIO,
+    )
+    assert section.questions == [
+        "Hi, this is Dana. So, what did you want to talk about?"
+    ]
+    with pytest.raises(ValueError):
+        PlanSectionOut(name="Q", module="technical", minutes=5, questions=[SCENARIO])
+
+
+def test_roleplay_intro_names_character_setting_and_goal():
+    from app.services.interviewer import roleplay_intro
+
+    assert roleplay_intro(SCENARIO) == (
+        "Let's switch to a role-play. I'll play Dana, an operations manager who "
+        "thinks the price is too high. Setting: A video call after your demo. "
+        "Your goal: book a follow-up meeting with her finance lead. "
+        "I'm in character from now on."
+    )

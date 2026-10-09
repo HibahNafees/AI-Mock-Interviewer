@@ -20,7 +20,7 @@ $choices
 - next_question: the role-play is over; ask the planned question given as the interviewer, out of character (the app announces leaving the role-play for you).
 - bonus: the role-play is over; ask the bonus question given as the interviewer.
 - wrap_up: the role-play is over; end the interview with a brief thank-you.
-Prefer follow_up while it is in the list and the goal is still open; end the role-play when the goal is clearly reached or clearly lost.
+Prefer follow_up while it is in the list and the goal is still open. Once you have accepted the candidate's resolution or next step (or the conversation is clearly lost), end the role-play with next_question, bonus or wrap_up if one is in the list.
 
 The "action" you return MUST be one of the keys in the list above; any other action is invalid.
 

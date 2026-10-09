@@ -120,7 +120,7 @@ def roleplay_intro(scenario: dict) -> str:
     parts = [
         "Let's switch to a role-play.",
         f"I'll play {scenario['character'].strip().rstrip('.')}.",
-        setting if setting.endswith((".", "!", "?")) or not setting else f"{setting}.",
+        f"Setting: {setting.rstrip('.')}." if setting else "",
         f"Your goal: {scenario['goal'].strip().rstrip('.')}.",
         "I'm in character from now on.",
     ]

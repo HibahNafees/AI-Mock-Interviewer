@@ -31,6 +31,13 @@ PLACEHOLDER_RE = re.compile(r"\[[^\]]*\]")
 SENTENCE_END_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\[])")
 # Clauses are checked too, so one invented add-on ("…, ensuring they were optimized
 # for performance") can't hide behind a well-grounded start.
+# "I'd use a token bucket" is a plan, not experience (live check, Phase 5).
+HYPOTHETICAL_RE = re.compile(
+    r"\b(?:i|we)(?:'|\u2019)d\b|\b(?:i|we) (?:would|might|could|will)\b"
+    r"|\b(?:i|we)(?:'|\u2019)ll\b",
+    re.IGNORECASE,
+)
+SOURCE_SENTENCE_RE = re.compile(r"[^.!?\n]+[.!?]?")
 CLAUSE_RE = re.compile(r"[,;:\u2014]|\s(?:which|while|ensuring|allowing|so that)\s")
 # A rewrite sentence must share at least this share of its content words with the
 # résumé + answers. Calibrated on live gpt-4o-mini rewrites: invented sentences
@@ -164,13 +171,26 @@ def split_sentences(items: list[Sentence]) -> list[Sentence]:
     ]
 
 
+def _factual(sources: list[str]) -> str:
+    """The sources without hypothetical sentences ("I'd…", "I would…")."""
+    return " ".join(
+        part
+        for text in sources
+        for part in SOURCE_SENTENCE_RE.findall(text)
+        if not HYPOTHETICAL_RE.search(part)
+    )
+
+
 def grounding_problems(sentences: list[Sentence], sources: list[str]) -> list[str]:
     """One message per sentence that isn't backed by the résumé or answers ("" if ok).
 
     The model's cited `source` is only a prompt for it to stay grounded (it often
-    leaves it out for faithful sentences); the check is on the sentence itself.
+    leaves it out for faithful sentences); the check is on the sentence itself. A
+    sentence stated as fact must be backed by facts, not only by what the candidate
+    said they would do.
     """
     stems = {_stem(w) for w in WORD_RE.findall(" ".join(sources).lower())}
+    factual = {_stem(w) for w in WORD_RE.findall(_factual(sources).lower())}
     digits = set(DIGITS_RE.findall(" ".join(sources)))
     problems = []
     for s in sentences:
@@ -181,6 +201,10 @@ def grounding_problems(sentences: list[Sentence], sources: list[str]) -> list[st
             )
         elif _adds_details(s.text, stems):
             problems.append("it adds details the candidate never gave")
+        elif not HYPOTHETICAL_RE.search(s.text) and _adds_details(s.text, factual):
+            problems.append(
+                "it presents what the candidate said they would do as something they did"
+            )
         else:
             problems.append("")
     return problems
@@ -400,6 +424,8 @@ def evaluate(
     resume = db.session.get(Document, session.resume_id) if session.resume_id else None
     resume_text = resume.raw_text[:MAX_RESUME_CHARS] if resume else ""
     words = target_words(budget_sec)
+    plan = section_plan(session, section)
+    scenario = plan.get("scenario") if plan.get("module") == "roleplay" else None
     prompt = render(
         "score",
         role=(session.plan_json or {}).get("role_title") or "the role",
@@ -409,12 +435,7 @@ def evaluate(
             modules.MODULES[modules.DEFAULT],
         ).label,
         module_guidance=modules.guidance(module, "score"),
-        scenario=(
-            section_plan(session, section).get("scenario")
-            if module == "roleplay"
-            else None
-        )
-        or "none",
+        scenario=scenario or "none",
         rubric=[
             {k: c.get(k, "") for k in ("name", "description", "strong_answer")}
             for c in (session.rubric_json or {}).get("criteria", [])
@@ -429,7 +450,13 @@ def evaluate(
     stronger, changes = grounded_rewrite(
         user_id,
         out.stronger_version,
-        [resume_text, *answers],
+        # In a role-play the reply may refer to what the character said.
+        [resume_text, *answers]
+        + (
+            [e["interviewer"] for e in exchange] + list(scenario.values())
+            if scenario
+            else []
+        ),
         question or exchange[0]["interviewer"],
         resume_text,
         answers,
