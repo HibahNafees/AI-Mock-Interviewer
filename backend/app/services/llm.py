@@ -29,12 +29,12 @@ def render(name: str, **values: object) -> str:
     )
 
 
-def _parse(content: str, schema: type[M]) -> M:
+def _parse(content: str, schema: type[M], context: dict | None = None) -> M:
     text = FENCE_RE.sub("", content.strip())
     start, end = text.find("{"), text.rfind("}")
     if start != -1 and end > start:
         text = text[start : end + 1]
-    return schema.model_validate_json(text)
+    return schema.model_validate_json(text, context=context)
 
 
 def chat_json(
@@ -44,10 +44,12 @@ def chat_json(
     system: str | None = None,
     max_tokens: int = 1500,
     temperature: float = 0.4,
+    context: dict | None = None,
 ) -> M:
     """Ask Fire chat for JSON matching `schema`; retry once if it's invalid.
 
-    Every call's price is recorded against the user, including failed parses.
+    `context` reaches the schema's validators. Every call's price is recorded
+    against the user, including failed parses.
     """
     fire = get_fire()
     model = current_app.config.get("FIRE_CHAT_MODEL")
@@ -62,7 +64,7 @@ def chat_json(
         )
         record_fire_call(user_id, result.price_usd)
         try:
-            return _parse(result.content, schema)
+            return _parse(result.content, schema, context)
         except ValidationError as err:
             log.warning(
                 "Invalid JSON from Fire for %s (attempt %d)", schema.__name__, attempt

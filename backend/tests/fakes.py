@@ -126,7 +126,14 @@ class FakeFire:
         self, messages, system_prompt=None, max_tokens=1024, temperature=0.4, model=None
     ):
         prompt = messages[0]["content"]
-        self.calls.append({"prompt": prompt, "messages": messages, "model": model})
+        self.calls.append(
+            {
+                "prompt": prompt,
+                "messages": messages,
+                "model": model,
+                "temperature": temperature,
+            }
+        )
         if "Analyze this job description" in prompt:
             body = self.analysis
         elif "question plan" in prompt:

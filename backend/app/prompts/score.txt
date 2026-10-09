@@ -31,7 +31,7 @@ Return JSON with exactly this shape:
 Scoring:
 - List every rubric criterion, using the names exactly as written. Score it from 1 (missing or poor) to 5 (excellent for the $difficulty level) only if this question gives the candidate a fair chance to show it; otherwise use null. Example: a question about mentoring doesn't test SQL, so SQL is null — never 1 just because the answer didn't mention it.
 - Always score Structure, Clarity and Relevance (or whatever general communication criteria the rubric has).
-- Judge only what the candidate said. An off-topic, empty or very short answer scores 1–2.
+$criteria_rule- Judge only what the candidate said. An off-topic, empty or very short answer scores 1–2.
 - This is practice feedback, not a hiring decision: be honest, specific and kind.
 
 Feedback:

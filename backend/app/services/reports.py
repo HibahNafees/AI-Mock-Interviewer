@@ -263,6 +263,18 @@ def retry(
             "spoken": input_mode == "voice",
         }
     ]
+    # Score on the same criteria as the first attempt (T-29: the first answer was
+    # scored on 3 criteria and the retry on 6, so a better retry scored lower).
+    first = db.session.scalar(
+        db.select(Evaluation)
+        .join(Answer, Evaluation.answer_id == Answer.id)
+        .where(Answer.question_id == question.id, Answer.attempt_no == 1)
+    )
+    criteria = [
+        c["name"]
+        for c in ((first.rubric_scores_json or {}).get("criteria", []) if first else [])
+        if c.get("score") is not None
+    ]
     try:
         scoring.evaluate(
             user_id,
@@ -273,6 +285,7 @@ def retry(
             exchange,
             [Clip(text, duration_ms, input_mode)],
             question=question.text,
+            criteria=criteria or None,
         )
     except (FireError, LimitReached):
         # Fire spend is committed along the way; don't keep an unscored attempt.

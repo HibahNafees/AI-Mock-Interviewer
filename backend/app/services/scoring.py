@@ -9,7 +9,7 @@ it doesn't; sentences that still aren't grounded are dropped).
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, model_validator
 
 from .. import modules
 from ..extensions import db
@@ -43,6 +43,20 @@ SOURCE_SENTENCE_RE = re.compile(r"[^.!?\n]+[.!?]?")
 HEDGE_RE = re.compile(
     r"\bi(?:(?:'|\u2019)?m| am) not (?:sure|certain)\b[^,;:.!?]*(?:[,;:.!?]+|$)\s*(?:but\s+)?"
     r"|\bi (?:don(?:'|\u2019)?t|do not) (?:know|remember)\b[^,;:.!?]*(?:[,;:.!?]+|$)\s*(?:but\s+)?",
+    re.IGNORECASE,
+)
+# Impact claims a rewrite must not add (T-29: "…which significantly improved user
+# engagement" when the candidate never said so): intensifiers, and "improved X"
+# outcomes, unless the candidate's own words make the same claim.
+INTENSIFIER_RE = re.compile(
+    r"\b(?:significantly|greatly|dramatically|substantially|considerably|massively|"
+    r"hugely|vastly|tremendously|drastically)\b",
+    re.IGNORECASE,
+)
+OUTCOME_RE = re.compile(
+    r"\b(?:improv|increas|boost|rais|enhanc|grew|grow|drove|driv)\w*\s+(?:\w+\s+){0,2}?"
+    r"(engagement|satisfaction|retention|conversion|morale|revenue|sales|productivity|"
+    r"efficiency|adoption|usage)\b",
     re.IGNORECASE,
 )
 CLAUSE_RE = re.compile(r"[,;:\u2014]|\s(?:which|while|ensuring|allowing|so that)\s")
@@ -85,6 +99,12 @@ FALLBACK_STEPS = (
 FALLBACK_REWRITE = (
     "[Answer the question with one specific example from your experience: "
     "the situation, what you did, and the result.]"
+)
+
+
+RETRY_RULE = (
+    "- This answer is a retry: score EVERY criterion in the rubric above from 1 to 5 "
+    "(no nulls), so it can be compared with the first attempt.\n"
 )
 
 
@@ -138,9 +158,17 @@ class ScoreOut(BaseModel):
     tips: list[str] = Field(default_factory=list, max_length=3)
 
     @model_validator(mode="after")
-    def some_criterion_scored(self) -> "ScoreOut":
+    def some_criterion_scored(self, info: ValidationInfo) -> "ScoreOut":
         if all(c.score is None for c in self.criteria):
             raise ValueError("score at least one criterion")
+        # A retry must be scored on the criteria its first attempt was (T-29).
+        required = (info.context or {}).get("required") or []
+        scored = {_norm(c.name) for c in self.criteria if c.score is not None}
+        missing = [n for n in required if _norm(n) not in scored]
+        if missing:
+            raise ValueError(
+                f"score every listed criterion; missing: {', '.join(missing)}"
+            )
         return self
 
 
@@ -207,12 +235,24 @@ def grounding_problems(sentences: list[Sentence], sources: list[str]) -> list[st
     stems = {_stem(w) for w in WORD_RE.findall(" ".join(sources).lower())}
     factual = {_stem(w) for w in WORD_RE.findall(_factual(sources).lower())}
     digits = set(DIGITS_RE.findall(" ".join(sources)))
+    said = " ".join(sources)
+    intensifiers = {w.lower() for w in INTENSIFIER_RE.findall(said)}
+    outcomes = {o.lower() for o in OUTCOME_RE.findall(said)}
     problems = []
     for s in sentences:
-        new_numbers = set(DIGITS_RE.findall(PLACEHOLDER_RE.sub(" ", s.text))) - digits
+        text = PLACEHOLDER_RE.sub(" ", s.text)
+        new_numbers = set(DIGITS_RE.findall(text)) - digits
+        new_impact = {w.lower() for w in INTENSIFIER_RE.findall(text)} - intensifiers
+        if not PLACEHOLDER_RE.search(s.text):
+            # "That improved engagement by [add the %]" asks for the real result.
+            new_impact |= {o.lower() for o in OUTCOME_RE.findall(text)} - outcomes
         if new_numbers:
             problems.append(
                 f"it uses numbers the candidate never gave ({', '.join(sorted(new_numbers))})"
+            )
+        elif new_impact:
+            problems.append(
+                f"it claims an impact the candidate never stated ({', '.join(sorted(new_impact))})"
             )
         elif _adds_details(s.text, stems):
             problems.append("it adds details the candidate never gave")
@@ -431,16 +471,28 @@ def evaluate(
     exchange: list[dict],
     clips: list[Clip],
     question: str | None = None,
+    criteria: list[str] | None = None,
 ) -> Evaluation:
     """One Fire chat call → a saved Evaluation for `answer_id`.
 
     `exchange` is [{"interviewer": ..., "candidate": ...}], main question first.
+    `criteria` (for "Try again") limits scoring to the criteria the first attempt
+    was scored on, all of them required, so before and after compare like with like.
     """
     resume = db.session.get(Document, session.resume_id) if session.resume_id else None
     resume_text = resume.raw_text[:MAX_RESUME_CHARS] if resume else ""
     words = target_words(budget_sec)
     plan = section_plan(session, section)
     scenario = plan.get("scenario") if plan.get("module") == "roleplay" else None
+    rubric = session.rubric_json or {}
+    if criteria:
+        wanted = {_norm(n) for n in criteria}
+        rubric = {
+            **rubric,
+            "criteria": [
+                c for c in rubric.get("criteria", []) if _norm(c["name"]) in wanted
+            ],
+        }
     prompt = render(
         "score",
         role=(session.plan_json or {}).get("role_title") or "the role",
@@ -453,14 +505,24 @@ def evaluate(
         scenario=scenario or "none",
         rubric=[
             {k: c.get(k, "") for k in ("name", "description", "strong_answer")}
-            for c in (session.rubric_json or {}).get("criteria", [])
+            for c in rubric.get("criteria", [])
         ],
+        criteria_rule=RETRY_RULE if criteria else "",
         resume=resume_text or "(not available)",
         exchange=exchange,
         target_words=str(words),
     )
-    out = chat_json(user_id, prompt, ScoreOut, SYSTEM, max_tokens=2000, temperature=0.3)
-    score, rows = weighted_score(out.criteria, session.rubric_json)
+    # Temperature 0: the same answer should get the same score (T-29).
+    out = chat_json(
+        user_id,
+        prompt,
+        ScoreOut,
+        SYSTEM,
+        max_tokens=2000,
+        temperature=0,
+        context={"required": criteria or []},
+    )
+    score, rows = weighted_score(out.criteria, rubric)
     answers = [e["candidate"] for e in exchange]
     stronger, changes = grounded_rewrite(
         user_id,

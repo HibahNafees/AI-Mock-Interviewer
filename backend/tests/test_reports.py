@@ -589,3 +589,80 @@ def test_spoken_retry_is_flagged_for_transcription_slips(client, auth, planned, 
     qid = report["report"]["questions"][0]["question_id"]
     assert retry(client, auth, sid, qid).status_code == 201
     assert '"spoken": true' in fire.calls[-1]["prompt"]
+
+
+# Live (T-29): the rewrite added an impact the candidate never claimed.
+EMOTION_ANSWER = (
+    "I worked with Python and OpenCV to make the learning experience more engaging. "
+    "We reached about 85 to 90% accuracy in testing."
+)
+
+
+@pytest.mark.parametrize(
+    "text, problem",
+    [
+        (
+            "I reached about 85 to 90% accuracy, which significantly improved user "
+            "engagement.",
+            "it claims an impact the candidate never stated (engagement, significantly)",
+        ),
+        (
+            "That increased retention for our learners.",
+            "it claims an impact the candidate never stated (retention)",
+        ),
+        ("We reached about 85 to 90% accuracy in testing.", ""),
+        ("That made learning more engaging: [add the result you measured].", ""),
+    ],
+)
+def test_grounding_flags_invented_impact(text, problem):
+    assert grounding_problems([Sentence(text=text)], [EMOTION_ANSWER]) == [problem]
+
+
+def test_try_again_is_scored_on_the_first_attempts_criteria(
+    client, auth, planned, fire
+):
+    # Live (T-29): the first answer was scored on 3 criteria and the retry on 6, so
+    # the suggested stronger version scored lower than the original.
+    sid = planned["id"]
+    fire.scores = [
+        {
+            **SCORE_ALL_FIVE,
+            "criteria": [
+                {"name": "API design", "score": None},
+                {"name": "Structure", "score": 3},
+                {"name": "Clarity", "score": 4},
+                {"name": "Relevance", "score": 4},
+            ],
+        }
+    ]
+    finished(client, auth, fire, sid)
+    build(client, auth, sid)
+    report = client.get(f"/api/sessions/{sid}/report", headers=auth).get_json()
+    qid = report["report"]["questions"][0]["question_id"]
+
+    # The scorer first drops a criterion, is told to score it, then complies.
+    partial = {
+        **SCORE_ALL_FIVE,
+        "criteria": [
+            {"name": "Structure", "score": 5},
+            {"name": "Clarity", "score": 5},
+        ],
+    }
+    fire.scores = [partial, {**SCORE_ALL_FIVE, "criteria": SCORE_ALL_FIVE["criteria"]}]
+    body = retry(client, auth, sid, qid).get_json()
+
+    prompt = fire.calls[-2]["prompt"]
+    assert "This answer is a retry" in prompt
+    assert '"name": "API design"' not in prompt  # not scored the first time
+    assert "missing: Relevance" in fire.calls[-1]["messages"][-1]["content"]
+    criteria = body["attempt"]["evaluation"]["criteria"]
+    assert [c["name"] for c in criteria] == ["Structure", "Clarity", "Relevance"]
+    assert body["attempt"]["evaluation"]["score"] == 5
+
+
+def test_scoring_runs_at_temperature_zero(client, auth, planned, fire):
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    build(client, auth, sid)
+    scoring = [c for c in fire.calls if c["prompt"].startswith("Score one question")]
+    assert scoring and {c["temperature"] for c in scoring} == {0}
