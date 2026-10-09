@@ -138,6 +138,40 @@ const ROLEPLAY = {
   },
 }
 
+describe('setup choices', () => {
+  it('can start right away, answering by typing', async () => {
+    let started = false
+    const active = { ...PLANNED, status: 'active', transcript: [FIRST], timer: TIMER }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/documents?kind=resume': [200, { documents: [{ id: 1, title: 'CV' }] }],
+      'GET /api/documents?kind=job_description': [200, { documents: [{ id: 2, title: 'Job' }] }],
+      'POST /api/documents/2/analysis': [
+        200,
+        { analysis: { role_title: 'Backend Engineer', field: 'software', competencies: [] }, modules: [] },
+      ],
+      'POST /api/sessions': [201, { session: PLANNED }],
+      'POST /api/sessions/7/start': () => {
+        started = true
+        return [200, { session: active, speech: null }]
+      },
+      'GET /api/sessions/7': () => [200, { session: started ? active : PLANNED }],
+    })
+    renderAt('/setup')
+    await screen.findByRole('radiogroup', { name: 'Interview type' })
+    await userEvent.click(screen.getByRole('radio', { name: 'Start right away' }))
+    await userEvent.click(screen.getByRole('radio', { name: '⌨️ Typing' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Start my interview' }))
+
+    // Straight to the first question: no plan screen.
+    expect(await screen.findByText('Hi Ada! Tell me about Acme.')).toBeInTheDocument()
+    expect(started).toBe(true)
+    expect(screen.queryByText('Your interview plan')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Your answer')).toBeInTheDocument()
+    expect(localStorage.getItem('mi_answer_mode')).toBe('text')
+  })
+})
+
 describe('role-play', () => {
   it('shows the scenario in the plan, then who is speaking during the call', async () => {
     respond({

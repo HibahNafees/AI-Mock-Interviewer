@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DocumentInput from '../components/DocumentInput'
 import { api } from '../lib/api'
+import { answerModePref, canRecord, setAnswerModePref } from '../lib/recording'
+import { voicePref } from '../lib/voice'
 
 const DURATIONS = [10, 30, 45, 60]
 
@@ -57,6 +59,8 @@ export default function Setup() {
   const [difficulty, setDifficulty] = useState('mid')
   const [persona, setPersona] = useState('neutral')
   const [focus, setFocus] = useState('mixed')
+  const [startNow, setStartNow] = useState(false)
+  const [answerMode, setAnswerMode] = useState(answerModePref)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const job = useJobAnalysis(jdId)
@@ -80,7 +84,25 @@ export default function Setup() {
           focus: chosen,
         },
       })
-      navigate(`/interview/${session.id}`)
+      setAnswerModePref(answerMode)
+      if (!startNow) {
+        navigate(`/interview/${session.id}`)
+        return
+      }
+      // Skip the plan screen: start now and greet on the interview page.
+      try {
+        const fire = session.voice?.provider === 'fire' && voicePref()
+        const data = await api(`/sessions/${session.id}/start`, {
+          method: 'POST',
+          ...(fire ? { body: { speak: true } } : {}),
+        })
+        navigate(`/interview/${session.id}`, {
+          state: { greeting: { segments: data.session.transcript[0]?.segments, clips: data.speech } },
+        })
+      } catch {
+        // e.g. a daily cap: the plan screen shows the reason when they press Start.
+        navigate(`/interview/${session.id}`)
+      }
     } catch (err) {
       setError(err.message)
       setBusy(false)
@@ -90,7 +112,7 @@ export default function Setup() {
   return (
     <form onSubmit={submit} className="space-y-6">
       <header>
-        <p className="eyebrow">Step 1 of 2</p>
+        <p className="eyebrow">{startNow ? 'Set up your interview' : 'Step 1 of 2'}</p>
         <h1 className="mt-1 text-3xl font-extrabold text-slate-900">New interview</h1>
         <p className="mt-2 text-slate-600">
           Add your résumé and the job you're going for, then choose how you want to practice.
@@ -194,6 +216,40 @@ export default function Setup() {
         </section>
       </div>
 
+      <div className="card grid gap-6 p-5 md:grid-cols-2">
+        <section className="space-y-3">
+          <h2 className="font-semibold text-slate-900">Before you start</h2>
+          <Choice
+            name="Questions"
+            options={[
+              ['review', 'Review the questions first'],
+              ['start', 'Start right away'],
+            ]}
+            value={startNow ? 'start' : 'review'}
+            onChange={(v) => setStartNow(v === 'start')}
+          />
+          <p className="text-sm text-slate-500">
+            {startNow
+              ? 'The questions stay a surprise, like a real interview.'
+              : 'See the plan, edit any question or the minutes, then start.'}
+          </p>
+        </section>
+        <section className="space-y-3">
+          <h2 className="font-semibold text-slate-900">Answer by</h2>
+          <Choice
+            name="Answer by"
+            options={[...(canRecord() ? [['voice', '🎙️ Speaking']] : []), ['text', '⌨️ Typing']]}
+            value={answerMode}
+            onChange={setAnswerMode}
+          />
+          <p className="text-sm text-slate-500">
+            {answerMode === 'voice'
+              ? 'Recording starts by itself when the interviewer finishes speaking.'
+              : 'Type each answer. You can switch to speaking any time.'}
+          </p>
+        </section>
+      </div>
+
       {error && (
         <p role="alert" className="text-sm text-red-600">
           {error}
@@ -204,7 +260,13 @@ export default function Setup() {
         disabled={busy || !resumeId || !jdId || job.status !== 'ready'}
         className="btn-primary"
       >
-        {busy ? 'Building your interview plan…' : 'Build my interview plan'}
+        {busy
+          ? startNow
+            ? 'Getting your interview ready…'
+            : 'Building your interview plan…'
+          : startNow
+            ? 'Start my interview'
+            : 'Build my interview plan'}
       </button>
       {busy && (
         <p className="text-sm text-slate-500">

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import PlanEditor from '../components/PlanEditor'
 import Recorder from '../components/Recorder'
 import { Mascot } from '../components/Art'
 import Timer from '../components/Timer'
 import { api } from '../lib/api'
 import { characterName, scenarioFor } from '../lib/modules'
-import { canRecord, MAX_ANSWER_MS } from '../lib/recording'
+import { answerModePref, canRecord, MAX_ANSWER_MS, setAnswerModePref } from '../lib/recording'
 import { canSpeak, FILLERS, say, setVoicePref, voicePref, warmUpVoices } from '../lib/voice'
 
 function speaker(t, plan) {
@@ -176,7 +176,13 @@ function PlanStep({ session, setSession, onGreeting }) {
 const EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a' }
 
 function LiveStep({ session, setSession, greeting }) {
-  const [mode, setMode] = useState(() => (canRecord() ? 'voice' : 'text'))
+  const [mode, setMode] = useState(answerModePref)
+  // Bumped when a question has been asked (and spoken): in speak mode the
+  // recorder starts by itself then.
+  const [recordKey, setRecordKey] = useState(0)
+  const modeRef = useRef(mode)
+  modeRef.current = mode
+  const said = useRef(0) // which speak() call is current
   const fireVoice = session.voice?.provider === 'fire'
   const persona = session.voice?.persona ?? session.persona
   const hasVoice = canSpeak() || fireVoice
@@ -209,21 +215,29 @@ function LiveStep({ session, setSession, greeting }) {
     setSpeaking(false)
   }, [])
 
+  // The question is out (spoken, skipped, or voice is off): in speak mode, record.
+  const questionReady = useCallback(() => {
+    askedAt.current = Date.now()
+    if (modeRef.current === 'voice') setRecordKey((k) => k + 1)
+  }, [])
+
   const speak = useCallback(
-    (message, { remember = true } = {}) => {
+    (message, { remember = true, onDone } = {}) => {
       if (!message?.segments?.length) return
       if (remember) lastSaid.current = message
       voice.current?.cancel()
+      const turn = ++said.current
       const handle = say({ ...message, persona })
       voice.current = handle
       setSpeaking(true)
       handle.done.then((result) => {
-        if (voice.current !== handle) return
-        voice.current = null
+        if (turn !== said.current) return // another message took over
+        if (voice.current === handle) voice.current = null
         setSpeaking(false)
         setVoiceFailed(result?.ok === false)
-        // A typed answer's time starts once the question has been heard.
-        askedAt.current = Date.now()
+        // Also after "Stop": the candidate wants to answer now.
+        if (onDone) onDone()
+        else askedAt.current = Date.now()
       })
     },
     [persona],
@@ -233,9 +247,11 @@ function LiveStep({ session, setSession, greeting }) {
   // "already greeted" flag: React's dev double-mount cancels the first attempt.)
   useEffect(() => {
     warmUpVoices()
-    if (greeting && voicePref() && hasVoice) speak(greeting)
+    if (!greeting) return () => voice.current?.cancel()
+    if (voicePref() && hasVoice) speak(greeting, { onDone: questionReady })
+    else questionReady()
     return () => voice.current?.cancel()
-  }, [greeting, hasVoice, speak])
+  }, [greeting, hasVoice, speak, questionReady])
 
   function toggleVoice() {
     const on = !voiceOn
@@ -246,7 +262,9 @@ function LiveStep({ session, setSession, greeting }) {
 
   function repeat() {
     // After a reload nothing has been said yet: read out the current question.
-    speak(lastSaid.current ?? { segments: session.transcript.at(-1)?.segments })
+    speak(lastSaid.current ?? { segments: session.transcript.at(-1)?.segments }, {
+      onDone: questionReady,
+    })
   }
 
   async function sendTurn(answer, meta) {
@@ -259,11 +277,15 @@ function LiveStep({ session, setSession, greeting }) {
       })
       setText('')
       spoken.current = null
-      const said = { segments: data.turn.segments, clips: data.speech }
+      const reply = { segments: data.turn.segments, clips: data.speech }
+      const next = data.session.status === 'active' ? questionReady : undefined
       if (data.turn.action === 'wrap_up') setClosing(data.turn.message)
       setSession(data.session)
-      if (voiceOn) speak(said)
-      else lastSaid.current = said
+      if (voiceOn) speak(reply, { onDone: next })
+      else {
+        lastSaid.current = reply
+        next?.()
+      }
     } catch (err) {
       // Keep the answer (typed or transcribed) so it can be resent without re-recording.
       setError(err.message)
@@ -385,7 +407,17 @@ function LiveStep({ session, setSession, greeting }) {
       {active ? (
         <div className="card space-y-4 p-5">
           {mode === 'voice' ? (
-            <Recorder onRecorded={onRecorded} onStart={stopSpeaking} disabled={busy} />
+            <div className="space-y-2">
+              <Recorder
+                onRecorded={onRecorded}
+                onStart={stopSpeaking}
+                disabled={busy}
+                autoStartKey={recordKey}
+              />
+              <p className="text-xs text-slate-500">
+                Recording starts by itself when the interviewer finishes the question.
+              </p>
+            </div>
           ) : (
             <form onSubmit={sendTyped} className="space-y-2">
               <textarea
@@ -427,7 +459,11 @@ function LiveStep({ session, setSession, greeting }) {
               onClick={() => {
                 setError('')
                 spoken.current = null
-                setMode((m) => (m === 'voice' ? 'text' : 'voice'))
+                setMode((m) => {
+                  const next = m === 'voice' ? 'text' : 'voice'
+                  setAnswerModePref(next)
+                  return next
+                })
               }}
               className="btn-link"
             >
@@ -466,7 +502,15 @@ export default function Interview() {
   const { id } = useParams()
   const [session, setSession] = useState(null)
   const [error, setError] = useState('')
-  const [greeting, setGreeting] = useState(null)
+  const location = useLocation()
+  const navigate = useNavigate()
+  // Set when Setup started the interview directly ("Start right away").
+  const [greeting, setGreeting] = useState(() => location.state?.greeting ?? null)
+
+  useEffect(() => {
+    // Don't greet again if the page is reloaded later.
+    if (location.state?.greeting) navigate(location.pathname, { replace: true, state: null })
+  }, [location, navigate])
 
   const load = useCallback(() => {
     api(`/sessions/${id}`)

@@ -21,7 +21,7 @@ function clock(ms) {
 
 // Records one answer. Stops on "Done", after a few seconds of silence, or at 5 minutes,
 // then calls onRecorded(blob, durationMs). The clip lives only in memory.
-export default function Recorder({ onRecorded, onStart, disabled }) {
+export default function Recorder({ onRecorded, onStart, disabled, autoStartKey = 0 }) {
   const [state, setState] = useState('idle') // idle | starting | recording | pending
   const [sendIn, setSendIn] = useState(0)
   const pending = useRef(null) // { blob, duration, timer } after an auto-stop
@@ -52,6 +52,18 @@ export default function Recorder({ onRecorded, onStart, disabled }) {
     },
     [],
   )
+
+  // Start by itself when autoStartKey changes (the interviewer finished asking),
+  // once the recorder is free.
+  const autoHandled = useRef(0)
+  useEffect(() => {
+    if (autoStartKey > autoHandled.current && !disabled && state === 'idle') {
+      autoHandled.current = autoStartKey
+      start()
+    }
+    // start() is recreated each render; the key is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStartKey, disabled, state])
 
   function sendPending() {
     const p = pending.current

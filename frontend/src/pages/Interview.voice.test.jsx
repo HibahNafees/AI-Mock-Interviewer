@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,14 +9,17 @@ import { fakeSpeech } from '../test-speech'
 
 // Stand-in recorder: one click "records" a 4.2-second clip.
 vi.mock('../components/Recorder', () => ({
-  default: ({ onRecorded, disabled }) => (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onRecorded(new Blob(['clip'], { type: 'audio/webm;codecs=opus' }), 4200)}
-    >
-      Record answer
-    </button>
+  default: ({ onRecorded, disabled, autoStartKey = 0 }) => (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onRecorded(new Blob(['clip'], { type: 'audio/webm;codecs=opus' }), 4200)}
+      >
+        Record answer
+      </button>
+      <span data-testid="auto-record">{autoStartKey}</span>
+    </>
   ),
 }))
 
@@ -286,5 +289,50 @@ describe('interviewer voice', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
     expect(await screen.findByText(closing)).toBeInTheDocument()
     expect(spoken.map((u) => u.text).slice(-2)).toEqual(['That covers everything.', 'Thank you.'])
+  })
+})
+
+describe('auto-record', () => {
+  const NEXT = { question_id: 2, interviewer: 'What was your part?', segments: TURN.segments, answer: null }
+  function routes() {
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: ACTIVE }],
+      'POST /api/sessions/7/transcribe': [200, { text: 'I led the billing API.' }],
+      'POST /api/sessions/7/turns': [
+        200,
+        { turn: TURN, session: { ...ACTIVE, transcript: [{ ...FIRST, answer: 'ok' }, NEXT] } },
+      ],
+    })
+  }
+
+  it('starts recording when the interviewer finishes the next question', async () => {
+    const spoken = fakeSpeech()
+    routes()
+    renderInterview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
+    await screen.findByText('What was your part?')
+    expect(screen.getByTestId('auto-record')).toHaveTextContent('0') // still speaking
+    await act(async () => spoken.at(-1).onend())
+    expect(screen.getByTestId('auto-record')).toHaveTextContent('1')
+  })
+
+  it('starts right away when the interviewer voice is off', async () => {
+    fakeSpeech()
+    localStorage.setItem('mi_voice', 'off')
+    routes()
+    renderInterview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
+    await screen.findByText('What was your part?')
+    await vi.waitFor(() => expect(screen.getByTestId('auto-record')).toHaveTextContent('1'))
+  })
+
+  it('opens in typing mode when that was chosen', async () => {
+    localStorage.setItem('mi_answer_mode', 'text')
+    routes()
+    renderInterview()
+    expect(await screen.findByLabelText('Your answer')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Speak instead' }))
+    expect(localStorage.getItem('mi_answer_mode')).toBe('voice')
   })
 })

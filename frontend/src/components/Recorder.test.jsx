@@ -137,4 +137,12 @@ describe('Recorder', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Record answer' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Microphone access was blocked')
   })
+
+  it('starts by itself when asked, once it is free', async () => {
+    const onRecorded = vi.fn()
+    const { rerender } = render(<Recorder onRecorded={onRecorded} disabled autoStartKey={1} />)
+    expect(screen.getByRole('button', { name: 'Record answer' })).toBeInTheDocument()
+    rerender(<Recorder onRecorded={onRecorded} autoStartKey={1} />)
+    expect(await screen.findByRole('button', { name: 'Done' })).toBeInTheDocument()
+  })
 })
