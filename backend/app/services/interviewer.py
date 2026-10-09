@@ -5,6 +5,7 @@ wrap up) from the timer; Fire chat only picks among them and words the reply.
 """
 
 import logging
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -45,6 +46,54 @@ CLOSING_EARLY = (
     "That covers everything I wanted to ask. Thank you for your answers today; "
     "that's the end of the interview."
 )
+
+
+# Evaluative words the interviewer must not use about an answer (feedback is for the
+# report). Applied only to statements; questions like "What was the most interesting
+# part?" are kept.
+PRAISE_RE = re.compile(
+    r"\b(great|good|solid|interesting|impressive|excellent|nice|fantastic|awesome|"
+    r"wonderful|insight|insightful|strong|perfect|well done|well said|sounds like|"
+    r"love that|appreciate (?:your|the) (?:thoughts|insights?|answer|perspective)|"
+    r"thanks for (?:that|the|your) (?:insight|great|detailed|thorough))",
+    re.IGNORECASE,
+)
+SENTENCE_RE = re.compile(r"[^.!?]+[.!?]*\s*")
+
+
+PROMPT_RE = re.compile(
+    r"\s*(tell|walk|describe|explain|give|share|talk|show|take)\b", re.IGNORECASE
+)
+
+
+def _is_question(sentence: str) -> bool:
+    return "?" in sentence or bool(PROMPT_RE.match(sentence))
+
+
+def neutralize(message: str) -> str:
+    """Drop statements that praise or grade the answer; keep the question(s)."""
+    sentences = SENTENCE_RE.findall(message)
+    kept, dropped = [], False
+    for i, sentence in enumerate(sentences):
+        last = i == len(sentences) - 1
+        if not last and not _is_question(sentence) and PRAISE_RE.search(sentence):
+            dropped = True
+            continue
+        kept.append(sentence)
+    if not dropped:
+        return message
+    out = "".join(kept).strip()
+    # A contrast word only made sense after the sentence we removed.
+    out = re.sub(
+        r"(^|[.!?]\s+)(however|but),\s*(\w)",
+        lambda m: m[1] + m[3].upper(),
+        out,
+        flags=re.I,
+    )
+    starts_with_ack = re.match(
+        r"(thanks|thank you|okay|ok|got it|understood|right)\b", out, re.I
+    )
+    return out if starts_with_ack else f"Thanks. {out}"
 
 
 class TurnOut(BaseModel):
@@ -220,6 +269,7 @@ def take_turn(
             nudges=nudges(timer, opts, root_budget, answer_sec) or ["none"],
         )
         out = chat_json(user_id, prompt, TurnOut, max_tokens=500, temperature=0.6)
+        out.message = neutralize(out.message)
         if out.action not in opts:
             log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
             out = _fallback(opts)

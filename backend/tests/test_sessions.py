@@ -220,3 +220,43 @@ def test_fire_errors_reach_the_user(client, auth, planned, fire):
     res = answer(client, auth, planned["id"])
     assert res.status_code == 429 and "busy" in res.get_json()["error"]
     assert Answer.query.count() == 0  # nothing half-saved; the user can resend
+
+
+@pytest.mark.parametrize(
+    "said,expected",
+    [
+        (
+            "Thanks for that insight. How did you optimize the queries?",
+            "Thanks. How did you optimize the queries?",
+        ),
+        (
+            "That sounds like a solid implementation! Can you explain the indexes?",
+            "Thanks. Can you explain the indexes?",
+        ),
+        (
+            "Got it. I appreciate your thoughts on mentoring. However, how did you tune MySQL?",
+            "Got it. How did you tune MySQL?",
+        ),
+        ("Great answer. Next: why MySQL?", "Thanks. Next: why MySQL?"),
+        ("Okay. Tell me about a strong result you achieved.", None),
+        (
+            "Great. Give me an example of a solid design you shipped.",
+            "Thanks. Give me an example of a solid design you shipped.",
+        ),
+        ("Okay. What was the most interesting bug you fixed?", None),
+        ("Thanks. Tell me about a time you disagreed with a teammate.", None),
+    ],
+)
+def test_interviewer_never_praises(said, expected):
+    from app.services.interviewer import neutralize
+
+    assert neutralize(said) == (expected or said)
+
+
+def test_praise_is_removed_from_live_turns(client, auth, planned, fire):
+    started(client, auth, planned["id"])
+    fire.turns = [
+        {"action": "follow_up", "message": "Impressive work! What was your role?"}
+    ]
+    turn = answer(client, auth, planned["id"]).get_json()["turn"]
+    assert turn["message"] == "Thanks. What was your role?"

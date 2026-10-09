@@ -49,7 +49,7 @@ No LiveKit, local Whisper, or local TTS is needed for phases 1–10.
 | 3. Turn-based voice | speaks | speaks | transcribe + chat + speech |
 | 4. Real-time (optional) | speaks | speaks, can interrupt | LiveKit agent |
 
-Turn-based limits to design around: 1–3 s pause per turn (show a thinking indicator; later a pre-recorded "Mm-hm"); no mid-answer interruptions (nudges and pressure happen between answers); no timestamps (measure answer duration in the browser; pace = words ÷ duration); Whisper may drop "um"/"uh" (test early before relying on filler counts).
+Turn-based limits to design around: 1–3 s pause per turn (show a thinking indicator; later a pre-recorded "Mm-hm"); no mid-answer interruptions (nudges and pressure happen between answers); no timestamps (measure answer duration in the browser; pace = words ÷ duration); Whisper keeps "um"/"uh" (verified live 2026-10-09 with a synthesized clip), so filler counts are usable.
 
 ## Repo layout
 
@@ -124,7 +124,7 @@ Flexible LLM output is stored in JSON columns. No table stores audio/video. Docu
 11. Optional: real-time voice with LiveKit (interruptions, peer practice)
 12. Optional: Hume EVI experiment
 
-**Current phase:** 3 done in code (speak in, text out); live transcribe check pending. Next: 4.
+**Current phase:** 3 done and live-verified (speak in, text out). Next: 4.
 
 ## Running locally
 
