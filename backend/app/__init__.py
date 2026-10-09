@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 from flask import Flask, jsonify
 from flask_cors import CORS
 
@@ -7,7 +6,6 @@ from .extensions import db, jwt, migrate
 
 
 def create_app(config_class: type[Config] = Config) -> Flask:
-    load_dotenv()
     app = Flask(__name__)
     app.config.from_object(config_class)
 
