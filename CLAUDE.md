@@ -124,7 +124,7 @@ Flexible LLM output is stored in JSON columns. No table stores audio/video. Docu
 11. Optional: real-time voice with LiveKit (interruptions, peer practice)
 12. Optional: Hume EVI experiment
 
-**Current phase:** 6 built (voice stage 3): replies are split into speaker segments (`questions.asked_segments`: interviewer vs role-play character); the browser speaks them with the free Web Speech API (persona pace/pitch, a different voice for the character, "Mm-hm" filler while the reply is written, Repeat, on/off switch). `VOICE_PROVIDER=fire` returns Fire `/v1/speech` audio per segment from start/turn instead, but Fire has no speech model deployed yet (T-27), so `browser` is the default. Next: try it in a real browser with voices, then 7.
+**Current phase:** 6 built (voice stage 3) plus polish from user testing: speaker segments + browser Web Speech API (`VOICE_PROVIDER=fire` coded; Fire has no speech model yet, T-27); ice-breaker opener (`ICEBREAKER`, never scored) and natural sign-offs; `/api/stats` dashboard (score chart, level, streak, roles, skills); Huru-inspired coral/amber/navy theme with the "Echo" mascot (`components/Art.jsx`); scoring fixes (retries judged against the first attempt on the same criteria, near-empty answers score 1, temperature 0). Open: T-27 (Fire speech), T-29 (confirm a retry with a filled-in stronger version scores higher). Next: Phase 7 (progress and story bank).
 
 ## Running locally
 
