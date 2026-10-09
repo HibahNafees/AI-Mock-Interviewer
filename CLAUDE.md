@@ -123,4 +123,24 @@ Flexible LLM output is stored in JSON columns. No table stores audio/video. Docu
 11. Optional: real-time voice with LiveKit (interruptions, peer practice)
 12. Optional: Hume EVI experiment
 
-**Current phase:** 1
+**Current phase:** 1 done (foundation). Next: 2.
+
+## Running locally
+
+```bash
+# Backend (python3-venv isn't installed on devbox, so bootstrap pip into the venv)
+cd backend
+python3 -m venv --without-pip .venv && python3 -m pip --python .venv/bin/python install pip
+.venv/bin/python -m pip install -r requirements-dev.txt
+cp .env.example .env            # fill in DATABASE_URL, SECRET_KEY, JWT_SECRET_KEY
+FLASK_APP=wsgi.py .venv/bin/flask db upgrade
+FLASK_APP=wsgi.py .venv/bin/flask run -p 5000
+.venv/bin/python -m pytest      # tests use in-memory SQLite; Fire is always mocked
+.venv/bin/black app tests
+
+# Frontend (Vite proxies /api to Flask on :5000)
+cd frontend && npm install && npm run dev
+npm test && npm run lint
+```
+
+Schema changes: edit `app/models`, then `flask db migrate -m "..."` and review the generated file.
