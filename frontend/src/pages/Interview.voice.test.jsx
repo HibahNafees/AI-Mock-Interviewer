@@ -336,3 +336,21 @@ describe('auto-record', () => {
     expect(localStorage.getItem('mi_answer_mode')).toBe('voice')
   })
 })
+
+describe('your questions', () => {
+  it('shows a hint when the interviewer invites questions', async () => {
+    const invite = {
+      question_id: 9,
+      section: 'Your questions',
+      interviewer: 'Before we wrap up, do you have any questions for me?',
+      segments: [{ who: 'interviewer', text: 'Before we wrap up, do you have any questions for me?' }],
+      answer: null,
+    }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: { ...ACTIVE, transcript: [{ ...FIRST, answer: 'ok' }, invite] } }],
+    })
+    renderInterview()
+    expect(await screen.findByText('Your turn to ask.')).toBeInTheDocument()
+  })
+})

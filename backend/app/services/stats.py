@@ -45,7 +45,11 @@ def user_stats(user_id: int) -> dict:
     answers = db.session.execute(
         db.select(Answer, Question)
         .join(Question, Answer.question_id == Question.id)
-        .where(Question.session_id.in_(ids), Question.is_icebreaker.is_(False))
+        .where(
+            Question.session_id.in_(ids),
+            Question.is_icebreaker.is_(False),
+            Question.is_candidate_qa.is_(False),
+        )
     ).all()
 
     history = [

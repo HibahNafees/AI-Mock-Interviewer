@@ -27,6 +27,8 @@ class Config:
     FIRE_TIMEOUT_SEC = float(os.environ.get("FIRE_TIMEOUT_SEC", "60"))
     # Open with a short small-talk question before the plan (never scored).
     ICEBREAKER = os.environ.get("ICEBREAKER", "1") == "1"
+    # End with "Do you have any questions for me?" (answered, never scored).
+    CANDIDATE_QUESTIONS = os.environ.get("CANDIDATE_QUESTIONS", "1") == "1"
     # Interviewer voice: "browser" (free Web Speech API in the browser) or "fire"
     # (Fire /v1/speech, billed; no speech model was deployed on 2026-10-09, T-27).
     VOICE_PROVIDER = os.environ.get("VOICE_PROVIDER", "browser")
@@ -60,3 +62,4 @@ class TestConfig(Config):
     REPORTS_INLINE = True
     # Most tests start straight at the first planned question.
     ICEBREAKER = False
+    CANDIDATE_QUESTIONS = False

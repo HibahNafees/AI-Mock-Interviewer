@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from .. import modules
 from ..extensions import db
-from ..models import Answer, Question, Session, User
+from ..models import Answer, Document, Question, Session, User
 from ..models.base import utcnow
 from .fire import FireError
 from .limits import LimitReached
@@ -28,6 +28,7 @@ MAX_FOLLOW_UPS = 2
 MAX_ROLEPLAY_TURNS = 6
 HISTORY_TURNS = 8
 BONUS_MIN_SEC = 3 * 60
+MAX_JD_CHARS = 4000
 
 PERSONAS = {
     "friendly": "warm and encouraging; you put the candidate at ease",
@@ -85,6 +86,15 @@ TOUGH_CLOSING = (
     "email."
 )
 OUT_OF_TIME = "Looks like we're out of time."
+
+# The candidate's turn to ask (not scored): asked instead of signing off.
+QA_SECTION = "Your questions"
+INVITE = "Before we wrap up, do you have any questions for me?"
+INVITE_LATE = (
+    "We're nearly out of time, but before we finish: do you have any questions for me?"
+)
+ANYTHING_ELSE = "Is there anything else you'd like to know?"
+MAX_CANDIDATE_QUESTIONS = 3
 
 
 def closing(session: Session, out_of_time: bool = False) -> str:
@@ -424,7 +434,19 @@ def take_turn(
         return _after_icebreaker(
             session, user_id, current, text, duration_ms, input_mode
         )
+    if current.is_candidate_qa:
+        return _after_candidate_question(
+            session, user_id, asked, current, text, duration_ms, input_mode
+        )
     timer = timer_state(session, asked)
+    invite = current_app.config.get("CANDIDATE_QUESTIONS", True)
+
+    def sign_off(out_of_time: bool = False) -> str:
+        """Invite the candidate's questions, or close if that's switched off."""
+        if invite:
+            return INVITE_LATE if out_of_time else INVITE
+        return closing(session, out_of_time)
+
     opts = options(session, asked, timer)
 
     root_budget = current.budget_sec
@@ -440,7 +462,7 @@ def take_turn(
     if list(opts) == ["wrap_up"]:
         out = TurnOut(
             action="wrap_up",
-            message=closing(session, out_of_time=timer.remaining_sec <= WRAP_UP_SEC),
+            message=sign_off(out_of_time=timer.remaining_sec <= WRAP_UP_SEC),
         )
     else:
         choices = {
@@ -490,7 +512,7 @@ def take_turn(
             out.message = neutralize(out.message)
         if out.action not in opts:
             log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
-            out = _fallback(session, opts)
+            out = _fallback(opts, sign_off())
             fell_back = True
         in_character = scenario is not None and not fell_back
 
@@ -523,13 +545,13 @@ def take_turn(
             parts = [
                 said,
                 (INTERVIEWER, ROLEPLAY_EXIT),
-                (INTERVIEWER, closing(session)),
+                (INTERVIEWER, sign_off()),
             ]
         elif leaving:
             parts = [(INTERVIEWER, ROLEPLAY_EXIT), said]
         elif out.action == "wrap_up" and not fell_back and list(opts) != ["wrap_up"]:
             # The app's natural sign-off, not the model's one-line thank-you.
-            parts = [(INTERVIEWER, closing(session))]
+            parts = [(INTERVIEWER, sign_off())]
     segments = _segments(parts)
     out.message = " ".join(s["text"] for s in segments)
 
@@ -550,6 +572,16 @@ def take_turn(
         db.session.add(follow)
     elif out.action in ("next_question", "bonus"):
         _ask(opts[out.action], segments)
+    elif invite:
+        # Not the end yet: the candidate's turn to ask.
+        qa = _qa_question(session, current, INVITE)
+        _ask(qa, segments)
+        db.session.commit()
+        return {
+            "action": "your_questions",
+            "message": out.message,
+            "segments": segments,
+        }
     else:
         session.status = "completed"
         session.ended_at = now
@@ -636,13 +668,90 @@ def _after_icebreaker(
     return {"action": "next_question", "message": message, "segments": segments}
 
 
-def _fallback(session: Session, opts: dict) -> TurnOut:
+def _qa_question(session: Session, after: Question, text: str) -> Question:
+    qa = Question(
+        session_id=session.id,
+        section=QA_SECTION,
+        order_no=after.order_no + 1000,
+        text=text,
+        budget_sec=60,
+        is_bonus=False,
+        is_candidate_qa=True,
+    )
+    db.session.add(qa)
+    return qa
+
+
+class CandidateQuestionReply(BaseModel):
+    has_question: bool
+    answer: str = Field(default="", max_length=1200)
+
+
+def _after_candidate_question(
+    session: Session,
+    user_id: int,
+    asked: list[Question],
+    qa: Question,
+    text: str,
+    duration_ms: int | None,
+    input_mode: str,
+) -> dict:
+    """Answer the candidate's question in role, then "anything else?" or sign off."""
+    _save_answer(session, qa, text, duration_ms, input_mode)
+    jd = db.session.get(Document, session.jd_id) if session.jd_id else None
+    plan = session.plan_json or {}
+    history = [
+        {"interviewer": q.asked_text, "candidate": a.transcript}
+        for q in asked[:-1]
+        if q.is_candidate_qa
+        and (a := db.session.scalar(db.select(Answer).filter_by(question_id=q.id)))
+    ]
+    try:
+        reply = chat_json(
+            user_id,
+            render(
+                "candidate_question",
+                persona=PERSONAS.get(session.persona or "neutral", PERSONAS["neutral"]),
+                role=plan.get("role_title") or "the role",
+                analysis=plan.get("analysis") or {},
+                jd=(jd.raw_text[:MAX_JD_CHARS] if jd else "(not available)"),
+                history=history,
+                question=qa.asked_text or qa.text,
+                answer=text,
+            ),
+            CandidateQuestionReply,
+            max_tokens=400,
+            temperature=0.5,
+        )
+    except (FireError, LimitReached) as err:
+        log.warning("Answering the candidate's question failed: %s", err)
+        reply = CandidateQuestionReply(has_question=False)
+
+    asked_so_far = sum(1 for q in asked if q.is_candidate_qa)
+    # The answer, or a short "No problem at all." when they had no questions.
+    answer = reply.answer.strip()
+    if reply.has_question and asked_so_far < MAX_CANDIDATE_QUESTIONS:
+        segments = _segments([(INTERVIEWER, answer), (INTERVIEWER, ANYTHING_ELSE)])
+        _ask(_qa_question(session, qa, ANYTHING_ELSE), segments)
+        db.session.commit()
+        message = " ".join(s["text"] for s in segments)
+        return {"action": "your_questions", "message": message, "segments": segments}
+
+    segments = _segments([(INTERVIEWER, answer), (INTERVIEWER, closing(session))])
+    session.status = "completed"
+    session.ended_at = utcnow()
+    db.session.commit()
+    message = " ".join(s["text"] for s in segments)
+    return {"action": "wrap_up", "message": message, "segments": segments}
+
+
+def _fallback(opts: dict, sign_off: str) -> TurnOut:
     """Used when the model picks a move the clock doesn't allow."""
     for action in ("next_question", "bonus"):
         q = opts.get(action)
         if q is not None:
             return TurnOut(action=action, message=f"Thank you. Next question: {q.text}")
-    return TurnOut(action="wrap_up", message=closing(session))
+    return TurnOut(action="wrap_up", message=sign_off)
 
 
 def end(session: Session) -> None:

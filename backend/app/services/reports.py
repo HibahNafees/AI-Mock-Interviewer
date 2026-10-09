@@ -76,7 +76,12 @@ def threads(session: Session) -> list[Thread]:
     first = {a.question_id: a for a in rows if a.attempt_no == 1}
     out = []
     for q in asked:
-        if q.follow_up_of_id is not None or q.id not in first or q.is_icebreaker:
+        if (
+            q.follow_up_of_id is not None
+            or q.id not in first
+            or q.is_icebreaker
+            or q.is_candidate_qa
+        ):
             continue
         group = [q] + [f for f in asked if f.follow_up_of_id == q.id]
         out.append(

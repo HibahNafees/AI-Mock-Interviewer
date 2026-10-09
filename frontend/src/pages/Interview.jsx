@@ -366,6 +366,13 @@ function LiveStep({ session, setSession, greeting }) {
         )}
       </header>
 
+      {active && session.transcript.at(-1)?.section === 'Your questions' && (
+        <p className="rounded-2xl bg-navy-50 p-4 text-sm text-navy-800 ring-1 ring-navy-100">
+          <span aria-hidden="true">💬 </span>
+          <span className="font-bold">Your turn to ask.</span> Ask about the role, the team or next
+          steps, like you would at the end of a real interview. Or just say you have no questions.
+        </p>
+      )}
       {roleplay && (
         <p className="rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
           <span aria-hidden="true">🎭 </span>

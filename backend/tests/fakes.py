@@ -122,6 +122,8 @@ class FakeFire:
         self.spoken: list[tuple[str, str | None]] = []
         self.speech_error: Exception | None = None
         self.small_talk_error: Exception | None = None
+        # Replies to "Do you have any questions for me?" turns.
+        self.candidate_replies: list[dict | Exception] = []
 
     def chat(
         self, messages, system_prompt=None, max_tokens=1024, temperature=0.4, model=None
@@ -149,6 +151,14 @@ class FakeFire:
             body = SUMMARY
         elif 'Fix a "stronger version"' in prompt:
             body = self.repairs.pop(0) if self.repairs else REPAIR
+        elif "whether they have any questions for you" in prompt:
+            body = (
+                self.candidate_replies.pop(0)
+                if self.candidate_replies
+                else {"has_question": False, "answer": "No problem at all."}
+            )
+            if isinstance(body, Exception):
+                raise body
         elif "moment of small talk" in prompt:
             if self.small_talk_error:
                 raise self.small_talk_error

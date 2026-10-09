@@ -76,6 +76,11 @@ class Question(db.Model):
     is_icebreaker: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
+    # "Do you have any questions for me?" at the end (and "Anything else?"): the
+    # candidate's questions to the interviewer. Never scored.
+    is_candidate_qa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     # Set for follow-ups the interviewer asks about a planned question.
     follow_up_of_id: Mapped[int | None] = fk("questions.id", nullable=True)
     # When and how the interviewer actually asked it (null = not asked yet).
