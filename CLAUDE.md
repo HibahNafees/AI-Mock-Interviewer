@@ -22,7 +22,7 @@ Full spec: `docs/SPEC.md` (read the relevant section before starting each phase)
 | Backend | Flask (Python), JWT auth; the only component that talks to Fire |
 | Speech-to-text | Fire `POST /v1/transcribe` (Whisper Large v3 Turbo) |
 | Interviewer brain | Fire `POST /v1/chat` |
-| Interviewer voice | Fire `POST /v1/speech` (from voice stage 3) |
+| Interviewer voice | Browser Web Speech API (free, default); Fire `POST /v1/speech` behind `VOICE_PROVIDER=fire` once Fire deploys a speech model (T-27) |
 | Database | MySQL 8 |
 | Hosting | Oracle Cloud Always Free VM (Docker Compose + Caddy); frontend on Vercel |
 | Optional later | LiveKit Agents (real-time voice, peer practice); Hume EVI (emotion experiment) |
@@ -124,7 +124,7 @@ Flexible LLM output is stored in JSON columns. No table stores audio/video. Docu
 11. Optional: real-time voice with LiveKit (interruptions, peer practice)
 12. Optional: Hume EVI experiment
 
-**Current phase:** 5 done and live-verified (any-job: format modules in `app/modules` + `prompts/modules`, interview type at setup, role-play with app-announced switches and a `goal_reached` exit). Next: 6.
+**Current phase:** 6 built (voice stage 3): replies are split into speaker segments (`questions.asked_segments`: interviewer vs role-play character); the browser speaks them with the free Web Speech API (persona pace/pitch, a different voice for the character, "Mm-hm" filler while the reply is written, Repeat, on/off switch). `VOICE_PROVIDER=fire` returns Fire `/v1/speech` audio per segment from start/turn instead, but Fire has no speech model deployed yet (T-27), so `browser` is the default. Next: try it in a real browser with voices, then 7.
 
 ## Running locally
 

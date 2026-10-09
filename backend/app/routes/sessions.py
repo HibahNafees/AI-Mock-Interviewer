@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..extensions import db
 from ..models import Answer, Session, User
-from ..services import interviewer, limits, planning
+from ..services import interviewer, limits, planning, voice
 from ..services.transcription import TranscriptionError, transcribe
 from ..services.timer import timer_state
 from .common import current_user_id, first_error
@@ -58,6 +58,8 @@ class TurnBody(BaseModel):
         default=None, ge=0, le=MAX_ANSWER_MS + DURATION_SLACK_MS
     )
     input_mode: Literal["text", "voice"] = "text"
+    # Ask for Fire audio of the reply (only used when VOICE_PROVIDER=fire).
+    speak: bool = False
 
     @field_validator("text")
     @classmethod
@@ -91,6 +93,8 @@ def _transcript(session: Session) -> list[dict]:
                 "question_id": q.id,
                 "section": q.section,
                 "interviewer": q.asked_text or q.text,
+                "segments": q.asked_segments
+                or [{"who": "interviewer", "text": q.asked_text or q.text}],
                 "is_follow_up": q.follow_up_of_id is not None,
                 "is_bonus": q.is_bonus,
                 "answer": a.transcript if a else None,
@@ -124,6 +128,7 @@ def session_dict(session: Session, detail: bool = False) -> dict:
         data["analysis"] = plan.get("analysis")
         data["plan"] = planning.plan_view(session)
         data["rubric"] = session.rubric_json
+        data["voice"] = voice.info(session)
         data["transcript"] = _transcript(session)
         data["timer"] = (
             timer_state(session, interviewer.asked_questions(session)).to_dict()
@@ -253,9 +258,11 @@ def start(session_id: int):
     user_id = current_user_id()
     limits.check_can_start(user_id, session.duration_min)
     user = db.session.get(User, user_id)
-    interviewer.start(session, user.name)
+    first = interviewer.start(session, user.name)
     limits.record_session_start(user_id, session.duration_min)
-    return jsonify(session=session_dict(session, detail=True))
+    speak = bool((request.get_json(silent=True) or {}).get("speak"))
+    speech = voice.synthesize(user_id, session, first.asked_segments) if speak else None
+    return jsonify(session=session_dict(session, detail=True), speech=speech)
 
 
 @bp.post("/<int:session_id>/turns")
@@ -272,10 +279,16 @@ def turn(session_id: int):
     except ValidationError as err:
         return jsonify(error=first_error(err)), 400
 
+    user_id = current_user_id()
     result = interviewer.take_turn(
-        session, current_user_id(), body.text, body.duration_ms, body.input_mode
+        session, user_id, body.text, body.duration_ms, body.input_mode
     )
-    return jsonify(turn=result, session=session_dict(session, detail=True))
+    speech = (
+        voice.synthesize(user_id, session, result["segments"]) if body.speak else None
+    )
+    return jsonify(
+        turn=result, session=session_dict(session, detail=True), speech=speech
+    )
 
 
 @bp.post("/<int:session_id>/transcribe")

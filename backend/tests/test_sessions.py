@@ -127,9 +127,11 @@ def test_disallowed_move_falls_back_to_plan(client, auth, planned, fire):
     started(client, auth, sid)
     fire.turns = [{"action": "bonus", "message": "Off-plan question"}]
     turn = answer(client, auth, sid).get_json()["turn"]
+    message = "Thank you. Next question: How would you design a rate limiter?"
     assert turn == {
         "action": "next_question",
-        "message": "Thank you. Next question: How would you design a rate limiter?",
+        "message": message,
+        "segments": [{"who": "interviewer", "text": message}],
     }
 
 

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { AuthProvider } from '../lib/auth'
+import { fakeSpeech } from '../test-speech'
 
 const ADA = { id: 1, name: 'Ada', email: 'ada@example.com' }
 const TIMER = {
@@ -190,7 +191,11 @@ describe('interview', () => {
         return [
           200,
           {
-            turn: { action: 'follow_up' },
+            turn: {
+              action: 'follow_up',
+              message: 'What was your part?',
+              segments: [{ who: 'interviewer', text: 'What was your part?' }],
+            },
             session: {
               ...PLANNED,
               status: 'active',
@@ -258,5 +263,28 @@ describe('interview', () => {
     const you = screen.getByText('Done').closest('div')
     expect(within(you).getByText('You')).toBeInTheDocument()
     expect(screen.queryByLabelText('Your answer')).not.toBeInTheDocument()
+  })
+
+  it('speaks the first question when the interview starts', async () => {
+    const spoken = fakeSpeech()
+    const segments = [
+      { who: 'interviewer', text: 'Hi Ada!' },
+      { who: 'character', text: 'Tell me about Acme.' },
+    ]
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: PLANNED }],
+      'POST /api/sessions/7/start': [
+        200,
+        { session: { ...PLANNED, status: 'active', transcript: [{ ...FIRST, segments }], timer: TIMER } },
+      ],
+    })
+    renderAt('/interview/7')
+    await userEvent.click(await screen.findByRole('button', { name: 'Start interview' }))
+    await screen.findByText('Hi Ada! Tell me about Acme.')
+    expect(spoken.map((u) => [u.text, u.voice.name])).toEqual([
+      ['Hi Ada!', 'Alex'],
+      ['Tell me about Acme.', 'Sam'],
+    ])
   })
 })

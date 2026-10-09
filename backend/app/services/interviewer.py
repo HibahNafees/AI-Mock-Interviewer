@@ -134,7 +134,33 @@ def _entering(session: Session, question: Question, previous: Question | None) -
         previous is not None and previous.section == question.section
     ):
         return ""
-    return roleplay_intro(scenario) + " "
+    return roleplay_intro(scenario)
+
+
+INTERVIEWER, CHARACTER = "interviewer", "character"
+
+
+def _segments(parts: list[tuple[str, str]]) -> list[dict]:
+    """[(who, text)] → [{"who", "text"}], dropping blanks and joining same-speaker runs.
+
+    Lets the browser voice the interviewer and a role-play character differently.
+    """
+    out: list[dict] = []
+    for who, text in parts:
+        text = text.strip()
+        if not text:
+            continue
+        if out and out[-1]["who"] == who:
+            out[-1]["text"] += f" {text}"
+        else:
+            out.append({"who": who, "text": text})
+    return out
+
+
+def _speaker_of(session: Session, question: Question) -> str:
+    """A planned role-play question is the character's opening line."""
+    in_roleplay = not question.is_bonus and scenario_of(session, question.section)
+    return CHARACTER if in_roleplay else INTERVIEWER
 
 
 class TurnOut(BaseModel):
@@ -162,9 +188,10 @@ def asked_questions(session: Session) -> list[Question]:
     )
 
 
-def _ask(question: Question, message: str) -> None:
+def _ask(question: Question, segments: list[dict]) -> None:
     question.asked_at = utcnow()
-    question.asked_text = message
+    question.asked_text = " ".join(s["text"] for s in segments)
+    question.asked_segments = segments
 
 
 def start(session: Session, user_name: str) -> Question:
@@ -183,7 +210,16 @@ def start(session: Session, user_name: str) -> Question:
         minutes=session.duration_min,
         role=(session.plan_json or {}).get("role_title") or "this",
     )
-    _ask(first, f"{opening} {_entering(session, first, None)}{first.text}")
+    _ask(
+        first,
+        _segments(
+            [
+                (INTERVIEWER, opening),
+                (INTERVIEWER, _entering(session, first, None)),
+                (_speaker_of(session, first), first.text),
+            ]
+        ),
+    )
     db.session.commit()
     return first
 
@@ -313,6 +349,7 @@ def take_turn(
 
     scenario = scenario_of(session, current.section)
     fell_back = False
+    in_character = False  # out.message is the role-play character's line
     module = section_info(session, current.section).get("module", modules.DEFAULT)
     if list(opts) == ["wrap_up"]:
         closing = CLOSING if timer.remaining_sec <= WRAP_UP_SEC else CLOSING_EARLY
@@ -367,7 +404,10 @@ def take_turn(
             log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
             out = _fallback(opts)
             fell_back = True
+        in_character = scenario is not None and not fell_back
 
+    said = (CHARACTER if in_character else INTERVIEWER, out.message)
+    parts = [said]
     if out.action != "follow_up":
         nxt = opts.get(out.action) if out.action in ("next_question", "bonus") else None
         leaving = scenario is not None and (
@@ -378,16 +418,25 @@ def take_turn(
             # The character never sees the next planned question (it blended the next
             # scenario into its replies, live check T-25): its closing line, then the
             # app steps out and asks the question as planned.
-            closing = "" if fell_back else f"{out.message.strip()} "
-            out.message = f"{closing}{ROLEPLAY_EXIT} {entering}{nxt.text}"
+            parts = ([said] if in_character else []) + [
+                (INTERVIEWER, ROLEPLAY_EXIT),
+                (INTERVIEWER, entering),
+                (_speaker_of(session, nxt), nxt.text),
+            ]
         elif entering:
             # The character's opening line is used as planned, after the intro.
-            out.message = f"Thanks. {entering}{nxt.text}"
-        elif leaving and not fell_back and list(opts) != ["wrap_up"]:
+            parts = [
+                (INTERVIEWER, "Thanks."),
+                (INTERVIEWER, entering),
+                (CHARACTER, nxt.text),
+            ]
+        elif leaving and in_character:
             # The character's goodbye, then the app steps out and closes.
-            out.message = f"{out.message.strip()} {ROLEPLAY_EXIT} {CLOSING_EARLY}"
+            parts = [said, (INTERVIEWER, ROLEPLAY_EXIT), (INTERVIEWER, CLOSING_EARLY)]
         elif leaving:
-            out.message = f"{ROLEPLAY_EXIT} {out.message}"
+            parts = [(INTERVIEWER, ROLEPLAY_EXIT), said]
+    segments = _segments(parts)
+    out.message = " ".join(s["text"] for s in segments)
 
     now = utcnow()
     ended_ms = int((now - session.started_at).total_seconds() * 1000)
@@ -414,15 +463,15 @@ def take_turn(
             is_bonus=False,
             follow_up_of_id=root_id,
         )
-        _ask(follow, out.message)
+        _ask(follow, segments)
         db.session.add(follow)
     elif out.action in ("next_question", "bonus"):
-        _ask(opts[out.action], out.message)
+        _ask(opts[out.action], segments)
     else:
         session.status = "completed"
         session.ended_at = now
     db.session.commit()
-    return {"action": out.action, "message": out.message}
+    return {"action": out.action, "message": out.message, "segments": segments}
 
 
 def _fallback(opts: dict) -> TurnOut:

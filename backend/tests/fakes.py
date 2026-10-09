@@ -118,6 +118,9 @@ class FakeFire:
         self.plan: dict | str = PLAN
         self.transcripts: list[str] = []
         self.audio: list[str] = []
+        # Speech calls as (text, voice); set speech_error to make them fail.
+        self.spoken: list[tuple[str, str | None]] = []
+        self.speech_error: Exception | None = None
 
     def chat(
         self, messages, system_prompt=None, max_tokens=1024, temperature=0.4, model=None
@@ -149,6 +152,12 @@ class FakeFire:
         self.audio.append(audio_data_url)
         text = self.transcripts.pop(0) if self.transcripts else "I led the billing API."
         return FireResult(data={"text": text}, price_usd=0.0003)
+
+    def speech(self, text, voice=None):
+        if self.speech_error:
+            raise self.speech_error
+        self.spoken.append((text, voice))
+        return FireResult(data={"audio": "QUJD", "format": "mp3"}, price_usd=0.0002)
 
     def kinds(self) -> list[str]:
         out = []

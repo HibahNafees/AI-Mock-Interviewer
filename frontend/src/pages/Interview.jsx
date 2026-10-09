@@ -6,6 +6,7 @@ import Timer from '../components/Timer'
 import { api } from '../lib/api'
 import { characterName, scenarioFor } from '../lib/modules'
 import { canRecord, MAX_ANSWER_MS } from '../lib/recording'
+import { canSpeak, FILLERS, say, setVoicePref, voicePref, warmUpVoices } from '../lib/voice'
 
 function speaker(t, plan) {
   const scenario = scenarioFor(plan, t.section)
@@ -39,7 +40,7 @@ function Transcript({ items, plan }) {
   )
 }
 
-function PlanStep({ session, setSession }) {
+function PlanStep({ session, setSession, onGreeting }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -52,7 +53,14 @@ function PlanStep({ session, setSession }) {
     setError('')
     setBusy(true)
     try {
-      setSession((await api(`/sessions/${session.id}/start`, { method: 'POST' })).session)
+      const fire = session.voice?.provider === 'fire'
+      const data = await api(`/sessions/${session.id}/start`, {
+        method: 'POST',
+        ...(fire && voicePref() ? { body: { speak: true } } : {}),
+      })
+      // The first question is spoken once the interview screen is up.
+      onGreeting({ segments: data.session.transcript[0]?.segments, clips: data.speech })
+      setSession(data.session)
     } catch (err) {
       setError(err.message)
       setBusy(false)
@@ -108,8 +116,18 @@ function PlanStep({ session, setSession }) {
 
 const EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a' }
 
-function LiveStep({ session, setSession }) {
+function LiveStep({ session, setSession, greeting }) {
   const [mode, setMode] = useState(() => (canRecord() ? 'voice' : 'text'))
+  const fireVoice = session.voice?.provider === 'fire'
+  const persona = session.voice?.persona ?? session.persona
+  const hasVoice = canSpeak() || fireVoice
+  const [voiceOn, setVoiceOn] = useState(() => hasVoice && voicePref())
+  const [speaking, setSpeaking] = useState(false)
+  const [voiceFailed, setVoiceFailed] = useState(false)
+  const [closing, setClosing] = useState(null)
+  const voice = useRef(null) // what's playing now: { cancel }
+  const lastSaid = useRef(null) // { segments, clips } for "Repeat"
+
   const [text, setText] = useState('')
   const [phase, setPhase] = useState('idle') // idle | transcribing | thinking
   const [error, setError] = useState('')
@@ -126,13 +144,67 @@ function LiveStep({ session, setSession }) {
     bottom.current?.scrollIntoView?.({ behavior: 'smooth' })
   }, [turns])
 
+  const stopSpeaking = useCallback(() => {
+    voice.current?.cancel()
+    voice.current = null
+    setSpeaking(false)
+  }, [])
+
+  const speak = useCallback(
+    (message, { remember = true } = {}) => {
+      if (!message?.segments?.length) return
+      if (remember) lastSaid.current = message
+      voice.current?.cancel()
+      const handle = say({ ...message, persona })
+      voice.current = handle
+      setSpeaking(true)
+      handle.done.then((result) => {
+        if (voice.current !== handle) return
+        voice.current = null
+        setSpeaking(false)
+        setVoiceFailed(result?.ok === false)
+        // A typed answer's time starts once the question has been heard.
+        askedAt.current = Date.now()
+      })
+    },
+    [persona],
+  )
+
+  // Speak the first question, and stop talking when the page goes away. (No
+  // "already greeted" flag: React's dev double-mount cancels the first attempt.)
+  useEffect(() => {
+    warmUpVoices()
+    if (greeting && voicePref() && hasVoice) speak(greeting)
+    return () => voice.current?.cancel()
+  }, [greeting, hasVoice, speak])
+
+  function toggleVoice() {
+    const on = !voiceOn
+    setVoiceOn(on)
+    setVoicePref(on)
+    if (!on) stopSpeaking()
+  }
+
+  function repeat() {
+    // After a reload nothing has been said yet: read out the current question.
+    speak(lastSaid.current ?? { segments: session.transcript.at(-1)?.segments })
+  }
+
   async function sendTurn(answer, meta) {
     setPhase('thinking')
     try {
-      const data = await api(`/sessions/${session.id}/turns`, { method: 'POST', body: { text: answer, ...meta } })
+      const data = await api(`/sessions/${session.id}/turns`, {
+        method: 'POST',
+        // Only Fire voice needs the backend; the browser voice speaks the text.
+        body: { text: answer, ...meta, ...(fireVoice && voiceOn ? { speak: true } : {}) },
+      })
       setText('')
       spoken.current = null
+      const said = { segments: data.turn.segments, clips: data.speech }
+      if (data.turn.action === 'wrap_up') setClosing(data.turn.message)
       setSession(data.session)
+      if (voiceOn) speak(said)
+      else lastSaid.current = said
     } catch (err) {
       // Keep the answer (typed or transcribed) so it can be resent without re-recording.
       setError(err.message)
@@ -149,6 +221,11 @@ function LiveStep({ session, setSession }) {
   async function onRecorded(blob, durationMs) {
     setError('')
     setPhase('transcribing')
+    if (voiceOn && !fireVoice) {
+      // A quick "Mm-hm" covers the pause while the reply is written.
+      const filler = FILLERS[Math.floor(Math.random() * FILLERS.length)]
+      speak({ segments: [{ who: roleplay ? 'character' : 'interviewer', text: filler }] }, { remember: false })
+    }
     const form = new FormData()
     const type = blob.type.split(';')[0]
     form.append('audio', blob, `answer.${EXT[type] ?? 'webm'}`)
@@ -178,6 +255,7 @@ function LiveStep({ session, setSession }) {
 
   async function endEarly() {
     if (!window.confirm('End the interview now?')) return
+    stopSpeaking()
     setSession((await api(`/sessions/${session.id}/end`, { method: 'POST' })).session)
   }
 
@@ -186,16 +264,24 @@ function LiveStep({ session, setSession }) {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{session.role_title || 'Interview'}</h1>
-          {active && <Timer timer={session.timer} running={!busy} />}
+          {active && <Timer timer={session.timer} running={!busy && !speaking} />}
         </div>
         {active && (
-          <button
-            type="button"
-            onClick={endEarly}
-            className="text-sm text-slate-600 underline hover:text-slate-900"
-          >
-            End interview
-          </button>
+          <div className="flex flex-wrap items-center gap-4">
+            {hasVoice && (
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input type="checkbox" checked={voiceOn} onChange={toggleVoice} />
+                Interviewer voice
+              </label>
+            )}
+            <button
+              type="button"
+              onClick={endEarly}
+              className="text-sm text-slate-600 underline hover:text-slate-900"
+            >
+              End interview
+            </button>
+          </div>
         )}
       </header>
 
@@ -206,6 +292,27 @@ function LiveStep({ session, setSession }) {
         </p>
       )}
       <Transcript items={session.transcript} plan={session.plan} />
+      {closing && !active && (
+        <div className="max-w-[85%] rounded-lg bg-white p-3 shadow-sm ring-1 ring-slate-200">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Interviewer</p>
+          <p>{closing}</p>
+        </div>
+      )}
+      {speaking && !busy && (
+        <p role="status" className="flex items-center gap-3 text-sm text-slate-500">
+          <span className="animate-pulse">Interviewer is speaking…</span>
+          <button type="button" onClick={stopSpeaking} className="underline hover:text-slate-900">
+            Stop
+          </button>
+        </p>
+      )}
+      {voiceFailed && voiceOn && active && (
+        <p className="text-sm text-amber-800">
+          Your browser couldn't play the interviewer's voice (it may have no voices installed,
+          or it blocked sound until you click). Try &ldquo;Repeat the question&rdquo;, or read
+          the text.
+        </p>
+      )}
       {busy && (
         <p role="status" className="animate-pulse text-sm text-slate-500">
           {phase === 'transcribing' ? 'Listening back to your answer…' : 'Interviewer is thinking…'}
@@ -216,7 +323,7 @@ function LiveStep({ session, setSession }) {
       {active ? (
         <div className="space-y-3">
           {mode === 'voice' ? (
-            <Recorder onRecorded={onRecorded} disabled={busy} />
+            <Recorder onRecorded={onRecorded} onStart={stopSpeaking} disabled={busy} />
           ) : (
             <form onSubmit={sendTyped} className="space-y-2">
               <textarea
@@ -244,6 +351,16 @@ function LiveStep({ session, setSession }) {
             <p role="alert" className="text-sm text-red-600">
               {error}
             </p>
+          )}
+          {hasVoice && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={repeat}
+              className="mr-4 text-sm text-slate-600 underline hover:text-slate-900 disabled:opacity-50"
+            >
+              Repeat the question
+            </button>
           )}
           {canRecord() && (
             <button
@@ -287,6 +404,7 @@ export default function Interview() {
   const { id } = useParams()
   const [session, setSession] = useState(null)
   const [error, setError] = useState('')
+  const [greeting, setGreeting] = useState(null)
 
   const load = useCallback(() => {
     api(`/sessions/${id}`)
@@ -298,6 +416,7 @@ export default function Interview() {
 
   if (error) return <p role="alert" className="text-red-600">{error}</p>
   if (!session) return <p className="text-slate-500">Loading…</p>
-  if (session.status === 'planned') return <PlanStep session={session} setSession={setSession} />
-  return <LiveStep session={session} setSession={setSession} />
+  if (session.status === 'planned')
+    return <PlanStep session={session} setSession={setSession} onGreeting={setGreeting} />
+  return <LiveStep session={session} setSession={setSession} greeting={greeting} />
 }

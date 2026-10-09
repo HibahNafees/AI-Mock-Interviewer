@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { AuthProvider } from '../lib/auth'
+import { FILLERS } from '../lib/voice'
+import { fakeSpeech } from '../test-speech'
 
 // Stand-in recorder: one click "records" a 4.2-second clip.
 vi.mock('../components/Recorder', () => ({
@@ -19,7 +21,17 @@ vi.mock('../components/Recorder', () => ({
 }))
 
 const ADA = { id: 1, name: 'Ada', email: 'ada@example.com' }
-const FIRST = { question_id: 1, interviewer: 'Tell me about Acme.', answer: null }
+const FIRST = {
+  question_id: 1,
+  interviewer: 'Tell me about Acme.',
+  segments: [{ who: 'interviewer', text: 'Tell me about Acme.' }],
+  answer: null,
+}
+const TURN = {
+  action: 'follow_up',
+  message: 'What was your part?',
+  segments: [{ who: 'interviewer', text: 'What was your part?' }],
+}
 const ACTIVE = {
   id: 7,
   status: 'active',
@@ -73,6 +85,7 @@ describe('spoken answers', () => {
       'POST /api/sessions/7/turns': [
         200,
         {
+          turn: TURN,
           session: {
             ...ACTIVE,
             transcript: [
@@ -111,7 +124,7 @@ describe('spoken answers', () => {
       'POST /api/sessions/7/turns': () =>
         ++attempts === 1
           ? [429, { error: 'The AI service is busy; please wait a moment' }]
-          : [200, { session: { ...ACTIVE, transcript: [{ ...FIRST, answer: 'ok' }] } }],
+          : [200, { turn: TURN, session: { ...ACTIVE, transcript: [{ ...FIRST, answer: 'ok' }] } }],
     })
     renderInterview()
     await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
@@ -151,5 +164,127 @@ describe('spoken answers', () => {
     expect(screen.getByLabelText('Your answer')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Speak instead' }))
     expect(screen.getByRole('button', { name: 'Record answer' })).toBeInTheDocument()
+  })
+})
+
+describe('interviewer voice', () => {
+  const NEXT = { question_id: 2, interviewer: 'What was your part?', segments: TURN.segments, answer: null }
+  const ANSWERED = { ...FIRST, answer: 'I led the billing API.', input_mode: 'voice' }
+
+  function routes(extra = {}, session = ACTIVE) {
+    return respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session }],
+      'POST /api/sessions/7/transcribe': [200, { text: 'I led the billing API.' }],
+      'POST /api/sessions/7/turns': [
+        200,
+        { turn: TURN, session: { ...session, transcript: [ANSWERED, NEXT] }, speech: null },
+      ],
+      ...extra,
+    })
+  }
+
+  it('says "Mm-hm" while the reply is written, then speaks the reply', async () => {
+    const spoken = fakeSpeech()
+    routes()
+    renderInterview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
+    await screen.findByText('What was your part?')
+
+    const said = spoken.map((u) => u.text)
+    expect(FILLERS).toContain(said[0])
+    expect(said.at(-1)).toBe('What was your part?')
+    expect(screen.getByText('Interviewer is speaking…')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(screen.queryByText('Interviewer is speaking…')).not.toBeInTheDocument()
+  })
+
+  it('can be turned off, and stays off', async () => {
+    const spoken = fakeSpeech()
+    routes()
+    renderInterview()
+    await userEvent.click(await screen.findByLabelText('Interviewer voice'))
+    await userEvent.click(screen.getByRole('button', { name: 'Record answer' }))
+    await screen.findByText('What was your part?')
+    expect(spoken).toEqual([])
+    expect(localStorage.getItem('mi_voice')).toBe('off')
+
+    // "Repeat" still reads the question out on request.
+    await userEvent.click(screen.getByRole('button', { name: 'Repeat the question' }))
+    expect(spoken.map((u) => u.text)).toEqual(['What was your part?'])
+  })
+
+  it('repeats the current question after a reload', async () => {
+    const spoken = fakeSpeech()
+    routes()
+    renderInterview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Repeat the question' }))
+    expect(spoken.map((u) => u.text)).toEqual(['Tell me about Acme.'])
+  })
+
+  it('says so when the browser cannot speak', async () => {
+    const spoken = fakeSpeech([])
+    routes()
+    renderInterview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Repeat the question' }))
+    spoken[0].onerror({ error: 'synthesis-failed' })
+    expect(await screen.findByText(/couldn't play the interviewer's voice/)).toBeInTheDocument()
+  })
+
+  it('has no voice controls without speech support', async () => {
+    routes()
+    renderInterview()
+    await screen.findByRole('button', { name: 'Record answer' })
+    expect(screen.queryByLabelText('Interviewer voice')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Repeat the question' })).not.toBeInTheDocument()
+  })
+
+  it('plays Fire audio when the backend sends it', async () => {
+    fakeSpeech()
+    const played = []
+    vi.stubGlobal('Audio', class {
+      constructor(src) {
+        played.push(src)
+      }
+      play() {
+        return Promise.resolve()
+      }
+      pause() {}
+    })
+    const fire = { ...ACTIVE, voice: { provider: 'fire', persona: 'neutral' } }
+    const clip = { who: 'interviewer', audio: 'data:audio/mpeg;base64,AA' }
+    const calls = routes(
+      {
+        'POST /api/sessions/7/turns': [
+          200,
+          { turn: TURN, session: { ...fire, transcript: [ANSWERED, NEXT] }, speech: [clip] },
+        ],
+      },
+      fire,
+    )
+    renderInterview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
+    await screen.findByText('What was your part?')
+    await vi.waitFor(() => expect(played).toEqual([clip.audio]))
+    const turn = calls.find((c) => c.key === 'POST /api/sessions/7/turns')
+    expect(JSON.parse(turn.opts.body).speak).toBe(true)
+  })
+
+  it('shows and speaks the closing line', async () => {
+    const spoken = fakeSpeech()
+    const closing = 'That covers everything. Thank you.'
+    routes({
+      'POST /api/sessions/7/turns': [
+        200,
+        {
+          turn: { action: 'wrap_up', message: closing, segments: [{ who: 'interviewer', text: closing }] },
+          session: { ...ACTIVE, status: 'completed', transcript: [ANSWERED] },
+        },
+      ],
+    })
+    renderInterview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
+    expect(await screen.findByText(closing)).toBeInTheDocument()
+    expect(spoken.map((u) => u.text).slice(-2)).toEqual(['That covers everything.', 'Thank you.'])
   })
 })

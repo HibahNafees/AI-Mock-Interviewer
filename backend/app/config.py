@@ -25,6 +25,16 @@ class Config:
     # Cheap model by default: the whole app runs on a $1/month Fire budget.
     FIRE_CHAT_MODEL = os.environ.get("FIRE_CHAT_MODEL", "gpt-4o-mini")
     FIRE_TIMEOUT_SEC = float(os.environ.get("FIRE_TIMEOUT_SEC", "60"))
+    # Interviewer voice: "browser" (free Web Speech API in the browser) or "fire"
+    # (Fire /v1/speech, billed; no speech model was deployed on 2026-10-09, T-27).
+    VOICE_PROVIDER = os.environ.get("VOICE_PROVIDER", "browser")
+    # Fire voice ids by speaker: "friendly", "neutral", "tough", "character".
+    # Unset ones use the speech model's default voice.
+    FIRE_VOICES = {
+        k: os.environ[f"FIRE_VOICE_{k.upper()}"]
+        for k in ("friendly", "neutral", "tough", "character")
+        if os.environ.get(f"FIRE_VOICE_{k.upper()}")
+    }
     # Per-user daily caps (usage_limits).
     DAILY_INTERVIEW_MINUTES = int(os.environ.get("DAILY_INTERVIEW_MINUTES", "60"))
     DAILY_LONG_SESSIONS = int(os.environ.get("DAILY_LONG_SESSIONS", "1"))

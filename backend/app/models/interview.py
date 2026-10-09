@@ -77,6 +77,9 @@ class Question(db.Model):
     # When and how the interviewer actually asked it (null = not asked yet).
     asked_at: Mapped[datetime | None] = mapped_column(DateTime)
     asked_text: Mapped[str | None] = mapped_column(Text)
+    # asked_text split by speaker for the interviewer's voice:
+    # [{"who": "interviewer" | "character", "text": ...}].
+    asked_segments: Mapped[list[Any] | None] = mapped_column(JSON)
 
 
 class Answer(db.Model):

@@ -17,7 +17,7 @@ function clock(ms) {
 
 // Records one answer. Stops on "Done", after a few seconds of silence, or at 5 minutes,
 // then calls onRecorded(blob, durationMs). The clip lives only in memory.
-export default function Recorder({ onRecorded, disabled }) {
+export default function Recorder({ onRecorded, onStart, disabled }) {
   const [state, setState] = useState('idle') // idle | starting | recording
   const [error, setError] = useState('')
   const [elapsed, setElapsed] = useState(0)
@@ -50,6 +50,7 @@ export default function Recorder({ onRecorded, disabled }) {
   async function start() {
     setError('')
     setState('starting')
+    onStart?.()
     let stream
     try {
       stream = await navigator.mediaDevices.getUserMedia({
