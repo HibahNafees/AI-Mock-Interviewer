@@ -37,7 +37,8 @@ No LiveKit, local Whisper, or local TTS is needed for phases 1–10.
 - `POST /v1/speech`: interviewer audio (voice stage 3 onward).
 - All calls live in `backend/app/services/fire.py` (one client: transcribe, chat, speech). Timeouts, one retry on 5xx, clear error messages to the frontend.
 - Cap answers at 5 minutes (well under the 25 MB clip limit).
-- Track estimated Fire spend per user in `usage_limits`. **Total Fire budget: $1/month** (`FIRE_MONTHLY_BUDGET_USD=1`); new sessions pause when it's reached.
+- Chat model is `FIRE_CHAT_MODEL` (default `gpt-4o-mini`; Fire's own default, Claude Sonnet, is far pricier).
+- Track Fire spend per user in `usage_limits` from each response's `meta.price.usd`. **Total Fire budget: $1/month** (`FIRE_MONTHLY_BUDGET_USD=1`); new sessions pause when it's reached.
 
 ## Voice stages
 
@@ -123,7 +124,7 @@ Flexible LLM output is stored in JSON columns. No table stores audio/video. Docu
 11. Optional: real-time voice with LiveKit (interruptions, peer practice)
 12. Optional: Hume EVI experiment
 
-**Current phase:** 1 done (foundation). Next: 2.
+**Current phase:** 2 done (text-only brain, typed answers). Next: 3.
 
 ## Running locally
 
@@ -133,6 +134,8 @@ cd backend
 python3 -m venv --without-pip .venv && python3 -m pip --python .venv/bin/python install pip
 .venv/bin/python -m pip install -r requirements-dev.txt
 cp .env.example .env            # fill in DATABASE_URL, SECRET_KEY, JWT_SECRET_KEY
+# On devbox: MySQL 8 is installed; DB creds are in the vault (ai_providers slug
+# mock-interviewer-db) and the Fire key under slug fireapi. backend/.env is already filled.
 FLASK_APP=wsgi.py .venv/bin/flask db upgrade
 FLASK_APP=wsgi.py .venv/bin/flask run -p 5000
 .venv/bin/python -m pytest      # tests use in-memory SQLite; Fire is always mocked

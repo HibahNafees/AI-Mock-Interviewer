@@ -3,7 +3,9 @@ import ComingSoon from './components/ComingSoon'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/Dashboard'
+import Interview from './pages/Interview'
 import Login from './pages/Login'
+import Setup from './pages/Setup'
 import Signup from './pages/Signup'
 
 export default function App() {
@@ -19,8 +21,8 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
-        <Route path="setup" element={<ComingSoon title="New interview" phase={2} />} />
-        <Route path="interview/:id" element={<ComingSoon title="Interview" phase={2} />} />
+        <Route path="setup" element={<Setup />} />
+        <Route path="interview/:id" element={<Interview />} />
         <Route path="report/:id" element={<ComingSoon title="Report" phase={4} />} />
         <Route path="stories" element={<ComingSoon title="Story bank" phase={7} />} />
         <Route path="decoder" element={<ComingSoon title="JD decoder" phase={8} />} />

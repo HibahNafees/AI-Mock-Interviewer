@@ -27,7 +27,8 @@ export class ApiError extends Error {
 
 export async function api(path, { method = 'GET', body } = {}) {
   const headers = {}
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
 
@@ -36,7 +37,7 @@ export async function api(path, { method = 'GET', body } = {}) {
     res = await fetch(`${BASE_URL}/api${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined || isForm ? body : JSON.stringify(body),
     })
   } catch {
     throw new ApiError('Cannot reach the server. Is the backend running?', 0)
