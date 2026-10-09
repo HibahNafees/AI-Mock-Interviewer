@@ -25,6 +25,8 @@ class Config:
     # Cheap model by default: the whole app runs on a $1/month Fire budget.
     FIRE_CHAT_MODEL = os.environ.get("FIRE_CHAT_MODEL", "gpt-4o-mini")
     FIRE_TIMEOUT_SEC = float(os.environ.get("FIRE_TIMEOUT_SEC", "60"))
+    # Open with a short small-talk question before the plan (never scored).
+    ICEBREAKER = os.environ.get("ICEBREAKER", "1") == "1"
     # Interviewer voice: "browser" (free Web Speech API in the browser) or "fire"
     # (Fire /v1/speech, billed; no speech model was deployed on 2026-10-09, T-27).
     VOICE_PROVIDER = os.environ.get("VOICE_PROVIDER", "browser")
@@ -56,3 +58,5 @@ class TestConfig(Config):
     SQLALCHEMY_ENGINE_OPTIONS: dict = {}
     FIRE_API_KEY = None
     REPORTS_INLINE = True
+    # Most tests start straight at the first planned question.
+    ICEBREAKER = False

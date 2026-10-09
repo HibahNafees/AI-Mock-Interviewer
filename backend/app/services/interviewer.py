@@ -5,15 +5,19 @@ wrap up) from the timer; Fire chat only picks among them and words the reply.
 """
 
 import logging
+import random
 import re
 from typing import Literal
 
+from flask import current_app
 from pydantic import BaseModel, Field
 
 from .. import modules
 from ..extensions import db
-from ..models import Answer, Question, Session
+from ..models import Answer, Question, Session, User
 from ..models.base import utcnow
+from .fire import FireError
+from .limits import LimitReached
 from .llm import chat_json, render
 from .timer import SECTION_NUDGE_SEC, WRAP_UP_SEC, TimerState, timer_state
 
@@ -41,14 +45,57 @@ OPENINGS = {
     "them count. First question.",
 }
 
-CLOSING = (
-    "That's all the time we have. Thank you for your answers today; "
-    "that's the end of the interview."
+# With an ice-breaker, the greeting leads into it instead of "Let's begin."
+GREETINGS = {
+    "friendly": "Hi {name}, thanks for joining! This is a {minutes}-minute interview for "
+    "the {role} role, and I'll keep an eye on the clock. Before we dive in: {ice}",
+    "neutral": "Hello {name}, nice to meet you. This is a {minutes}-minute interview for "
+    "the {role} role; I'll keep track of time. To start: {ice}",
+    "tough": "Hello {name}. We have {minutes} minutes for the {role} role. Quickly, "
+    "before we start: {ice}",
+}
+ICEBREAKERS = [
+    "How are you doing today?",
+    "How's your day going so far?",
+    "Tell me a little about yourself.",
+    "What's something you've enjoyed working on recently?",
+    "What got you interested in this role?",
+    "How are you feeling about today's interview?",
+]
+ICEBREAKER_SECTION = "Ice-breaker"
+INTO_PLAN = {
+    "friendly": "Let's get started.",
+    "neutral": "Let's get started.",
+    "tough": "Let's get to it.",
+}
+ICEBREAKER_FALLBACK = "Thanks for sharing."
+
+# How the interviewer signs off; one is picked per session.
+CLOSINGS = [
+    "That's everything from me, {name}. It was really great talking with you today. "
+    "The team will review everything, and you'll hear back by email about next steps. "
+    "Take care!",
+    "Thank you so much for your time, {name}; I really enjoyed our conversation. "
+    "We'll be in touch by email soon about next steps. Have a great rest of your day!",
+    "That brings us to the end. It was a pleasure speaking with you, {name}. You'll get "
+    "an email from us once the team has made a decision. Best of luck!",
+]
+TOUGH_CLOSING = (
+    "That's everything, {name}. Thanks for your time. You'll hear back from us by "
+    "email."
 )
-CLOSING_EARLY = (
-    "That covers everything I wanted to ask. Thank you for your answers today; "
-    "that's the end of the interview."
-)
+OUT_OF_TIME = "Looks like we're out of time."
+
+
+def closing(session: Session, out_of_time: bool = False) -> str:
+    """A natural sign-off, the same one for the whole session."""
+    user = db.session.get(User, session.user_id)
+    name = (user.name if user else "").split(" ")[0] or "there"
+    if session.persona == "tough":
+        text = TOUGH_CLOSING.format(name=name)
+    else:
+        text = random.Random(session.id).choice(CLOSINGS).format(name=name)
+    return f"{OUT_OF_TIME} {text}" if out_of_time else text
 
 
 # Evaluative words the interviewer must not use about an answer (feedback is for the
@@ -195,16 +242,51 @@ def _ask(question: Question, segments: list[dict]) -> None:
 
 
 def start(session: Session, user_name: str) -> Question:
-    """Start the clock and ask the first planned question."""
+    """Start the clock and ask the ice-breaker (or the first planned question)."""
     first = db.session.scalar(
         db.select(Question)
-        .filter_by(session_id=session.id, is_bonus=False, follow_up_of_id=None)
+        .filter_by(
+            session_id=session.id,
+            is_bonus=False,
+            is_icebreaker=False,
+            follow_up_of_id=None,
+        )
         .order_by(Question.order_no)
     )
     if first is None:
         raise ValueError("The plan has no questions")
     session.status = "active"
     session.started_at = utcnow()
+    if current_app.config.get("ICEBREAKER", True):
+        ice = Question(
+            session_id=session.id,
+            section=ICEBREAKER_SECTION,
+            order_no=0,
+            text=random.Random(session.id).choice(ICEBREAKERS),
+            budget_sec=60,
+            is_bonus=False,
+            is_icebreaker=True,
+        )
+        db.session.add(ice)
+        greeting = GREETINGS.get(session.persona or "neutral", GREETINGS["neutral"])
+        _ask(
+            ice,
+            _segments(
+                [
+                    (
+                        INTERVIEWER,
+                        greeting.format(
+                            name=user_name.split(" ")[0],
+                            minutes=session.duration_min,
+                            role=(session.plan_json or {}).get("role_title") or "this",
+                            ice=ice.text,
+                        ),
+                    )
+                ]
+            ),
+        )
+        db.session.commit()
+        return ice
     opening = OPENINGS.get(session.persona or "neutral", OPENINGS["neutral"]).format(
         name=user_name,
         minutes=session.duration_min,
@@ -338,6 +420,10 @@ def take_turn(
     """Save the answer to the current question and produce the interviewer's reply."""
     asked = asked_questions(session)
     current = asked[-1]
+    if current.is_icebreaker:
+        return _after_icebreaker(
+            session, user_id, current, text, duration_ms, input_mode
+        )
     timer = timer_state(session, asked)
     opts = options(session, asked, timer)
 
@@ -352,8 +438,10 @@ def take_turn(
     in_character = False  # out.message is the role-play character's line
     module = section_info(session, current.section).get("module", modules.DEFAULT)
     if list(opts) == ["wrap_up"]:
-        closing = CLOSING if timer.remaining_sec <= WRAP_UP_SEC else CLOSING_EARLY
-        out = TurnOut(action="wrap_up", message=closing)
+        out = TurnOut(
+            action="wrap_up",
+            message=closing(session, out_of_time=timer.remaining_sec <= WRAP_UP_SEC),
+        )
     else:
         choices = {
             name: (q.text if q is not None and scenario is None else None)
@@ -402,7 +490,7 @@ def take_turn(
             out.message = neutralize(out.message)
         if out.action not in opts:
             log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
-            out = _fallback(opts)
+            out = _fallback(session, opts)
             fell_back = True
         in_character = scenario is not None and not fell_back
 
@@ -432,25 +520,20 @@ def take_turn(
             ]
         elif leaving and in_character:
             # The character's goodbye, then the app steps out and closes.
-            parts = [said, (INTERVIEWER, ROLEPLAY_EXIT), (INTERVIEWER, CLOSING_EARLY)]
+            parts = [
+                said,
+                (INTERVIEWER, ROLEPLAY_EXIT),
+                (INTERVIEWER, closing(session)),
+            ]
         elif leaving:
             parts = [(INTERVIEWER, ROLEPLAY_EXIT), said]
+        elif out.action == "wrap_up" and not fell_back and list(opts) != ["wrap_up"]:
+            # The app's natural sign-off, not the model's one-line thank-you.
+            parts = [(INTERVIEWER, closing(session))]
     segments = _segments(parts)
     out.message = " ".join(s["text"] for s in segments)
 
-    now = utcnow()
-    ended_ms = int((now - session.started_at).total_seconds() * 1000)
-    started_ms = max(0, ended_ms - duration_ms) if duration_ms else None
-    answer = Answer(
-        question_id=current.id,
-        transcript=text,
-        started_ms=started_ms,
-        ended_ms=ended_ms,
-        duration_ms=duration_ms,
-        attempt_no=1,
-        input_mode=input_mode,
-    )
-    db.session.add(answer)
+    now = _save_answer(session, current, text, duration_ms, input_mode)
 
     if out.action == "follow_up":
         root_id = current.follow_up_of_id or current.id
@@ -474,13 +557,92 @@ def take_turn(
     return {"action": out.action, "message": out.message, "segments": segments}
 
 
-def _fallback(opts: dict) -> TurnOut:
+def _save_answer(
+    session: Session,
+    question: Question,
+    text: str,
+    duration_ms: int | None,
+    input_mode: str,
+):
+    now = utcnow()
+    ended_ms = int((now - session.started_at).total_seconds() * 1000)
+    started_ms = max(0, ended_ms - duration_ms) if duration_ms else None
+    db.session.add(
+        Answer(
+            question_id=question.id,
+            transcript=text,
+            started_ms=started_ms,
+            ended_ms=ended_ms,
+            duration_ms=duration_ms,
+            attempt_no=1,
+            input_mode=input_mode,
+        )
+    )
+    return now
+
+
+class IcebreakerReply(BaseModel):
+    message: str = Field(min_length=1, max_length=300)
+
+
+def _after_icebreaker(
+    session: Session,
+    user_id: int,
+    ice: Question,
+    text: str,
+    duration_ms: int | None,
+    input_mode: str,
+) -> dict:
+    """A warm one-line reply to the small talk, then the first planned question."""
+    first = db.session.scalar(
+        db.select(Question)
+        .filter_by(
+            session_id=session.id,
+            is_bonus=False,
+            is_icebreaker=False,
+            follow_up_of_id=None,
+        )
+        .order_by(Question.order_no)
+    )
+    try:
+        reply = chat_json(
+            user_id,
+            render(
+                "icebreaker_reply",
+                persona=PERSONAS.get(session.persona or "neutral", PERSONAS["neutral"]),
+                question=ice.text,
+                answer=text,
+            ),
+            IcebreakerReply,
+            max_tokens=120,
+            temperature=0.7,
+        ).message
+    except (FireError, LimitReached) as err:
+        # Small talk isn't worth failing the turn over.
+        log.warning("Ice-breaker reply failed: %s", err)
+        reply = ICEBREAKER_FALLBACK
+    segments = _segments(
+        [
+            (INTERVIEWER, reply),
+            (INTERVIEWER, INTO_PLAN.get(session.persona or "neutral", "")),
+            (INTERVIEWER, _entering(session, first, ice)),
+            (_speaker_of(session, first), first.text),
+        ]
+    )
+    _save_answer(session, ice, text, duration_ms, input_mode)
+    _ask(first, segments)
+    db.session.commit()
+    message = " ".join(s["text"] for s in segments)
+    return {"action": "next_question", "message": message, "segments": segments}
+
+
+def _fallback(session: Session, opts: dict) -> TurnOut:
     """Used when the model picks a move the clock doesn't allow."""
     for action in ("next_question", "bonus"):
         q = opts.get(action)
         if q is not None:
             return TurnOut(action=action, message=f"Thank you. Next question: {q.text}")
-    return TurnOut(action="wrap_up", message=CLOSING_EARLY)
+    return TurnOut(action="wrap_up", message=closing(session))
 
 
 def end(session: Session) -> None:

@@ -3,7 +3,7 @@
 import pytest
 
 from app import modules
-from app.services.interviewer import CLOSING_EARLY, ROLEPLAY_EXIT
+from app.services.interviewer import CLOSINGS, ROLEPLAY_EXIT
 from app.services.planning import PlanSectionOut
 
 from tests.fakes import PLAN
@@ -190,10 +190,9 @@ def test_roleplay_is_announced_played_in_character_and_left(client, auth, sales,
     # Leaving: the character's goodbye, then the app steps out and closes.
     fire.turns = [{"action": "wrap_up", "message": "Fine, book it."}]
     r = answer(client, auth, sid, "Can we book a call with your finance lead?")
-    assert (
-        r.get_json()["turn"]["message"]
-        == f"Fine, book it. {ROLEPLAY_EXIT} {CLOSING_EARLY}"
-    )
+    message = r.get_json()["turn"]["message"]
+    assert message.startswith(f"Fine, book it. {ROLEPLAY_EXIT} ")
+    assert any(c.format(name="Ada") in message for c in CLOSINGS)
 
 
 def test_interview_starting_with_a_roleplay_announces_it(client, auth, docs, fire):

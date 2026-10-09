@@ -121,6 +121,7 @@ class FakeFire:
         # Speech calls as (text, voice); set speech_error to make them fail.
         self.spoken: list[tuple[str, str | None]] = []
         self.speech_error: Exception | None = None
+        self.small_talk_error: Exception | None = None
 
     def chat(
         self, messages, system_prompt=None, max_tokens=1024, temperature=0.4, model=None
@@ -148,6 +149,10 @@ class FakeFire:
             body = SUMMARY
         elif 'Fix a "stronger version"' in prompt:
             body = self.repairs.pop(0) if self.repairs else REPAIR
+        elif "moment of small talk" in prompt:
+            if self.small_talk_error:
+                raise self.small_talk_error
+            body = {"message": "Doing well, thanks for asking!"}
         elif self.turns:
             body = self.turns.pop(0)
         else:

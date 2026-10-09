@@ -36,6 +36,8 @@ def timer_state(
     total = session.duration_min * 60
     end = session.ended_at or now
     elapsed = min(total, _secs(end, session.started_at))
+    # The ice-breaker isn't part of any section of the plan.
+    asked = [q for q in asked if not q.is_icebreaker]
     section = asked[-1].section if asked else None
     minutes = {
         s["name"]: s["minutes"] for s in (session.plan_json or {}).get("sections", [])

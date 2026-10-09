@@ -72,6 +72,10 @@ class Question(db.Model):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     budget_sec: Mapped[int | None] = mapped_column(Integer)
     is_bonus: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # The small-talk opener ("How's your day going?"): asked first, never scored.
+    is_icebreaker: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     # Set for follow-ups the interviewer asks about a planned question.
     follow_up_of_id: Mapped[int | None] = fk("questions.id", nullable=True)
     # When and how the interviewer actually asked it (null = not asked yet).

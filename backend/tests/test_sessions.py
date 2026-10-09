@@ -143,7 +143,7 @@ def test_out_of_time_wraps_up_without_fire(client, auth, planned, fire):
     db.session.commit()
     calls_before = len(fire.calls)
     turn = answer(client, auth, sid).get_json()["turn"]
-    assert turn["action"] == "wrap_up" and "all the time we have" in turn["message"]
+    assert turn["action"] == "wrap_up" and "out of time" in turn["message"]
     assert len(fire.calls) == calls_before
 
 
