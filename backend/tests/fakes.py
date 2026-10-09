@@ -61,6 +61,7 @@ SCORE = {
     "weak_moments": [
         {"quote": "My answer", "why": "Too vague."},
         {"quote": "something the candidate never said", "why": "Invented."},
+        {"quote": "My answer", "why": "The transcription error sounds unprofessional."},
     ],
     "missing_points": [
         {"point": "A measurable result", "covered": False},

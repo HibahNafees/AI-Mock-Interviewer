@@ -242,6 +242,12 @@ VAGUE_NOUNS = frozenset(
     improvements solution update optimization optimizations""".split()
 )
 DANGLING_SUBJECT = "[What you changed] "
+# The model sometimes knows a phrase was misheard and flags it anyway (live check,
+# T-19): a weak moment that blames transcription isn't the candidate's fault.
+MISHEARING_RE = re.compile(
+    r"transcri|mishear|misheard|speech[- ]recognition|speech[- ]to[- ]text",
+    re.IGNORECASE,
+)
 
 
 def _subject(match: re.Match) -> str:
@@ -417,7 +423,11 @@ def evaluate(
     )
 
     said = _norm(" ".join(e["candidate"] for e in exchange))
-    weak = [w.model_dump() for w in out.weak_moments if _norm(w.quote) in said][:3]
+    weak = [
+        w.model_dump()
+        for w in out.weak_moments
+        if _norm(w.quote) in said and not MISHEARING_RE.search(w.why)
+    ][:3]
     evaluation = Evaluation(
         answer_id=answer_id,
         score=score,
