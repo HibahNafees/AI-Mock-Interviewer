@@ -303,6 +303,9 @@ def report_dict(session: Session, report: Report) -> dict:
                 "question_id": t.root.id,
                 "section": t.root.section,
                 "module": scoring.section_module(session, t.root.section),
+                "scenario": scoring.section_plan(session, t.root.section).get(
+                    "scenario"
+                ),
                 "text": t.root.text,
                 "is_bonus": t.root.is_bonus,
                 "budget_sec": t.root.budget_sec,

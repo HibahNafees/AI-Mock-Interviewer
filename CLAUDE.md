@@ -124,7 +124,7 @@ Flexible LLM output is stored in JSON columns. No table stores audio/video. Docu
 11. Optional: real-time voice with LiveKit (interruptions, peer practice)
 12. Optional: Hume EVI experiment
 
-**Current phase:** 4 built and live-verified against Fire (T-15 grounded rewrites, T-16 untested criteria excluded). Next: 5.
+**Current phase:** 5 built (any-job: format modules in `app/modules` + `prompts/modules`, interview type at setup, role-play with app-announced switches; tests pass, not yet live-verified). Next: live check of 5, then 6.
 
 ## Running locally
 

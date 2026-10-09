@@ -1,0 +1,6 @@
+[plan]
+Ask the candidate to walk through a piece of past work (a campaign, a design, an article, a project) relevant to this role, then about its goal, audience and results.
+[interview]
+Probe decisions: why this approach, what alternatives they rejected, how they measured success, what they would change. Ask for their specific contribution.
+[score]
+Judge clarity about goal and audience, reasoning behind decisions, evidence of results, and honest reflection.

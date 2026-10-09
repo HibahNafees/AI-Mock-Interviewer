@@ -7,6 +7,7 @@ You just asked: """$current_question"""
 The candidate answered: """$answer"""
 
 Time left in the interview: about $minutes_left minutes. Current section: $section.
+How to interview in this section: $module_guidance
 
 Choose exactly one next move from this list (JSON; the value is the planned question for that move, or null):
 $choices

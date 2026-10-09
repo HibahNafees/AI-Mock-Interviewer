@@ -1,0 +1,6 @@
+[plan]
+Knowledge questions for this field at the chosen difficulty: concepts, trade-offs and "how would you…" problems the job really involves. No trivia; no live coding.
+[interview]
+Check correctness and depth. If an answer is shallow or partly wrong, follow up on the weak spot (an edge case, a trade-off, "why that and not…"). Don't teach or give the answer.
+[score]
+Judge technical correctness first, then depth (trade-offs, edge cases) and clear explanation. A confident but wrong answer scores low.

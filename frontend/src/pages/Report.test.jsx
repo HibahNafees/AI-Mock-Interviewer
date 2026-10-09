@@ -113,6 +113,28 @@ describe('report', () => {
     expect(screen.getAllByText('um ×2')).toHaveLength(2)
   })
 
+  it('shows the role-play scenario and labels the character lines', async () => {
+    const scenario = { character: 'Dana, a skeptical buyer', setting: '', goal: 'book a demo' }
+    const roleplay = {
+      ...QUESTION,
+      module: 'roleplay',
+      scenario,
+      exchange: [
+        { interviewer: 'This looks expensive.', answer: 'What would it need to save you?', is_follow_up: false },
+        { interviewer: 'Ten hours a week.', answer: 'We can do that.', is_follow_up: true },
+      ],
+    }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7/report': [200, { report: { ...READY, questions: [roleplay] } }],
+    })
+    renderAt('/report/7')
+    expect(
+      await screen.findByText('Role-play with Dana, a skeptical buyer. Your goal: book a demo'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('They said: Ten hours a week.')).toBeInTheDocument()
+  })
+
   it('polls while the report is being built', async () => {
     let polls = 0
     respond({

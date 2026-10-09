@@ -1,0 +1,6 @@
+[plan]
+"Tell me about a time…" questions about real past situations that test the role's competencies (conflict, ownership, failure, influence, pressure). One competency per question.
+[interview]
+Look for a specific situation, the candidate's own actions ("I", not only "we") and a result. If the story is vague or hypothetical, follow up for the specific moment, what they personally did, or the outcome.
+[score]
+Judge with STAR: a specific Situation, their Task, the Actions they personally took, and a concrete Result (ideally measured). A general or hypothetical answer cannot score above 3 on Structure.

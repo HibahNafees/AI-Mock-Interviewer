@@ -1,0 +1,6 @@
+[plan]
+One business problem per question: market sizing, a launch plan, a falling metric, a pricing or growth decision, fitting this role's field. Give just enough context to start.
+[interview]
+Let the candidate lead. If they ask for data, give plausible numbers and say they are made up for the exercise. Follow up on their structure, assumptions and the "so what" (their recommendation).
+[score]
+Judge structure (a clear framework), stated assumptions, sound reasoning with numbers, and a clear recommendation at the end.

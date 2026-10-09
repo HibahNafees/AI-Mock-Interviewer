@@ -1,0 +1,6 @@
+[plan]
+Questions about specific résumé lines: a project, a claimed result, a technology, a job change or a gap, checked against what this job needs. Name the résumé item in the question.
+[interview]
+Probe depth and ownership of what the résumé claims: how it worked, what they decided, what they would change. Follow up on numbers ("how did you measure that?") and on gaps between the résumé and the job.
+[score]
+Judge whether they can back up the résumé claim with specifics, show their own role, and connect it to this job.

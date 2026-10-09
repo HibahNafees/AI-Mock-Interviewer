@@ -10,6 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from .. import modules
 from ..extensions import db
 from ..models import Answer, Question, Session
 from ..models.base import utcnow
@@ -19,6 +20,8 @@ from .timer import SECTION_NUDGE_SEC, WRAP_UP_SEC, TimerState, timer_state
 log = logging.getLogger(__name__)
 
 MAX_FOLLOW_UPS = 2
+# A role-play is a conversation: the character's replies are follow-ups.
+MAX_ROLEPLAY_TURNS = 6
 HISTORY_TURNS = 8
 BONUS_MIN_SEC = 3 * 60
 
@@ -96,6 +99,44 @@ def neutralize(message: str) -> str:
     return out if starts_with_ack else f"Thanks. {out}"
 
 
+ROLEPLAY_EXIT = "Let's step out of the role-play there."
+
+
+def section_info(session: Session, name: str | None) -> dict:
+    for s in (session.plan_json or {}).get("sections", []):
+        if s["name"] == name:
+            return s
+    return {}
+
+
+def scenario_of(session: Session, section: str | None) -> dict | None:
+    info = section_info(session, section)
+    return info.get("scenario") if info.get("module") == "roleplay" else None
+
+
+def roleplay_intro(scenario: dict) -> str:
+    """Said by the app (not the model) so the switch into character is always clear."""
+    setting = scenario.get("setting", "").strip()
+    parts = [
+        "Let's switch to a role-play.",
+        f"I'll play {scenario['character'].strip().rstrip('.')}.",
+        setting if setting.endswith((".", "!", "?")) or not setting else f"{setting}.",
+        f"Your goal: {scenario['goal'].strip().rstrip('.')}.",
+        "I'm in character from now on.",
+    ]
+    return " ".join(p for p in parts if p)
+
+
+def _entering(session: Session, question: Question, previous: Question | None) -> str:
+    """The role-play intro if `question` opens a role-play section, else ""."""
+    scenario = scenario_of(session, question.section)
+    if scenario is None or (
+        previous is not None and previous.section == question.section
+    ):
+        return ""
+    return roleplay_intro(scenario) + " "
+
+
 class TurnOut(BaseModel):
     action: Literal["follow_up", "next_question", "bonus", "wrap_up"]
     message: str = Field(min_length=1, max_length=1500)
@@ -133,7 +174,7 @@ def start(session: Session, user_name: str) -> Question:
         minutes=session.duration_min,
         role=(session.plan_json or {}).get("role_title") or "this",
     )
-    _ask(first, f"{opening} {first.text}")
+    _ask(first, f"{opening} {_entering(session, first, None)}{first.text}")
     db.session.commit()
     return first
 
@@ -152,6 +193,8 @@ def options(session: Session, asked: list[Question], timer: TimerState) -> dict:
     if current.follow_up_of_id:
         root = db.session.get(Question, current.follow_up_of_id) or current
     follow_ups = sum(1 for q in asked if q.follow_up_of_id == root.id)
+    in_roleplay = scenario_of(session, root.section) is not None
+    max_follow_ups = MAX_ROLEPLAY_TURNS if in_roleplay else MAX_FOLLOW_UPS
 
     order = _section_order(session)
     here = order.index(root.section) if root.section in order else 0
@@ -175,8 +218,8 @@ def options(session: Session, asked: list[Question], timer: TimerState) -> dict:
 
     opts: dict[str, Question | None] = {}
     if (
-        follow_ups < MAX_FOLLOW_UPS
-        and timer.section_remaining_sec > 90
+        follow_ups < max_follow_ups
+        and timer.section_remaining_sec > (30 if in_roleplay else 90)
         and timer.remaining_sec > 2 * 60
     ):
         opts["follow_up"] = None
@@ -190,8 +233,14 @@ def options(session: Session, asked: list[Question], timer: TimerState) -> dict:
 
 
 def nudges(
-    timer: TimerState, options_: dict, root_budget: int | None, answer_sec: float
+    timer: TimerState,
+    options_: dict,
+    root_budget: int | None,
+    answer_sec: float,
+    in_roleplay: bool = False,
 ):
+    if in_roleplay:
+        return []  # Time and length notes would break character.
     notes = []
     next_q = options_.get("next_question")
     if (
@@ -248,6 +297,8 @@ def take_turn(
         root_budget = root.budget_sec if root else None
     answer_sec = (duration_ms or 0) / 1000
 
+    scenario = scenario_of(session, current.section)
+    module = section_info(session, current.section).get("module", modules.DEFAULT)
     if list(opts) == ["wrap_up"]:
         closing = CLOSING if timer.remaining_sec <= WRAP_UP_SEC else CLOSING_EARLY
         out = TurnOut(action="wrap_up", message=closing)
@@ -255,24 +306,54 @@ def take_turn(
         choices = {
             name: (q.text if q is not None else None) for name, q in opts.items()
         }
-        prompt = render(
-            "interviewer_turn",
-            persona=PERSONAS.get(session.persona or "neutral", PERSONAS["neutral"]),
+        common = dict(
             difficulty=session.difficulty or "mid",
             role=(session.plan_json or {}).get("role_title") or "the role",
-            history=_history(asked[:-1]),
             current_question=current.asked_text or current.text,
             answer=text,
             minutes_left=str(max(0, round(timer.remaining_sec / 60))),
-            section=timer.section or "",
             choices=choices,
-            nudges=nudges(timer, opts, root_budget, answer_sec) or ["none"],
+            module_guidance=modules.guidance(module, "interview"),
         )
+        if scenario is not None:
+            root_id = current.follow_up_of_id or current.id
+            prompt = render(
+                "roleplay_turn",
+                scenario=scenario,
+                history=_history(
+                    [q for q in asked[:-1] if (q.follow_up_of_id or q.id) == root_id]
+                ),
+                **common,
+            )
+        else:
+            prompt = render(
+                "interviewer_turn",
+                persona=PERSONAS.get(session.persona or "neutral", PERSONAS["neutral"]),
+                history=_history(asked[:-1]),
+                section=timer.section or "",
+                nudges=nudges(timer, opts, root_budget, answer_sec) or ["none"],
+                **common,
+            )
         out = chat_json(user_id, prompt, TurnOut, max_tokens=500, temperature=0.6)
-        out.message = neutralize(out.message)
+        if not (scenario is not None and out.action == "follow_up"):
+            # In character, praise or agreement is part of the role-play.
+            out.message = neutralize(out.message)
         if out.action not in opts:
             log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
             out = _fallback(opts)
+
+    if out.action != "follow_up":
+        nxt = opts.get(out.action) if out.action in ("next_question", "bonus") else None
+        leaving = scenario is not None and (
+            nxt is None or nxt.section != current.section
+        )
+        entering = _entering(session, nxt, current) if nxt is not None else ""
+        if entering:
+            # The character's opening line is used as planned, after the intro.
+            lead = ROLEPLAY_EXIT if leaving else "Thanks."
+            out.message = f"{lead} {entering}{nxt.text}"
+        elif leaving:
+            out.message = f"{ROLEPLAY_EXIT} {out.message}"
 
     now = utcnow()
     ended_ms = int((now - session.started_at).total_seconds() * 1000)

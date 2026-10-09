@@ -26,6 +26,7 @@ class CreateBody(BaseModel):
     duration_min: int = Field(ge=5, le=60)
     difficulty: Literal["entry", "mid", "senior"] = "mid"
     persona: Literal["friendly", "neutral", "tough"] = "neutral"
+    focus: str = Field(default=planning.MIXED, max_length=40)
 
 
 class PlanSectionIn(BaseModel):
@@ -33,6 +34,7 @@ class PlanSectionIn(BaseModel):
     module: str = "behavioral"
     minutes: int = Field(ge=1, le=60)
     questions: list[str] = Field(min_length=1, max_length=8)
+    scenario: planning.Scenario | None = None
 
     @field_validator("questions")
     @classmethod
@@ -109,6 +111,7 @@ def session_dict(session: Session, detail: bool = False) -> dict:
         "difficulty": session.difficulty,
         "persona": session.persona,
         "role_title": plan.get("role_title", ""),
+        "focus": plan.get("focus", planning.MIXED),
         "resume_id": session.resume_id,
         "jd_id": session.jd_id,
         "started_at": (
@@ -148,10 +151,14 @@ def create():
     limits.check_can_plan(user_id)
     limits.check_can_start(user_id, body.duration_min)
     analysis = planning.analyze_jd(user_id, jd)
+    if body.focus != planning.MIXED and body.focus not in planning.offered_modules(
+        analysis
+    ):
+        return jsonify(error="That interview type doesn't fit this job"), 400
     plan = planning.build_plan(
-        user_id, resume, analysis, body.duration_min, body.difficulty
+        user_id, resume, analysis, body.duration_min, body.difficulty, body.focus
     )
-    rubric = planning.build_rubric(user_id, analysis, body.difficulty)
+    rubric = planning.build_rubric(user_id, analysis, body.difficulty, body.focus)
 
     summary = planning.analysis_summary(analysis)
     session = Session(
@@ -164,7 +171,11 @@ def create():
         persona=body.persona,
         status="planned",
         rubric_json=rubric.model_dump(),
-        plan_json={"analysis": summary, "jd_analysis_id": analysis.id},
+        plan_json={
+            "analysis": summary,
+            "jd_analysis_id": analysis.id,
+            "focus": body.focus,
+        },
     )
     db.session.add(session)
     db.session.flush()
@@ -223,7 +234,10 @@ def edit_plan(session_id: int):
     if len(set(names)) != len(names):
         return jsonify(error="Section names must be different"), 400
 
-    plan = planning.PlanOut.model_validate(body.model_dump())
+    try:
+        plan = planning.PlanOut.model_validate(body.model_dump())
+    except ValidationError as err:
+        return jsonify(error=first_error(err)), 400
     planning.save_plan(session, plan)
     return jsonify(session=session_dict(session, detail=True))
 

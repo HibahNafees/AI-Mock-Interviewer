@@ -113,6 +113,9 @@ class FakeFire:
         self.scores: list[dict | str | Exception] = []
         # Queued rewrite-repair replies (default: one grounded sentence).
         self.repairs: list[dict | str] = []
+        # What the JD analysis and plan prompts return (override per test).
+        self.analysis: dict = ANALYSIS
+        self.plan: dict | str = PLAN
         self.transcripts: list[str] = []
         self.audio: list[str] = []
 
@@ -122,9 +125,9 @@ class FakeFire:
         prompt = messages[0]["content"]
         self.calls.append({"prompt": prompt, "messages": messages, "model": model})
         if "Analyze this job description" in prompt:
-            body = ANALYSIS
+            body = self.analysis
         elif "question plan" in prompt:
-            body = PLAN
+            body = self.plan
         elif "scoring rubric" in prompt:
             body = RUBRIC
         elif "Score one question" in prompt:

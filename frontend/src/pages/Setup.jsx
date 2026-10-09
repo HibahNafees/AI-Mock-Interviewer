@@ -1,9 +1,29 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DocumentInput from '../components/DocumentInput'
 import { api } from '../lib/api'
 
 const DURATIONS = [10, 30, 45, 60]
+
+// Role detection for the chosen job description, and the interview types that fit.
+function useJobAnalysis(jdId) {
+  const [state, setState] = useState({ status: 'idle' })
+  useEffect(() => {
+    if (!jdId) {
+      setState({ status: 'idle' })
+      return
+    }
+    let live = true
+    setState({ status: 'loading' })
+    api(`/documents/${jdId}/analysis`, { method: 'POST' })
+      .then((data) => live && setState({ status: 'ready', ...data }))
+      .catch((err) => live && setState({ status: 'error', error: err.message }))
+    return () => {
+      live = false
+    }
+  }, [jdId])
+  return state
+}
 
 function Choice({ name, options, value, onChange }) {
   return (
@@ -36,8 +56,13 @@ export default function Setup() {
   const [custom, setCustom] = useState(false)
   const [difficulty, setDifficulty] = useState('mid')
   const [persona, setPersona] = useState('neutral')
+  const [focus, setFocus] = useState('mixed')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const job = useJobAnalysis(jdId)
+  const offered = job.status === 'ready' ? job.modules : []
+  // A type that fit the previous job description may not fit this one.
+  const chosen = focus === 'mixed' || offered.some((m) => m.name === focus) ? focus : 'mixed'
 
   async function submit(e) {
     e.preventDefault()
@@ -46,7 +71,14 @@ export default function Setup() {
     try {
       const { session } = await api('/sessions', {
         method: 'POST',
-        body: { resume_id: resumeId, jd_id: jdId, duration_min: duration, difficulty, persona },
+        body: {
+          resume_id: resumeId,
+          jd_id: jdId,
+          duration_min: duration,
+          difficulty,
+          persona,
+          focus: chosen,
+        },
       })
       navigate(`/interview/${session.id}`)
     } catch (err) {
@@ -63,6 +95,41 @@ export default function Setup() {
         <DocumentInput kind="resume" value={resumeId} onChange={setResumeId} />
         <DocumentInput kind="job_description" value={jdId} onChange={setJdId} />
       </div>
+
+      {job.status === 'loading' && (
+        <p role="status" className="animate-pulse text-sm text-slate-500">
+          Reading the job description…
+        </p>
+      )}
+      {job.status === 'error' && (
+        <p role="alert" className="text-sm text-red-600">
+          {job.error}
+        </p>
+      )}
+      {job.status === 'ready' && (
+        <section className="space-y-2">
+          <h2 className="font-medium">Interview type</h2>
+          <p className="text-sm text-slate-600">
+            {job.analysis.role_title} · {job.analysis.field}
+            {job.analysis.competencies.length > 0 &&
+              ` · ${job.analysis.competencies.map((c) => c.name).join(', ')}`}
+          </p>
+          <Choice
+            name="Interview type"
+            options={[
+              ['mixed', 'Full mixed loop'],
+              ...offered.map((m) => [m.name, m.label]),
+            ]}
+            value={chosen}
+            onChange={setFocus}
+          />
+          <p className="text-sm text-slate-500">
+            {chosen === 'mixed'
+              ? 'A realistic loop mixing the formats that fit this job.'
+              : offered.find((m) => m.name === chosen)?.blurb}
+          </p>
+        </section>
+      )}
 
       <section className="space-y-2">
         <h2 className="font-medium">Length</h2>
@@ -125,7 +192,7 @@ export default function Setup() {
       )}
       <button
         type="submit"
-        disabled={busy || !resumeId || !jdId}
+        disabled={busy || !resumeId || !jdId || job.status !== 'ready'}
         className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
       >
         {busy ? 'Building your interview plan…' : 'Build my interview plan'}

@@ -77,6 +77,16 @@ describe('setup', () => {
         created = JSON.parse(opts.body)
         return [201, { session: PLANNED }]
       },
+      'POST /api/documents/11/analysis': [
+        200,
+        {
+          analysis: { role_title: 'Backend Engineer', field: 'software', competencies: [{ name: 'API design' }] },
+          modules: [
+            { name: 'behavioral', label: 'Behavioral', blurb: 'Stories' },
+            { name: 'technical', label: 'Technical Q&A', blurb: 'Knowledge questions for the field' },
+          ],
+        },
+      ],
       'GET /api/sessions/7': [200, { session: PLANNED }],
     })
     renderAt('/setup')
@@ -85,6 +95,16 @@ describe('setup', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Use this text' })[0])
     await userEvent.type(screen.getByLabelText('Paste job description'), long)
     await userEvent.click(screen.getByRole('button', { name: 'Use this text' }))
+    // Only interview types that fit the job are offered; mixed is the default.
+    const types = await screen.findByRole('radiogroup', { name: 'Interview type' })
+    expect(within(types).getAllByRole('radio').map((r) => r.textContent)).toEqual([
+      'Full mixed loop',
+      'Behavioral',
+      'Technical Q&A',
+    ])
+    expect(within(types).getByRole('radio', { name: 'Full mixed loop' })).toBeChecked()
+    await userEvent.click(within(types).getByRole('radio', { name: 'Technical Q&A' }))
+    expect(screen.getByText('Knowledge questions for the field')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('radio', { name: '30 min' }))
     await userEvent.click(screen.getByRole('radio', { name: 'Tough' }))
     await userEvent.click(screen.getByRole('button', { name: 'Build my interview plan' }))
@@ -96,7 +116,57 @@ describe('setup', () => {
       duration_min: 30,
       difficulty: 'mid',
       persona: 'tough',
+      focus: 'technical',
     })
+  })
+})
+
+const SCENARIO = {
+  character: 'Dana, an operations manager who thinks the price is too high',
+  setting: 'A video call after your demo',
+  goal: 'book a follow-up meeting',
+}
+const ROLEPLAY = {
+  ...PLANNED,
+  role_title: 'Account Executive',
+  plan: {
+    sections: [
+      { name: 'Sales call', module: 'roleplay', minutes: 10, questions: ['This looks expensive.'], scenario: SCENARIO },
+    ],
+    reserve: [],
+  },
+}
+
+describe('role-play', () => {
+  it('shows the scenario in the plan, then who is speaking during the call', async () => {
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: ROLEPLAY }],
+      'POST /api/sessions/7/start': [
+        200,
+        {
+          session: {
+            ...ROLEPLAY,
+            status: 'active',
+            timer: { ...TIMER, section: 'Sales call' },
+            transcript: [
+              { question_id: 1, section: 'Sales call', interviewer: "Let's switch to a role-play. This looks expensive.", answer: 'What would it need to save you?' },
+              { question_id: 2, section: 'Sales call', is_follow_up: true, interviewer: 'About ten hours a week.', answer: null },
+            ],
+          },
+        },
+      ],
+    })
+    renderAt('/interview/7')
+    expect(await screen.findByText('Role-play')).toBeInTheDocument()
+    expect(screen.getByText(SCENARIO.character)).toBeInTheDocument()
+    expect(screen.getByText(SCENARIO.goal)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start interview' }))
+    expect(await screen.findByText('Dana · role-play')).toBeInTheDocument()
+    expect(screen.getByText(/the interviewer is playing/)).toHaveTextContent(
+      `Role-play: the interviewer is playing ${SCENARIO.character}. Your goal: ${SCENARIO.goal}`,
+    )
   })
 })
 

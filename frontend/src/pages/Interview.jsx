@@ -4,16 +4,24 @@ import PlanEditor from '../components/PlanEditor'
 import Recorder from '../components/Recorder'
 import Timer from '../components/Timer'
 import { api } from '../lib/api'
+import { characterName, scenarioFor } from '../lib/modules'
 import { canRecord, MAX_ANSWER_MS } from '../lib/recording'
 
-function Transcript({ items }) {
+function speaker(t, plan) {
+  const scenario = scenarioFor(plan, t.section)
+  // The opening line follows the app's announcement; replies are the character's.
+  if (scenario && t.is_follow_up) return `${characterName(scenario)} · role-play`
+  return `Interviewer${t.is_follow_up ? ' · follow-up' : t.is_bonus ? ' · bonus' : ''}`
+}
+
+function Transcript({ items, plan }) {
   return (
     <ol className="space-y-4">
       {items.map((t) => (
         <li key={t.question_id} className="space-y-2">
           <div className="max-w-[85%] rounded-lg bg-white p-3 shadow-sm ring-1 ring-slate-200">
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-              Interviewer{t.is_follow_up ? ' · follow-up' : t.is_bonus ? ' · bonus' : ''}
+              {speaker(t, plan)}
             </p>
             <p>{t.interviewer}</p>
           </div>
@@ -111,6 +119,7 @@ function LiveStep({ session, setSession }) {
   const active = session.status === 'active'
   const busy = phase !== 'idle'
   const turns = session.transcript.length
+  const roleplay = active ? scenarioFor(session.plan, session.timer?.section) : null
 
   useEffect(() => {
     askedAt.current = Date.now()
@@ -190,7 +199,13 @@ function LiveStep({ session, setSession }) {
         )}
       </header>
 
-      <Transcript items={session.transcript} />
+      {roleplay && (
+        <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">
+          <span className="font-medium">Role-play:</span> the interviewer is playing{' '}
+          {roleplay.character}. Your goal: {roleplay.goal}
+        </p>
+      )}
+      <Transcript items={session.transcript} plan={session.plan} />
       {busy && (
         <p role="status" className="animate-pulse text-sm text-slate-500">
           {phase === 'transcribing' ? 'Listening back to your answer…' : 'Interviewer is thinking…'}

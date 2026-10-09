@@ -2,22 +2,15 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .. import modules
 from ..extensions import db
 from ..models import Document, JdAnalysis, Question, Session
 from .llm import chat_json, render
 
-# Text-friendly format modules available before the any-job phase adds the rest.
-TEXT_MODULES = (
-    "behavioral",
-    "resume_deepdive",
-    "technical",
-    "case",
-    "scenario",
-    "portfolio",
-)
-ALL_MODULES = TEXT_MODULES + ("coding", "system_design", "roleplay")
+ALL_MODULES = tuple(modules.MODULES) + modules.LATER
+MIXED = "mixed"
 
 SYSTEM = (
     "You are an expert interview coach who designs realistic, fair job interviews. "
@@ -48,16 +41,33 @@ class JdAnalysisOut(BaseModel):
         return kept or ["behavioral", "resume_deepdive"]
 
 
+class Scenario(BaseModel):
+    """A role-play: who the interviewer plays, where, and what the candidate must do."""
+
+    character: str = Field(min_length=1, max_length=300)
+    setting: str = Field(default="", max_length=400)
+    goal: str = Field(min_length=1, max_length=300)
+
+
 class PlanSectionOut(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     module: str
     minutes: int = Field(ge=1, le=60)
     questions: list[str] = Field(min_length=1, max_length=8)
+    scenario: Scenario | None = None
 
     @field_validator("module")
     @classmethod
-    def text_module(cls, v: str) -> str:
-        return v if v in TEXT_MODULES else "behavioral"
+    def available_module(cls, v: str) -> str:
+        return v if modules.known(v) else modules.DEFAULT
+
+    @model_validator(mode="after")
+    def roleplay_needs_scenario(self) -> "PlanSectionOut":
+        if self.module == "roleplay" and self.scenario is None:
+            raise ValueError("A role-play section needs a scenario")
+        if self.module != "roleplay":
+            self.scenario = None
+        return self
 
 
 class BonusOut(BaseModel):
@@ -126,18 +136,28 @@ def analysis_summary(analysis: JdAnalysis) -> dict:
     }
 
 
+def offered_modules(analysis: JdAnalysis) -> list[str]:
+    """Modules that fit this job and exist now (coding/system design come later)."""
+    fit = [f for f in analysis_summary(analysis)["formats"] if modules.known(f)]
+    return fit or ["behavioral", "resume_deepdive"]
+
+
 def build_plan(
     user_id: int,
     resume: Document,
     analysis: JdAnalysis,
     duration_min: int,
     difficulty: str,
+    focus: str = MIXED,
 ) -> PlanOut:
     summary = analysis_summary(analysis)
-    allowed = [f for f in summary["formats"] if f in TEXT_MODULES] or [
-        "behavioral",
-        "resume_deepdive",
-    ]
+    allowed = offered_modules(analysis) if focus == MIXED else [focus]
+    focus_rule = (
+        "Mix the modules to fit the role: a full interview loop."
+        if focus == MIXED
+        else f'The candidate chose to practise only "{modules.MODULES[focus].label}": '
+        f'every section uses the "{focus}" module.'
+    )
     prompt = render(
         "plan",
         role=summary,
@@ -145,16 +165,34 @@ def build_plan(
         duration_min=str(duration_min),
         difficulty=difficulty,
         modules=allowed,
+        module_guidance=modules.plan_guidance(allowed),
+        focus_rule=focus_rule,
         max_sections=str(section_limit(duration_min)),
         question_count=str(question_target(duration_min)),
     )
     plan = chat_json(user_id, prompt, PlanOut, SYSTEM, max_tokens=2000)
+    for section in plan.sections:
+        if section.module not in allowed:
+            section.module = allowed[0]
+            if section.module == "roleplay" and section.scenario is None:
+                section.module = modules.DEFAULT
     plan.sections = normalize_minutes(plan.sections, duration_min)
     return plan
 
 
-def build_rubric(user_id: int, analysis: JdAnalysis, difficulty: str) -> RubricOut:
-    prompt = render("rubric", role=analysis_summary(analysis), difficulty=difficulty)
+def build_rubric(
+    user_id: int, analysis: JdAnalysis, difficulty: str, focus: str = MIXED
+) -> RubricOut:
+    prompt = render(
+        "rubric",
+        role=analysis_summary(analysis),
+        difficulty=difficulty,
+        focus=(
+            "a full mixed interview"
+            if focus == MIXED
+            else f"{modules.MODULES[focus].label} questions only"
+        ),
+    )
     rubric = chat_json(user_id, prompt, RubricOut, SYSTEM)
     total = sum(c.weight for c in rubric.criteria)
     for c in rubric.criteria:
@@ -230,7 +268,12 @@ def save_plan(session: Session, plan: PlanOut, role_title: str = "") -> None:
         **previous,
         "role_title": role_title or previous.get("role_title", ""),
         "sections": [
-            {"name": s.name, "module": s.module, "minutes": s.minutes}
+            {
+                "name": s.name,
+                "module": s.module,
+                "minutes": s.minutes,
+                "scenario": s.scenario.model_dump() if s.scenario else None,
+            }
             for s in plan.sections
         ],
     }

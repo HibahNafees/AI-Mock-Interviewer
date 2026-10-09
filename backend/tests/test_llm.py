@@ -11,7 +11,7 @@ class Out(BaseModel):
 
 
 def test_render_keeps_json_braces():
-    text = render("rubric", role={"field": "x"}, difficulty="mid")
+    text = render("rubric", role={"field": "x"}, difficulty="mid", focus="mixed")
     assert '{"field": "x"}' in text and '"criteria"' in text
 
 

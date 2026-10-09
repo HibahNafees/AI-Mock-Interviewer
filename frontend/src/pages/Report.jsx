@@ -134,7 +134,7 @@ function Star({ star }) {
   )
 }
 
-function Evaluation({ e, said }) {
+function Evaluation({ e, said, roleplay }) {
   return (
     <div className="space-y-5">
       {e.summary && <p className="text-slate-700">{e.summary}</p>}
@@ -146,7 +146,11 @@ function Evaluation({ e, said }) {
           </h4>
           {said.map((s, i) => (
             <div key={i} className="mb-2 last:mb-0">
-              {s.is_follow_up && <p className="text-xs italic text-slate-500">Follow-up: {s.interviewer}</p>}
+              {s.is_follow_up && (
+                <p className="text-xs italic text-slate-500">
+                  {roleplay ? 'They said' : 'Follow-up'}: {s.interviewer}
+                </p>
+              )}
               <p className="whitespace-pre-wrap">
                 <Highlighted text={s.answer} moments={e.weak_moments} />
               </p>
@@ -395,12 +399,17 @@ function QuestionCard({ q, index, sessionId, onAttempt }) {
             {q.is_bonus ? ' · bonus' : ''}
           </p>
           <h3 className="mt-1 font-medium">{q.text}</h3>
+          {q.scenario && (
+            <p className="mt-1 text-sm text-amber-900">
+              Role-play with {q.scenario.character}. Your goal: {q.scenario.goal}
+            </p>
+          )}
         </div>
         {e ? <Score value={e.score} /> : <span className="text-sm text-slate-500">Scoring…</span>}
       </header>
       <Delivery d={q.delivery} />
       {e ? (
-        <Evaluation e={e} said={q.exchange} />
+        <Evaluation e={e} said={q.exchange} roleplay={Boolean(q.scenario)} />
       ) : (
         <div className="space-y-2">
           {q.exchange.map((s, i) => (

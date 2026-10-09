@@ -11,6 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from .. import modules
 from ..extensions import db
 from ..models import Document, Evaluation, Session
 from .analytics import Clip, delivery
@@ -371,11 +372,15 @@ def target_words(budget_sec: int | None) -> int:
     return min(250, max(80, round((budget_sec or 120) * 130 / 60 * 0.7)))
 
 
-def section_module(session: Session, section: str) -> str:
+def section_plan(session: Session, section: str) -> dict:
     for s in (session.plan_json or {}).get("sections", []):
         if s["name"] == section:
-            return s.get("module", "behavioral")
-    return "behavioral"
+            return s
+    return {}
+
+
+def section_module(session: Session, section: str) -> str:
+    return section_plan(session, section).get("module", modules.DEFAULT)
 
 
 def evaluate(
@@ -399,7 +404,17 @@ def evaluate(
         "score",
         role=(session.plan_json or {}).get("role_title") or "the role",
         difficulty=session.difficulty or "mid",
-        module=section_module(session, section).replace("_", " "),
+        module=modules.MODULES.get(
+            module := section_module(session, section),
+            modules.MODULES[modules.DEFAULT],
+        ).label,
+        module_guidance=modules.guidance(module, "score"),
+        scenario=(
+            section_plan(session, section).get("scenario")
+            if module == "roleplay"
+            else None
+        )
+        or "none",
         rubric=[
             {k: c.get(k, "") for k in ("name", "description", "strong_answer")}
             for c in (session.rubric_json or {}).get("criteria", [])

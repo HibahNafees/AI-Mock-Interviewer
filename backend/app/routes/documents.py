@@ -6,6 +6,8 @@ from flask_jwt_extended import jwt_required
 from ..extensions import db
 from ..models import Document
 from ..models.base import utcnow
+from .. import modules
+from ..services import limits, planning
 from ..services.parsing import ParseError, extract_text, validate_text
 from .common import current_user_id
 
@@ -112,6 +114,29 @@ def get_document(doc_id: int):
     if doc is None:
         return jsonify(error="Document not found"), 404
     return jsonify(document=document_dict(doc, full=True))
+
+
+@bp.post("/<int:doc_id>/analysis")
+@jwt_required()
+def analyze(doc_id: int):
+    """Role detection for a job description (one Fire chat call, cached per document)
+    and the interview types that fit it."""
+    jd = owned_document(doc_id, "job_description")
+    if jd is None:
+        return jsonify(error="Job description not found"), 404
+    limits.check_budget()
+    analysis = planning.analyze_jd(current_user_id(), jd)
+    return jsonify(
+        analysis=planning.analysis_summary(analysis),
+        modules=[
+            {
+                "name": n,
+                "label": modules.MODULES[n].label,
+                "blurb": modules.MODULES[n].blurb,
+            }
+            for n in planning.offered_modules(analysis)
+        ],
+    )
 
 
 @bp.delete("/<int:doc_id>")

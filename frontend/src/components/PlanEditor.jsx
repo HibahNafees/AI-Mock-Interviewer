@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { moduleLabel } from '../lib/modules'
 
 const input = 'rounded-md border border-slate-300 px-2 py-1 text-sm'
 
@@ -56,7 +57,30 @@ export default function PlanEditor({ plan, duration, onSave }) {
               className={`${input} w-16`}
             />
             <span className="text-sm text-slate-500">min</span>
+            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+              {moduleLabel(s.module)}
+            </span>
           </div>
+          {s.scenario && (
+            <dl className="mt-3 grid gap-1 rounded-md bg-amber-50 p-3 text-sm text-amber-900 sm:grid-cols-[auto_1fr] sm:gap-x-3">
+              <dt className="font-medium">Interviewer plays</dt>
+              <dd>{s.scenario.character}</dd>
+              {s.scenario.setting && (
+                <>
+                  <dt className="font-medium">Setting</dt>
+                  <dd>{s.scenario.setting}</dd>
+                </>
+              )}
+              <dt className="font-medium">Your goal</dt>
+              <dd>{s.scenario.goal}</dd>
+            </dl>
+          )}
+          {s.scenario && (
+            <p className="mt-2 text-xs text-slate-500">
+              The question below is the character's opening line; the conversation continues
+              live.
+            </p>
+          )}
           <ol className="mt-3 space-y-2">
             {s.questions.map((q, qi) => (
               <li key={qi} className="flex gap-2">
