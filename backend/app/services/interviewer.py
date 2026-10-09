@@ -298,13 +298,15 @@ def take_turn(
     answer_sec = (duration_ms or 0) / 1000
 
     scenario = scenario_of(session, current.section)
+    fell_back = False
     module = section_info(session, current.section).get("module", modules.DEFAULT)
     if list(opts) == ["wrap_up"]:
         closing = CLOSING if timer.remaining_sec <= WRAP_UP_SEC else CLOSING_EARLY
         out = TurnOut(action="wrap_up", message=closing)
     else:
         choices = {
-            name: (q.text if q is not None else None) for name, q in opts.items()
+            name: (q.text if q is not None and scenario is None else None)
+            for name, q in opts.items()
         }
         common = dict(
             difficulty=session.difficulty or "mid",
@@ -335,12 +337,13 @@ def take_turn(
                 **common,
             )
         out = chat_json(user_id, prompt, TurnOut, max_tokens=500, temperature=0.6)
-        if not (scenario is not None and out.action == "follow_up"):
+        if scenario is None:
             # In character, praise or agreement is part of the role-play.
             out.message = neutralize(out.message)
         if out.action not in opts:
             log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
             out = _fallback(opts)
+            fell_back = True
 
     if out.action != "follow_up":
         nxt = opts.get(out.action) if out.action in ("next_question", "bonus") else None
@@ -348,10 +351,15 @@ def take_turn(
             nxt is None or nxt.section != current.section
         )
         entering = _entering(session, nxt, current) if nxt is not None else ""
-        if entering:
+        if scenario is not None and nxt is not None:
+            # The character never sees the next planned question (it blended the next
+            # scenario into its replies, live check T-25): its closing line, then the
+            # app steps out and asks the question as planned.
+            closing = "" if fell_back else f"{out.message.strip()} "
+            out.message = f"{closing}{ROLEPLAY_EXIT} {entering}{nxt.text}"
+        elif entering:
             # The character's opening line is used as planned, after the intro.
-            lead = ROLEPLAY_EXIT if leaving else "Thanks."
-            out.message = f"{lead} {entering}{nxt.text}"
+            out.message = f"Thanks. {entering}{nxt.text}"
         elif leaving:
             out.message = f"{ROLEPLAY_EXIT} {out.message}"
 

@@ -315,3 +315,20 @@ def test_rubric_drops_roleplay_prefix_and_merges_duplicates():
         ("Objection Handling", pytest.approx(0.3)),
         ("Rapport", 0.1),
     ]
+
+
+def test_character_never_sees_the_next_planned_question(client, auth, docs, fire):
+    # Live (T-25): given the next question's text, the character blended the next
+    # scenario into its replies. The app asks the next question itself.
+    fire.analysis = SALES_ANALYSIS
+    roleplay, warm_up = SALES_PLAN["sections"][1], SALES_PLAN["sections"][0]
+    fire.plan = {**SALES_PLAN, "sections": [roleplay, warm_up]}
+    sid = create(client, auth, docs).get_json()["session"]["id"]
+    started(client, auth, sid)
+
+    fire.turns = [{"action": "next_question", "message": "Deal. Talk Thursday."}]
+    r = answer(client, auth, sid, "How about a call with your finance lead Thursday?")
+    assert warm_up["questions"][0] not in fire.calls[-1]["prompt"]
+    assert r.get_json()["turn"]["message"] == (
+        f"Deal. Talk Thursday. {ROLEPLAY_EXIT} {warm_up['questions'][0]}"
+    )
