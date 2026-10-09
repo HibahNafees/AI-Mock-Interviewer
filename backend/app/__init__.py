@@ -49,7 +49,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
 
     @app.errorhandler(413)
     def too_large(_err):
-        return jsonify(error="That upload is too large (5 MB max)"), 413
+        return jsonify(error="That upload is too large"), 413
 
     @app.errorhandler(405)
     def method_not_allowed(_err):

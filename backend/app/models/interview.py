@@ -82,6 +82,10 @@ class Answer(db.Model):
     duration_ms: Mapped[int | None] = mapped_column(Integer)
     attempt_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     hints_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # "voice" (transcribed clip) or "text" (typed); pace analytics need voice.
+    input_mode: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="text", server_default="text"
+    )
     created_at: Mapped[datetime] = created_at_column()
 
 

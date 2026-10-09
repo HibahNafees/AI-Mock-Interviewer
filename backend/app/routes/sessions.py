@@ -1,12 +1,13 @@
 from typing import Literal
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import jwt_required
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..extensions import db
 from ..models import Answer, Session, User
 from ..services import interviewer, limits, planning
+from ..services.transcription import TranscriptionError, transcribe
 from ..services.timer import timer_state
 from .common import current_user_id, first_error
 from .documents import owned_document
@@ -15,6 +16,8 @@ bp = Blueprint("sessions", __name__)
 
 MAX_ANSWER_CHARS = 8000
 MAX_ANSWER_MS = 5 * 60 * 1000
+# The browser stops recording at 5 minutes; allow a little slack for timing.
+DURATION_SLACK_MS = 10 * 1000
 
 
 class CreateBody(BaseModel):
@@ -49,7 +52,10 @@ class PlanIn(BaseModel):
 
 class TurnBody(BaseModel):
     text: str = Field(min_length=1, max_length=MAX_ANSWER_CHARS)
-    duration_ms: int | None = Field(default=None, ge=0, le=MAX_ANSWER_MS)
+    duration_ms: int | None = Field(
+        default=None, ge=0, le=MAX_ANSWER_MS + DURATION_SLACK_MS
+    )
+    input_mode: Literal["text", "voice"] = "text"
 
     @field_validator("text")
     @classmethod
@@ -85,6 +91,7 @@ def _transcript(session: Session) -> list[dict]:
                 "is_bonus": q.is_bonus,
                 "answer": a.transcript if a else None,
                 "duration_ms": a.duration_ms if a else None,
+                "input_mode": a.input_mode if a else None,
             }
         )
     return out
@@ -250,9 +257,41 @@ def turn(session_id: int):
         return jsonify(error=first_error(err)), 400
 
     result = interviewer.take_turn(
-        session, current_user_id(), body.text, body.duration_ms
+        session, current_user_id(), body.text, body.duration_ms, body.input_mode
     )
     return jsonify(turn=result, session=session_dict(session, detail=True))
+
+
+@bp.post("/<int:session_id>/transcribe")
+@jwt_required()
+def transcribe_answer(session_id: int):
+    """Spoken answer clip (multipart field "audio") → text. The clip is not stored.
+
+    The browser then sends the text to /turns, so a failed chat call can be retried
+    without paying to transcribe the clip again.
+    """
+    session = _owned_session(session_id)
+    if session is None:
+        return jsonify(error="Interview not found"), 404
+    if session.status != "active":
+        return jsonify(error="This interview is not in progress"), 409
+    clip = request.files.get("audio")
+    if clip is None:
+        return jsonify(error="audio is required"), 400
+    limit = current_app.config["MAX_AUDIO_BYTES"]
+    audio = clip.read(limit + 1)
+    if len(audio) > limit:
+        return (
+            jsonify(
+                error="That recording is too long; answers are capped at 5 minutes"
+            ),
+            413,
+        )
+    try:
+        text = transcribe(current_user_id(), audio, clip.mimetype)
+    except TranscriptionError as err:
+        return jsonify(error=err.message), err.status
+    return jsonify(text=text)
 
 
 @bp.post("/<int:session_id>/end")

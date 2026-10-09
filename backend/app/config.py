@@ -30,7 +30,9 @@ class Config:
     DAILY_LONG_SESSIONS = int(os.environ.get("DAILY_LONG_SESSIONS", "1"))
     DAILY_PLANS = int(os.environ.get("DAILY_PLANS", "10"))
     MAX_UPLOAD_BYTES = 5 * 1024 * 1024
-    MAX_CONTENT_LENGTH = 6 * 1024 * 1024
+    # A 5-minute answer at the browser's 32 kbps is ~1.2 MB; Fire accepts ~25 MB.
+    MAX_AUDIO_BYTES = 10 * 1024 * 1024
+    MAX_CONTENT_LENGTH = 11 * 1024 * 1024
 
 
 class TestConfig(Config):

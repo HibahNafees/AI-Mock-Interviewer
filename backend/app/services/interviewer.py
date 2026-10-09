@@ -181,7 +181,11 @@ def _history(asked: list[Question]) -> list[dict]:
 
 
 def take_turn(
-    session: Session, user_id: int, text: str, duration_ms: int | None
+    session: Session,
+    user_id: int,
+    text: str,
+    duration_ms: int | None,
+    input_mode: str = "text",
 ) -> dict:
     """Save the answer to the current question and produce the interviewer's reply."""
     asked = asked_questions(session)
@@ -230,6 +234,7 @@ def take_turn(
         ended_ms=ended_ms,
         duration_ms=duration_ms,
         attempt_no=1,
+        input_mode=input_mode,
     )
     db.session.add(answer)
 

@@ -6,37 +6,7 @@ from app.extensions import db
 from app.models import Answer, JdAnalysis, Question, Session, UsageLimit
 from app.services.limits import today
 
-RESUME = (
-    "Ada Lovelace. Backend engineer. Built the Acme billing API in Python and MySQL."
-)
-JD = (
-    "We are hiring a backend engineer to design APIs and tune MySQL databases at scale."
-)
-
-
-@pytest.fixture()
-def docs(client, auth):
-    def upload(kind, text):
-        res = client.post(
-            "/api/documents", json={"kind": kind, "text": text}, headers=auth
-        )
-        return res.get_json()["document"]["id"]
-
-    return {
-        "resume_id": upload("resume", RESUME),
-        "jd_id": upload("job_description", JD),
-    }
-
-
-@pytest.fixture()
-def planned(client, auth, docs):
-    res = client.post(
-        "/api/sessions",
-        json={**docs, "duration_min": 10, "persona": "friendly"},
-        headers=auth,
-    )
-    assert res.status_code == 201, res.get_json()
-    return res.get_json()["session"]
+from tests.conftest import RESUME
 
 
 def started(client, auth, session_id):

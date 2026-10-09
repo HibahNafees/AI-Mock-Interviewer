@@ -2,7 +2,7 @@
 
 import json
 
-from app.services.fire import ChatResult
+from app.services.fire import ChatResult, FireResult
 
 ANALYSIS = {
     "role_title": "Backend Engineer",
@@ -57,6 +57,8 @@ class FakeFire:
     def __init__(self):
         self.calls: list[dict] = []
         self.turns: list[dict | str] = []
+        self.transcripts: list[str] = []
+        self.audio: list[str] = []
 
     def chat(
         self, messages, system_prompt=None, max_tokens=1024, temperature=0.4, model=None
@@ -75,6 +77,11 @@ class FakeFire:
             body = {"action": "next_question", "message": "Thanks. Next question."}
         content = body if isinstance(body, str) else json.dumps(body)
         return ChatResult(content=content, price_usd=self.price)
+
+    def transcribe(self, audio_data_url):
+        self.audio.append(audio_data_url)
+        text = self.transcripts.pop(0) if self.transcripts else "I led the billing API."
+        return FireResult(data={"text": text}, price_usd=0.0003)
 
     def kinds(self) -> list[str]:
         out = []

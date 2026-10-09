@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import PlanEditor from '../components/PlanEditor'
+import Recorder from '../components/Recorder'
 import Timer from '../components/Timer'
 import { api } from '../lib/api'
+import { canRecord, MAX_ANSWER_MS } from '../lib/recording'
 
 function Transcript({ items }) {
   return (
@@ -17,7 +19,9 @@ function Transcript({ items }) {
           </div>
           {t.answer && (
             <div className="ml-auto max-w-[85%] rounded-lg bg-indigo-50 p-3 ring-1 ring-indigo-100">
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-indigo-700">You</p>
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-indigo-700">
+                You{t.input_mode === 'voice' ? ' · transcribed' : ''}
+              </p>
               <p className="whitespace-pre-wrap">{t.answer}</p>
             </div>
           )}
@@ -94,13 +98,18 @@ function PlanStep({ session, setSession }) {
   )
 }
 
+const EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a' }
+
 function LiveStep({ session, setSession }) {
+  const [mode, setMode] = useState(() => (canRecord() ? 'voice' : 'text'))
   const [text, setText] = useState('')
-  const [thinking, setThinking] = useState(false)
+  const [phase, setPhase] = useState('idle') // idle | transcribing | thinking
   const [error, setError] = useState('')
   const askedAt = useRef(0)
+  const spoken = useRef(null) // {duration_ms} when the text box holds a transcript
   const bottom = useRef(null)
   const active = session.status === 'active'
+  const busy = phase !== 'idle'
   const turns = session.transcript.length
 
   useEffect(() => {
@@ -108,23 +117,54 @@ function LiveStep({ session, setSession }) {
     bottom.current?.scrollIntoView?.({ behavior: 'smooth' })
   }, [turns])
 
-  async function send(e) {
-    e.preventDefault()
-    if (!text.trim() || thinking) return
-    setError('')
-    setThinking(true)
+  async function sendTurn(answer, meta) {
+    setPhase('thinking')
     try {
-      const data = await api(`/sessions/${session.id}/turns`, {
-        method: 'POST',
-        body: { text, duration_ms: Math.min(Date.now() - askedAt.current, 300000) },
-      })
+      const data = await api(`/sessions/${session.id}/turns`, { method: 'POST', body: { text: answer, ...meta } })
       setText('')
+      spoken.current = null
       setSession(data.session)
     } catch (err) {
-      setError(err.message) // keep the typed answer so it can be resent
+      // Keep the answer (typed or transcribed) so it can be resent without re-recording.
+      setError(err.message)
+      setText(answer)
+      if (meta.input_mode === 'voice') {
+        spoken.current = { duration_ms: meta.duration_ms }
+        setMode('text')
+      }
     } finally {
-      setThinking(false)
+      setPhase('idle')
     }
+  }
+
+  async function onRecorded(blob, durationMs) {
+    setError('')
+    setPhase('transcribing')
+    const form = new FormData()
+    const type = blob.type.split(';')[0]
+    form.append('audio', blob, `answer.${EXT[type] ?? 'webm'}`)
+    let transcript
+    try {
+      transcript = (await api(`/sessions/${session.id}/transcribe`, { method: 'POST', body: form })).text
+    } catch (err) {
+      setError(err.message)
+      setPhase('idle')
+      return
+    }
+    await sendTurn(transcript, {
+      duration_ms: Math.min(durationMs, MAX_ANSWER_MS),
+      input_mode: 'voice',
+    })
+  }
+
+  function sendTyped(e) {
+    e.preventDefault()
+    if (!text.trim() || busy) return
+    setError('')
+    const meta = spoken.current
+      ? { ...spoken.current, input_mode: 'voice' }
+      : { duration_ms: Math.min(Date.now() - askedAt.current, MAX_ANSWER_MS), input_mode: 'text' }
+    sendTurn(text, meta)
   }
 
   async function endEarly() {
@@ -137,7 +177,7 @@ function LiveStep({ session, setSession }) {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{session.role_title || 'Interview'}</h1>
-          {active && <Timer timer={session.timer} running={!thinking} />}
+          {active && <Timer timer={session.timer} running={!busy} />}
         </div>
         {active && (
           <button
@@ -151,40 +191,60 @@ function LiveStep({ session, setSession }) {
       </header>
 
       <Transcript items={session.transcript} />
-      {thinking && (
+      {busy && (
         <p role="status" className="animate-pulse text-sm text-slate-500">
-          Interviewer is thinking…
+          {phase === 'transcribing' ? 'Listening back to your answer…' : 'Interviewer is thinking…'}
         </p>
       )}
       <div ref={bottom} />
 
       {active ? (
-        <form onSubmit={send} className="space-y-2">
-          <textarea
-            aria-label="Your answer"
-            rows={5}
-            value={text}
-            disabled={thinking}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(e)
-            }}
-            placeholder="Type your answer… (Ctrl+Enter to send)"
-            className="block w-full rounded-md border border-slate-300 px-3 py-2"
-          />
+        <div className="space-y-3">
+          {mode === 'voice' ? (
+            <Recorder onRecorded={onRecorded} disabled={busy} />
+          ) : (
+            <form onSubmit={sendTyped} className="space-y-2">
+              <textarea
+                aria-label="Your answer"
+                rows={5}
+                value={text}
+                disabled={busy}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendTyped(e)
+                }}
+                placeholder="Type your answer… (Ctrl+Enter to send)"
+                className="block w-full rounded-md border border-slate-300 px-3 py-2"
+              />
+              <button
+                type="submit"
+                disabled={busy || !text.trim()}
+                className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+              >
+                Send answer
+              </button>
+            </form>
+          )}
           {error && (
             <p role="alert" className="text-sm text-red-600">
               {error}
             </p>
           )}
-          <button
-            type="submit"
-            disabled={thinking || !text.trim()}
-            className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-          >
-            Send answer
-          </button>
-        </form>
+          {canRecord() && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setError('')
+                spoken.current = null
+                setMode((m) => (m === 'voice' ? 'text' : 'voice'))
+              }}
+              className="text-sm text-slate-600 underline hover:text-slate-900 disabled:opacity-50"
+            >
+              {mode === 'voice' ? 'Type instead' : 'Speak instead'}
+            </button>
+          )}
+        </div>
       ) : (
         <div className="rounded-lg border border-slate-200 bg-white p-4">
           <p className="font-medium">Interview finished.</p>
