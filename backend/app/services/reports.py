@@ -170,6 +170,7 @@ def generate(report_id: int, user_id: int) -> None:
                 t.root.budget_sec,
                 t.exchange(),
                 t.clips(),
+                question=t.root.text,
             )
         except (FireError, LimitReached) as err:
             log.warning("Scoring question %s failed: %s", t.root.id, err)
@@ -264,6 +265,7 @@ def retry(
             question.budget_sec,
             exchange,
             [Clip(text, duration_ms, input_mode)],
+            question=question.text,
         )
     except (FireError, LimitReached):
         # Fire spend is committed along the way; don't keep an unscored attempt.

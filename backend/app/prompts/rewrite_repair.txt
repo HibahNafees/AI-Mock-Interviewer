@@ -17,11 +17,12 @@ Problems found:
 $problems
 
 Return JSON with exactly this shape:
-{"stronger_version": [{"text": "one sentence", "source": "exact words from the résumé or an answer, or null"}]}
+{
+  "stronger_version": [{"text": "one sentence", "source": "exact words from the résumé or an answer, or null"}]
+}
 
 Rules:
 - Keep the sentences that have no problems.
 - For each problem sentence: cut anything the source doesn't say, or replace the unsupported detail with a short bracketed placeholder such as [add the result you achieved] or [name the tool you used].
-- A sentence with "source": null must contain a [placeholder].
 - "source" must be copied word for word from the résumé or an answer.
 - First person, natural spoken style, about $target_words words.

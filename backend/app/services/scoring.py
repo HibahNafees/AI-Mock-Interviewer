@@ -24,10 +24,13 @@ SYSTEM = (
 MAX_RESUME_CHARS = 6000
 VERDICTS = ((4.0, "hire"), (3.0, "lean hire"), (0.0, "no hire"))
 SPACE_RE = re.compile(r"\s+")
-WORD_RE = re.compile(r"[a-z0-9]+")
+WORD_RE = re.compile(r"[a-z]+|\d+")
 DIGITS_RE = re.compile(r"\d+")
 PLACEHOLDER_RE = re.compile(r"\[[^\]]*\]")
 SENTENCE_END_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\[])")
+# Clauses are checked too, so one invented add-on ("…, ensuring they were optimized
+# for performance") can't hide behind a well-grounded start.
+CLAUSE_RE = re.compile(r"[,;:\u2014]|\s(?:which|while|ensuring|allowing|so that)\s")
 # A rewrite sentence must share at least this share of its content words with the
 # résumé + answers. Calibrated on live gpt-4o-mini rewrites: invented sentences
 # ("I also collaborated closely with product teams…") scored 0–0.35, grounded
@@ -41,6 +44,28 @@ STOPWORDS = frozenset(
     during not no only own same such too can could would should will shall may might
     must do does did done have has had having make made get got one way well really
     able""".split()
+)
+# Units and framing words a faithful rewrite adds ("300ms" → "300 milliseconds",
+# "to address this, I…") without adding a fact.
+NEUTRAL = frozenset(
+    """second seconds milliseconds minute minutes hour hours day days week weeks month
+    months year years percent million millions thousand billion address addressed
+    issue issues cut reduce reduced reducing result resulted example""".split()
+)
+# Words every interview question uses; they don't make a résumé line relevant.
+QUESTION_WORDS = frozenset(
+    """tell walk describe share time times approach specific example examples
+    experience challenge challenges faced face ensure successful success role roles
+    project projects work worked process handle handled think explain""".split()
+)
+PAST_VERB_RE = re.compile(
+    r"^(?:\w+ed|built|wrote|led|ran|made|grew|taught|won|set|drove|took|kept|"
+    r"shipped|began|chose|did|got|held|lost|met|paid|put|read|saw|sold|spent|"
+    r"stood|told|thought|understood)$",
+    re.IGNORECASE,
+)
+FALLBACK_STEPS = (
+    "[Describe one specific time: the situation, what you did, and the result.]"
 )
 FALLBACK_REWRITE = (
     "[Answer the question with one specific example from your experience: "
@@ -114,7 +139,18 @@ def _stem(word: str) -> str:
 
 def _content_words(text: str) -> list[str]:
     words = WORD_RE.findall(PLACEHOLDER_RE.sub(" ", text).lower())
-    return [w for w in words if len(w) > 2 and w not in STOPWORDS]
+    return [w for w in words if len(w) > 2 and w not in STOPWORDS | NEUTRAL]
+
+
+def _adds_details(text: str, stems: set[str]) -> bool:
+    """Most of the sentence (or of one of its clauses) isn't in the sources."""
+    for part in [text, *CLAUSE_RE.split(text)]:
+        content = _content_words(part)
+        novel = sum(_stem(w) not in stems for w in content)
+        # A single linking word ("That led to [the result]") is fine.
+        if novel >= 2 and novel / len(content) > 1 - MIN_OVERLAP:
+            return True
+    return False
 
 
 def split_sentences(items: list[Sentence]) -> list[Sentence]:
@@ -128,33 +164,59 @@ def split_sentences(items: list[Sentence]) -> list[Sentence]:
 
 
 def grounding_problems(sentences: list[Sentence], sources: list[str]) -> list[str]:
-    """One message per sentence that isn't backed by the résumé or answers ("" if ok)."""
-    corpus_words = WORD_RE.findall(" ".join(sources).lower())
-    corpus = " " + " ".join(corpus_words) + " "
-    stems = {_stem(w) for w in corpus_words}
+    """One message per sentence that isn't backed by the résumé or answers ("" if ok).
+
+    The model's cited `source` is only a prompt for it to stay grounded (it often
+    leaves it out for faithful sentences); the check is on the sentence itself.
+    """
+    stems = {_stem(w) for w in WORD_RE.findall(" ".join(sources).lower())}
     digits = set(DIGITS_RE.findall(" ".join(sources)))
     problems = []
     for s in sentences:
-        has_placeholder = bool(PLACEHOLDER_RE.search(s.text))
-        quote = " ".join(WORD_RE.findall((s.source or "").lower()))
-        content = _content_words(s.text)
-        novel = sum(_stem(w) not in stems for w in content)
-        # A single linking word ("That led to [the result]") is fine.
-        unsupported = novel >= 2 and novel / len(content) > 1 - MIN_OVERLAP
         new_numbers = set(DIGITS_RE.findall(PLACEHOLDER_RE.sub(" ", s.text))) - digits
-        if quote and f" {quote} " not in corpus:
-            problems.append("its source is not copied from the résumé or answers")
-        elif not quote and not has_placeholder:
-            problems.append("it has no source and no [placeholder]")
-        elif new_numbers:
+        if new_numbers:
             problems.append(
                 f"it uses numbers the candidate never gave ({', '.join(sorted(new_numbers))})"
             )
-        elif unsupported:
-            problems.append("it adds details that aren't in its source")
+        elif _adds_details(s.text, stems):
+            problems.append("it adds details the candidate never gave")
         else:
             problems.append("")
     return problems
+
+
+def _resume_facts(resume: str) -> list[tuple[str, str]]:
+    """(employer, fact) pairs from résumé lines like "Acme (2021–now): Built X; did Y."."""
+    facts = []
+    for line in resume.splitlines():
+        employer, _, rest = line.partition(":")
+        if not rest.strip():
+            employer, rest = "", line
+        employer = employer.split("(")[0].strip()
+        for fact in re.split(r";|\.\s", rest):
+            fact = fact.strip().rstrip(".")
+            if len(fact.split()) >= 2:
+                facts.append((employer, fact))
+    return facts
+
+
+def resume_fallback(question: str, resume: str) -> str:
+    """Rewrite skeleton for an answer with nothing usable: the résumé line that fits
+    the question (no Fire call), plus a placeholder for the story."""
+    asked = {_stem(w) for w in _content_words(question) if w not in QUESTION_WORDS}
+    best, best_hits = None, 0
+    for employer, fact in _resume_facts(resume):
+        hits = len(asked & {_stem(w) for w in _content_words(fact)})
+        if hits > best_hits:
+            best, best_hits = (employer, fact), hits
+    if best is None:
+        return FALLBACK_REWRITE
+    employer, fact = best
+    first = fact.split()[0]
+    if PAST_VERB_RE.match(first):
+        where = f"At {employer}, I" if employer else "I"
+        return f"{where} {fact[0].lower()}{fact[1:]}. {FALLBACK_STEPS}"
+    return f'[Build this from your résumé: "{fact}".] {FALLBACK_STEPS}'
 
 
 def _join(sentences: list[Sentence]) -> str:
@@ -169,8 +231,12 @@ def grounded_rewrite(
     resume: str,
     answers: list[str],
     words: int,
-) -> str:
-    """Join the rewrite, after one repair call if any sentence isn't grounded."""
+    changes: list["Change"],
+) -> tuple[str, list["Change"]]:
+    """The rewrite (after one repair call if any sentence isn't grounded) and the
+    "what changed" list, kept only when the scorer's rewrite passed unchanged:
+    otherwise it would describe text the user never sees.
+    """
     sentences = split_sentences(sentences)
     problems = grounding_problems(sentences, sources)
     if any(problems):
@@ -184,13 +250,17 @@ def grounded_rewrite(
             problems="\n".join(numbered),
             target_words=str(words),
         )
-        sentences = chat_json(
+        repaired = chat_json(
             user_id, prompt, RewriteOut, SYSTEM, max_tokens=1200, temperature=0.2
-        ).stronger_version
-        sentences = split_sentences(sentences)
+        )
+        sentences = split_sentences(repaired.stronger_version)
+        changes = []
         problems = grounding_problems(sentences, sources)
     kept = [s for s, p in zip(sentences, problems) if not p]
-    return _join(kept) or FALLBACK_REWRITE
+    if not any(WORD_RE.search(PLACEHOLDER_RE.sub(" ", s.text).lower()) for s in kept):
+        # Nothing but bare placeholders left: start from the résumé instead.
+        return resume_fallback(question, resume), []
+    return _join(kept), changes if len(kept) == len(sentences) else []
 
 
 def weighted_score(
@@ -257,6 +327,7 @@ def evaluate(
     budget_sec: int | None,
     exchange: list[dict],
     clips: list[Clip],
+    question: str | None = None,
 ) -> Evaluation:
     """One Fire chat call → a saved Evaluation for `answer_id`.
 
@@ -281,14 +352,15 @@ def evaluate(
     out = chat_json(user_id, prompt, ScoreOut, SYSTEM, max_tokens=2000, temperature=0.3)
     score, rows = weighted_score(out.criteria, session.rubric_json)
     answers = [e["candidate"] for e in exchange]
-    stronger = grounded_rewrite(
+    stronger, changes = grounded_rewrite(
         user_id,
         out.stronger_version,
         [resume_text, *answers],
-        exchange[0]["interviewer"],
+        question or exchange[0]["interviewer"],
         resume_text,
         answers,
         words,
+        out.changes,
     )
 
     said = _norm(" ".join(e["candidate"] for e in exchange))
@@ -299,7 +371,7 @@ def evaluate(
         rubric_scores_json={"criteria": rows},
         missing_points_json=[m.model_dump() for m in out.missing_points],
         stronger_version=stronger,
-        changes_json=[c.model_dump() for c in out.changes],
+        changes_json=[c.model_dump() for c in changes],
         delivery_json=delivery(clips, budget_sec),
         feedback_json={
             "summary": out.summary,

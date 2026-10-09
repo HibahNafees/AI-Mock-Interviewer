@@ -12,6 +12,7 @@ from app.services.scoring import (
     CriterionScore,
     Sentence,
     grounding_problems,
+    resume_fallback,
     split_sentences,
     verdict_for,
     weighted_score,
@@ -131,27 +132,38 @@ LIVE_RESUME = (
         (
             "I also collaborated closely with product teams to gather requirements.",
             None,
-            "it has no source and no [placeholder]",
+            "it adds details the candidate never gave",
         ),
+        # Faithful sentences pass without a cited source (the model often omits it).
+        ("I set up the alerts and mentored two junior engineers.", None, ""),
         (
             "I designed the endpoints to be stateless, allowing easy horizontal scaling.",
             "Built the refunds API",
-            "it adds details that aren't in its source",
+            "it adds details the candidate never gave",
         ),
         (
             "I organized regular one-on-one sessions with [names] every week.",
             None,
-            "it adds details that aren't in its source",
+            "it adds details the candidate never gave",
+        ),
+        # Unit conversions and framing aren't new facts.
+        (
+            "To address this, we moved reporting queries to a nightly ETL, which cut "
+            "p95 latency from 1.8 seconds to 300 milliseconds.",
+            "moved reporting queries from MySQL replicas to a nightly ETL",
+            "",
+        ),
+        # A grounded start can't carry an invented clause.
+        (
+            "I built the refunds API in Python and Flask, ensuring it was optimized "
+            "for performance.",
+            "Built the refunds API in Python/Flask",
+            "it adds details the candidate never gave",
         ),
         (
             "It served 5 million requests a day.",
             "serving 2M requests/day",
             "it uses numbers the candidate never gave (5)",
-        ),
-        (
-            "I mentored juniors.",
-            "mentored four junior engineers",
-            "its source is not copied from the résumé or answers",
         ),
     ],
 )
@@ -263,8 +275,38 @@ def test_paragraph_items_are_checked_sentence_by_sentence():
     ]
     assert grounding_problems(parts, [LIVE_RESUME]) == [
         "",
-        "it adds details that aren't in its source",
+        "it adds details the candidate never gave",
     ]
+
+
+FULL_RESUME = (
+    "Sam Rivera — Backend Engineer\n"
+    + LIVE_RESUME
+    + "\nBright Labs (2019–2021): Wrote internal REST services in Django; "
+    "added Redis caching; on-call rotation.\nSkills: Python, Flask, MySQL."
+)
+
+
+@pytest.mark.parametrize(
+    "question,expected",
+    [
+        (
+            "Can you describe a time when you had to mentor junior engineers?",
+            "At Acme Payments, I mentored two junior engineers. [Describe one",
+        ),
+        (
+            "Walk me through a Django service you wrote.",
+            "At Bright Labs, I wrote internal REST services in Django. [Describe",
+        ),
+        (
+            "Tell me about an on-call incident.",
+            '[Build this from your résumé: "on-call rotation".] [Describe',
+        ),
+        ("How do you handle conflict with a product manager?", FALLBACK_REWRITE),
+    ],
+)
+def test_fallback_starts_from_the_matching_resume_line(question, expected):
+    assert resume_fallback(question, FULL_RESUME).startswith(expected)
 
 
 def invented(*sentences: dict) -> dict:
@@ -286,13 +328,16 @@ def test_invented_rewrite_is_repaired_once(client, auth, planned, fire):
     report = build(client, auth, sid).get_json()["report"]
     assert fire.kinds()[before:] == ["score", "repair", "score", "summary"]
     repair = fire.calls[before + 1]["prompt"]
-    assert "Sentence 2: it has no source and no [placeholder]." in repair
+    assert "Sentence 2: it uses numbers the candidate never gave (9)." in repair
     assert "Sentence 1:" not in repair
     first = report["questions"][0]["evaluation"]["stronger_version"]
     assert (
         first
         == "I built the Acme billing API. The result was [add the result you achieved]."
     )
+    # "What changed" described the rejected rewrite, so it isn't shown.
+    assert report["questions"][0]["evaluation"]["changes"] == []
+    assert report["questions"][1]["evaluation"]["changes"] == SCORE["changes"]
     second = report["questions"][1]["evaluation"]["stronger_version"]
     assert second == "At Acme I built the billing API."
 
@@ -307,6 +352,18 @@ def test_still_invented_sentences_are_dropped(client, auth, planned, fire):
     evs = [q["evaluation"]["stronger_version"] for q in report["questions"]]
     # Never shown: the invented sentence. Nothing grounded left → a placeholder.
     assert evs == ["At Acme I built the billing API.", FALLBACK_REWRITE]
+    # Sentences were dropped, so no "what changed" list describes unseen text.
+    assert [q["evaluation"]["changes"] for q in report["questions"]] == [[], []]
+
+
+def test_placeholder_only_rewrite_falls_back_to_the_resume(client, auth, planned, fire):
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    bare = {"text": "[add the result you achieved] [name the tool you used]"}
+    fire.scores = [invented(bare), invented(GOOD)]
+    report = build(client, auth, sid).get_json()["report"]
+    first = report["questions"][0]["evaluation"]["stronger_version"]
+    assert first.startswith("I built the Acme billing API in Python and MySQL.")
 
 
 def test_all_criteria_untested_is_retried(client, auth, planned, fire):
