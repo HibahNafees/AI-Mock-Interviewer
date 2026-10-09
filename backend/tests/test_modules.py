@@ -212,7 +212,9 @@ def test_scorer_gets_module_guidance_and_the_scenario(client, auth, sales, fire)
         {"action": "next_question", "message": "Next."},
         {"action": "wrap_up", "message": "Thanks."},
     ]
-    answer(client, auth, sid, "I closed a big renewal.")
+    answer(
+        client, auth, sid, "I closed a big renewal with a logistics customer last year."
+    )
     answer(client, auth, sid, "I hear you on price; what would it need to save you?")
     report = client.post(f"/api/sessions/{sid}/report", headers=auth).get_json()
     prompts = [c["prompt"] for c in fire.calls if "Score one question" in c["prompt"]]

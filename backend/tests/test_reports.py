@@ -35,7 +35,13 @@ def finished(client, auth, fire, session_id):
     ]
     answer(client, auth, session_id, "Um, I built the billing API at Acme.", 60_000)
     answer(client, auth, session_id, "I owned the schema.", 20_000)
-    answer(client, auth, session_id, "My answer about token buckets.", 90_000)
+    answer(
+        client,
+        auth,
+        session_id,
+        "My answer about token buckets in Redis with a Lua script.",
+        90_000,
+    )
     res = client.post(f"/api/sessions/{session_id}/end", headers=auth)
     assert res.get_json()["session"]["status"] == "completed"
 
@@ -475,7 +481,14 @@ def test_reports_are_private(client, auth, planned, fire, signup):
 # ---- Try again -------------------------------------------------------------
 
 
-def retry(client, auth, sid, qid, text="A tighter answer with a result.", **extra):
+def retry(
+    client,
+    auth,
+    sid,
+    qid,
+    text="A tighter answer with a result: we cut p95 latency in half.",
+    **extra,
+):
     return client.post(
         f"/api/sessions/{sid}/questions/{qid}/retry",
         json={"text": text, "duration_ms": 45_000, "input_mode": "voice", **extra},
@@ -510,7 +523,7 @@ def test_try_again_shows_before_and_after(client, auth, planned, fire):
     assert q["evaluation"]["score"] == pytest.approx(3.4)  # original kept
     # The interview transcript still shows only the original answers.
     s = client.get(f"/api/sessions/{sid}", headers=auth).get_json()["session"]
-    assert "A tighter answer with a result." not in [
+    assert "A tighter answer with a result: we cut p95 latency in half." not in [
         t["answer"] for t in s["transcript"]
     ]
 
@@ -666,3 +679,69 @@ def test_scoring_runs_at_temperature_zero(client, auth, planned, fire):
     build(client, auth, sid)
     scoring = [c for c in fire.calls if c["prompt"].startswith("Score one question")]
     assert scoring and {c["temperature"] for c in scoring} == {0}
+
+
+def test_near_empty_answer_scores_one_without_a_fire_call(client, auth, planned, fire):
+    # Live (T-33): "Thank you." scored 3.6 and "so" 3.27, with feedback taken from
+    # the résumé.
+    sid = planned["id"]
+    started(client, auth, sid)
+    fire.turns = [{"action": "next_question", "message": "How would you design it?"}]
+    answer(client, auth, sid, "Thank you.", 1_800)
+    answer(
+        client,
+        auth,
+        sid,
+        "I'd put a token bucket per API key in Redis with a Lua script.",
+    )
+    client.post(f"/api/sessions/{sid}/end", headers=auth)
+    before = len(fire.calls)
+    report = build(client, auth, sid).get_json()["report"]
+
+    short = report["questions"][0]["evaluation"]
+    assert short["score"] == 1
+    assert {c["score"] for c in short["criteria"]} == {1}
+    assert short["summary"].startswith("This answer was too short to score (2 words)")
+    assert short["weak_moments"] == []
+    scored = [c for c in fire.calls[before:] if c["prompt"].startswith("Score one")]
+    assert len(scored) == 1  # only the real answer cost a Fire call
+    assert "Thank you." not in scored[0]["prompt"]
+
+
+def test_retry_is_judged_against_the_first_attempt(client, auth, planned, fire):
+    # Live (T-29): re-reading the suggested rewrite scored the same, judged blind.
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    build(client, auth, sid)
+    report = client.get(f"/api/sessions/{sid}/report", headers=auth).get_json()
+    qid = report["report"]["questions"][0]["question_id"]
+    fire.scores = [SCORE_ALL_FIVE]
+    retry(client, auth, sid, qid)
+    prompt = fire.calls[-1]["prompt"]
+    assert "First attempt (JSON):" in prompt
+    assert "Um, I built the billing API at Acme." in prompt
+    assert '"comment": "Wandered a little."' in prompt
+    assert "Rewording the same content is not an improvement" in prompt
+
+
+def test_rewrite_must_fix_the_gaps_not_polish(client, auth, planned, fire):
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    build(client, auth, sid)
+    prompt = next(
+        c["prompt"] for c in fire.calls if c["prompt"].startswith("Score one")
+    )
+    assert "not a polished copy" in prompt
+    assert "First attempt" not in prompt  # only retries compare
+
+
+def test_too_short_retry_scores_one(client, auth, planned, fire):
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    build(client, auth, sid)
+    report = client.get(f"/api/sessions/{sid}/report", headers=auth).get_json()
+    qid = report["report"]["questions"][0]["question_id"]
+    calls = len(fire.calls)
+    body = retry(client, auth, sid, qid, text="so").get_json()
+    assert body["attempt"]["evaluation"]["score"] == 1
+    assert len(fire.calls) == calls

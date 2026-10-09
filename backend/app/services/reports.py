@@ -270,11 +270,28 @@ def retry(
         .join(Answer, Evaluation.answer_id == Answer.id)
         .where(Answer.question_id == question.id, Answer.attempt_no == 1)
     )
-    criteria = [
-        c["name"]
-        for c in ((first.rubric_scores_json or {}).get("criteria", []) if first else [])
-        if c.get("score") is not None
-    ]
+    rows = (first.rubric_scores_json or {}).get("criteria", []) if first else []
+    criteria = [c["name"] for c in rows if c.get("score") is not None]
+    first_answer = db.session.get(Answer, first.answer_id) if first else None
+    # The scorer sees the first attempt, so a retry that fixes its weaknesses scores
+    # higher and a reworded copy scores the same (T-29).
+    previous = (
+        {
+            "answer": first_answer.transcript if first_answer else "",
+            "criteria": [
+                {
+                    "name": c["name"],
+                    "score": c["score"],
+                    "comment": c.get("comment", ""),
+                }
+                for c in rows
+                if c.get("score") is not None
+            ],
+            "summary": (first.feedback_json or {}).get("summary", ""),
+        }
+        if first
+        else None
+    )
     try:
         scoring.evaluate(
             user_id,
@@ -286,6 +303,7 @@ def retry(
             [Clip(text, duration_ms, input_mode)],
             question=question.text,
             criteria=criteria or None,
+            previous=previous,
         )
     except (FireError, LimitReached):
         # Fire spend is committed along the way; don't keep an unscored attempt.

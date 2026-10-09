@@ -4,6 +4,10 @@ import { SilenceDetector, rms } from '../lib/silence'
 
 const MIME_TYPES = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/webm', 'audio/mp4']
 const COUNTDOWN_FROM_MS = 2500 // show "stopping in…" for the last part of the silence
+// After a silence auto-stop, wait this long before sending so the answer can still be
+// discarded (T-32: the auto-stop sent a clip while the user went for Cancel).
+export const SEND_DELAY_MS = 3000
+const MIN_CLIP_MS = 1000
 
 function pickMimeType() {
   const MR = window.MediaRecorder
@@ -18,7 +22,9 @@ function clock(ms) {
 // Records one answer. Stops on "Done", after a few seconds of silence, or at 5 minutes,
 // then calls onRecorded(blob, durationMs). The clip lives only in memory.
 export default function Recorder({ onRecorded, onStart, disabled }) {
-  const [state, setState] = useState('idle') // idle | starting | recording
+  const [state, setState] = useState('idle') // idle | starting | recording | pending
+  const [sendIn, setSendIn] = useState(0)
+  const pending = useRef(null) // { blob, duration, timer } after an auto-stop
   const [error, setError] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const [level, setLevel] = useState(0)
@@ -34,13 +40,53 @@ export default function Recorder({ onRecorded, onStart, disabled }) {
     rec.current = null
   }
 
-  useEffect(() => cleanup, [])
+  function clearPending() {
+    clearInterval(pending.current?.timer)
+    pending.current = null
+  }
 
-  function finish(keep) {
+  useEffect(
+    () => () => {
+      cleanup()
+      clearPending()
+    },
+    [],
+  )
+
+  function sendPending() {
+    const p = pending.current
+    clearPending()
+    setState('idle')
+    if (p) onRecorded(p.blob, p.duration)
+  }
+
+  function discardPending() {
+    clearPending()
+    setState('idle')
+  }
+
+  // Auto-stopped: show "Sending in 3…" with Send now / Discard, then send.
+  function hold(blob, duration) {
+    const until = Date.now() + SEND_DELAY_MS
+    setSendIn(SEND_DELAY_MS)
+    setState('pending')
+    pending.current = {
+      blob,
+      duration,
+      timer: setInterval(() => {
+        const left = until - Date.now()
+        if (left <= 0) sendPending()
+        else setSendIn(left)
+      }, 100),
+    }
+  }
+
+  function finish(keep, auto = false) {
     const r = rec.current
     if (!r || r.finishing) return
     r.finishing = true
     r.keep = keep
+    r.auto = auto
     clearInterval(r.interval)
     r.duration = Date.now() - r.startedAt
     if (r.recorder.state !== 'inactive') r.recorder.stop()
@@ -79,13 +125,20 @@ export default function Recorder({ onRecorded, onStart, disabled }) {
       if (e.data?.size) chunks.push(e.data)
     }
     recorder.onstop = () => {
-      const { keep, duration } = r
+      const { keep, duration, auto } = r
       const type = recorder.mimeType || mimeType || 'audio/webm'
       cleanup()
       setState('idle')
       setStopIn(null)
       setLevel(0)
-      if (keep) onRecorded(new Blob(chunks, { type }), duration)
+      if (!keep) return
+      if (duration < MIN_CLIP_MS) {
+        setError('That was too short to send. Tap Record answer and try again.')
+        return
+      }
+      const blob = new Blob(chunks, { type })
+      if (auto) hold(blob, duration)
+      else onRecorded(blob, duration)
     }
 
     // Loudness meter + silence auto-stop.
@@ -115,12 +168,30 @@ export default function Recorder({ onRecorded, onStart, disabled }) {
       setElapsed(ms)
       setLevel(lvl)
       setStopIn(left !== null && left <= COUNTDOWN_FROM_MS ? left : null)
-      if (left === 0 || ms >= MAX_ANSWER_MS) finish(true)
+      if (left === 0 || ms >= MAX_ANSWER_MS) finish(true, true)
     }, 100)
 
     recorder.start(1000)
     setElapsed(0)
     setState('recording')
+  }
+
+  if (state === 'pending') {
+    return (
+      <div className="space-y-2 rounded-2xl bg-violet-50 p-4 ring-1 ring-violet-200">
+        <p role="status" className="text-sm font-medium text-violet-800">
+          Stopped after a pause. Sending your answer in {Math.ceil(sendIn / 1000)}…
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={sendPending} className="btn-primary px-4 py-2 text-sm">
+            Send now
+          </button>
+          <button type="button" onClick={discardPending} className="btn-secondary">
+            Discard
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (state !== 'recording') {
@@ -159,12 +230,8 @@ export default function Recorder({ onRecorded, onStart, disabled }) {
           <span aria-hidden="true" className="h-3 w-3 rounded-sm bg-white" />
           Done
         </button>
-        <button
-          type="button"
-          onClick={() => finish(false)}
-          className="btn-link"
-        >
-          Cancel
+        <button type="button" onClick={() => finish(false)} className="btn-secondary">
+          <span aria-hidden="true">✕</span>Cancel
         </button>
         <span aria-label="Recording time" className="rounded-full bg-slate-100 px-3 py-1 font-mono text-sm tabular-nums text-slate-700">
           {clock(elapsed)} / {clock(MAX_ANSWER_MS)}

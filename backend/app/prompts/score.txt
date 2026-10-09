@@ -49,5 +49,6 @@ Stronger version:
 - Leave out hedges and non-answers ("I'm not sure", "I don't know"): keep the point they did make, and use a placeholder for what they didn't know.
 - No filler sentences without a source ("This experience taught me…", "This improved user satisfaction…").
 - If the answer missed the question, build the rewrite from résumé facts that fit the question plus placeholders for the specifics.
+- It must be clearly better than the original, not a polished copy: fix every criterion you scored 3 or below and cover every missing point marked covered: false (with a placeholder where the facts are missing). Lead with a one-sentence direct answer to the question, then the specifics, then the result; if the candidate gave no result or impact, end with a placeholder for it (e.g. "[add what changed because of your work]").
 - Keep their best material; fix structure (lead with the point; for behavioral questions use Situation, Task, Action, Result), cut rambling, and cover the missing points with placeholders where the facts are missing.
 - changes: 2 to 5 items; "kind" is "added", "cut" or "reframed".

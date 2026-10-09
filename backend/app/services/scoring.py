@@ -6,7 +6,9 @@ the check that the rewrite only uses facts the candidate gave (one repair call i
 it doesn't; sentences that still aren't grounded are dropped).
 """
 
+import json
 import re
+from string import Template
 from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationInfo, model_validator
@@ -14,7 +16,7 @@ from pydantic import BaseModel, Field, ValidationInfo, model_validator
 from .. import modules
 from ..extensions import db
 from ..models import Document, Evaluation, Session
-from .analytics import Clip, delivery
+from .analytics import Clip, delivery, word_count
 from .llm import chat_json, render
 
 SYSTEM = (
@@ -103,8 +105,20 @@ FALLBACK_REWRITE = (
 
 
 RETRY_RULE = (
-    "- This answer is a retry: score EVERY criterion in the rubric above from 1 to 5 "
-    "(no nulls), so it can be compared with the first attempt.\n"
+    "- This answer is a retry of the same question. Score EVERY criterion in the "
+    "rubric above from 1 to 5 (no nulls), on the same scale as the first attempt "
+    "below: raise a criterion where the new answer fixes the weakness its comment "
+    "names, keep it where the answer is just as good, and lower it only where the "
+    "new answer is actually worse. Rewording the same content is not an improvement. "
+    "Don't mark down words that are clearly speech-recognition slips.\n"
+    "  First attempt (JSON): $previous\n"
+)
+# Fewer words than this (all answers to the question together) can't be scored:
+# the scorer filled the gap from the résumé (T-33: "so" scored 3.27).
+MIN_SCORABLE_WORDS = 8
+TOO_SHORT = (
+    "This answer was too short to score ({n} words). Answer with one specific "
+    "example: the situation, what you did, and the result."
 )
 
 
@@ -462,6 +476,50 @@ def section_module(session: Session, section: str) -> str:
     return section_plan(session, section).get("module", modules.DEFAULT)
 
 
+def _too_short(
+    session: Session,
+    answer_id: int,
+    rubric: dict,
+    criteria: list[str] | None,
+    said: int,
+    clips: list[Clip],
+    budget_sec: int | None,
+    resume_text: str,
+    question: str,
+) -> Evaluation:
+    """A near-empty answer scores 1 on every criterion, without a Fire call."""
+    wanted = {_norm(n) for n in criteria} if criteria else None
+    rows = [
+        {
+            "name": c["name"],
+            "kind": c.get("kind", "role"),
+            "weight": c.get("weight", 0),
+            "score": 1,
+            "comment": "The answer was too short to show this.",
+        }
+        for c in rubric.get("criteria", [])
+        if wanted is None or _norm(c["name"]) in wanted
+    ]
+    evaluation = Evaluation(
+        answer_id=answer_id,
+        score=1.0,
+        rubric_scores_json={"criteria": rows},
+        missing_points_json=[],
+        stronger_version=resume_fallback(question, resume_text),
+        changes_json=[],
+        delivery_json=delivery(clips, budget_sec),
+        feedback_json={
+            "summary": TOO_SHORT.format(n=said),
+            "weak_moments": [],
+            "star": None,
+            "tips": [],
+        },
+    )
+    db.session.add(evaluation)
+    db.session.commit()
+    return evaluation
+
+
 def evaluate(
     user_id: int,
     session: Session,
@@ -472,12 +530,14 @@ def evaluate(
     clips: list[Clip],
     question: str | None = None,
     criteria: list[str] | None = None,
+    previous: dict | None = None,
 ) -> Evaluation:
     """One Fire chat call → a saved Evaluation for `answer_id`.
 
     `exchange` is [{"interviewer": ..., "candidate": ...}], main question first.
     `criteria` (for "Try again") limits scoring to the criteria the first attempt
-    was scored on, all of them required, so before and after compare like with like.
+    was scored on, all of them required, so before and after compare like with like;
+    `previous` is that attempt ({"answer", "criteria", "summary"}) to compare against.
     """
     resume = db.session.get(Document, session.resume_id) if session.resume_id else None
     resume_text = resume.raw_text[:MAX_RESUME_CHARS] if resume else ""
@@ -485,6 +545,19 @@ def evaluate(
     plan = section_plan(session, section)
     scenario = plan.get("scenario") if plan.get("module") == "roleplay" else None
     rubric = session.rubric_json or {}
+    said = sum(word_count(e["candidate"]) for e in exchange)
+    if said < MIN_SCORABLE_WORDS:
+        return _too_short(
+            session,
+            answer_id,
+            rubric,
+            criteria,
+            said,
+            clips,
+            budget_sec,
+            resume_text,
+            question or exchange[0]["interviewer"],
+        )
     if criteria:
         wanted = {_norm(n) for n in criteria}
         rubric = {
@@ -507,7 +580,11 @@ def evaluate(
             {k: c.get(k, "") for k in ("name", "description", "strong_answer")}
             for c in rubric.get("criteria", [])
         ],
-        criteria_rule=RETRY_RULE if criteria else "",
+        criteria_rule=(
+            Template(RETRY_RULE).substitute(previous=json.dumps(previous or {}))
+            if criteria
+            else ""
+        ),
         resume=resume_text or "(not available)",
         exchange=exchange,
         target_words=str(words),

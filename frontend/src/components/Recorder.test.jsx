@@ -56,11 +56,13 @@ afterEach(() => {
 
 describe('Recorder', () => {
   it('records until Done and hands over the clip', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     const onRecorded = vi.fn()
     render(<Recorder onRecorded={onRecorded} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Record answer' }))
+    await act(async () => screen.getByRole('button', { name: 'Record answer' }).click())
     expect(FakeMediaRecorder.last.opts.audioBitsPerSecond).toBe(32000)
-    await userEvent.click(screen.getByRole('button', { name: 'Done' }))
+    await act(async () => vi.advanceTimersByTime(1500))
+    await act(async () => screen.getByRole('button', { name: 'Done' }).click())
 
     expect(onRecorded).toHaveBeenCalledTimes(1)
     const [blob, duration] = onRecorded.mock.calls[0]
@@ -78,9 +80,8 @@ describe('Recorder', () => {
     expect(screen.getByRole('button', { name: 'Record answer' })).toBeInTheDocument()
   })
 
-  it('stops by itself after speech then silence', async () => {
+  async function autoStop(onRecorded) {
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    const onRecorded = vi.fn()
     render(<Recorder onRecorded={onRecorded} />)
     await act(async () => screen.getByRole('button', { name: 'Record answer' }).click())
     await act(async () => vi.advanceTimersByTime(700)) // calibrate on silence
@@ -90,7 +91,42 @@ describe('Recorder', () => {
     await act(async () => vi.advanceTimersByTime(2000))
     expect(screen.getByRole('status')).toHaveTextContent('Stopping in')
     await act(async () => vi.advanceTimersByTime(2500))
+  }
+
+  it('stops by itself after speech then silence, and sends after a short wait', async () => {
+    const onRecorded = vi.fn()
+    await autoStop(onRecorded)
+    // T-32: a moment to discard before it is sent.
+    expect(onRecorded).not.toHaveBeenCalled()
+    expect(screen.getByRole('status')).toHaveTextContent('Sending your answer in')
+    await act(async () => vi.advanceTimersByTime(3100))
     expect(onRecorded).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Record answer' })).toBeInTheDocument()
+  })
+
+  it('an auto-stopped answer can be discarded', async () => {
+    const onRecorded = vi.fn()
+    await autoStop(onRecorded)
+    await act(async () => screen.getByRole('button', { name: 'Discard' }).click())
+    await act(async () => vi.advanceTimersByTime(5000))
+    expect(onRecorded).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Record answer' })).toBeInTheDocument()
+  })
+
+  it('an auto-stopped answer can be sent at once', async () => {
+    const onRecorded = vi.fn()
+    await autoStop(onRecorded)
+    await act(async () => screen.getByRole('button', { name: 'Send now' }).click())
+    expect(onRecorded).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not send an accidental tap', async () => {
+    const onRecorded = vi.fn()
+    render(<Recorder onRecorded={onRecorded} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Record answer' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(onRecorded).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('too short')
   })
 
   it('explains a blocked microphone', async () => {
