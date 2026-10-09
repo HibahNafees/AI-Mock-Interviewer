@@ -142,6 +142,9 @@ class TurnOut(BaseModel):
     message: str = Field(min_length=1, max_length=1500)
 
 
+EXITS = ("next_question", "bonus", "wrap_up")
+
+
 class RoleplayTurnOut(TurnOut):
     # Asked for first so the character decides before it writes (T-21: without it,
     # the character kept inventing new objections and never accepted a next step).
@@ -220,7 +223,12 @@ def options(session: Session, asked: list[Question], timer: TimerState) -> dict:
         ),
         None,
     )
-    bonus = next((q for q in unasked if q.is_bonus), None)
+    # A reserve question is the interviewer's, never a character line (T-26: in a
+    # role-play section it re-entered the role-play as the character).
+    bonus = next(
+        (q for q in unasked if q.is_bonus and scenario_of(session, q.section) is None),
+        None,
+    )
 
     opts: dict[str, Question | None] = {}
     if (
@@ -344,14 +352,14 @@ def take_turn(
             )
         schema = TurnOut if scenario is None else RoleplayTurnOut
         out = chat_json(user_id, prompt, schema, max_tokens=500, temperature=0.6)
-        if getattr(out, "goal_reached", False) and out.action == "follow_up":
-            # The candidate got there: the character's reply is its closing line.
-            exit_ = next(
-                (a for a in ("next_question", "bonus", "wrap_up") if a in opts), None
-            )
-            if exit_:
-                log.info("Role-play goal reached; ending with %s", exit_)
-                out.action = exit_
+        if scenario is not None and (
+            getattr(out, "goal_reached", False) or out.action != "follow_up"
+        ):
+            # The character's reply is its goodbye, whichever way the clock lets the
+            # interview go on (T-21: goal reached; T-26: an exit that isn't allowed).
+            if out.action == "follow_up" or out.action not in opts:
+                # options() always offers next_question or wrap_up.
+                out.action = next(a for a in EXITS if a in opts)
         if scenario is None:
             # In character, praise or agreement is part of the role-play.
             out.message = neutralize(out.message)
@@ -375,6 +383,9 @@ def take_turn(
         elif entering:
             # The character's opening line is used as planned, after the intro.
             out.message = f"Thanks. {entering}{nxt.text}"
+        elif leaving and not fell_back and list(opts) != ["wrap_up"]:
+            # The character's goodbye, then the app steps out and closes.
+            out.message = f"{out.message.strip()} {ROLEPLAY_EXIT} {CLOSING_EARLY}"
         elif leaving:
             out.message = f"{ROLEPLAY_EXIT} {out.message}"
 

@@ -21,7 +21,7 @@ $choices
 - follow_up: continue the role-play: reply as the character to what the candidate just said, in first person, realistically (object, push back, ask, or agree if they have truly earned it).
 - next_question: the role-play is over; the app steps out of character and asks the next planned question for you, so "message" is just a short closing line from the character.
 - bonus: the role-play is over; same as next_question, with a bonus question.
-- wrap_up: the role-play is over; end the interview with a brief thank-you.
+- wrap_up: the role-play is over and so is the interview; the app steps out of character and thanks the candidate, so "message" is just a short closing line from the character.
 Start your message differently from your earlier replies in the role-play so far (not "I appreciate…" or "I understand…" every time).
 Prefer follow_up while it is in the list and the goal is still open. Once you accept the candidate's resolution or next step (or the conversation is clearly lost), end the role-play with next_question, bonus or wrap_up if one is in the list.
 

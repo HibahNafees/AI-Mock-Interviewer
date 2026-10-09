@@ -3,7 +3,7 @@
 import pytest
 
 from app import modules
-from app.services.interviewer import ROLEPLAY_EXIT
+from app.services.interviewer import CLOSING_EARLY, ROLEPLAY_EXIT
 from app.services.planning import PlanSectionOut
 
 from tests.fakes import PLAN
@@ -187,12 +187,12 @@ def test_roleplay_is_announced_played_in_character_and_left(client, auth, sales,
     assert modules.guidance("roleplay", "interview") in prompt
     assert "minutes left in this section" not in prompt  # no out-of-character nudges
 
-    # Leaving: the app says so before the interviewer's closing.
-    fire.turns = [{"action": "wrap_up", "message": "Thanks for your time today."}]
+    # Leaving: the character's goodbye, then the app steps out and closes.
+    fire.turns = [{"action": "wrap_up", "message": "Fine, book it."}]
     r = answer(client, auth, sid, "Can we book a call with your finance lead?")
     assert (
         r.get_json()["turn"]["message"]
-        == f"{ROLEPLAY_EXIT} Thanks for your time today."
+        == f"Fine, book it. {ROLEPLAY_EXIT} {CLOSING_EARLY}"
     )
 
 
@@ -352,3 +352,26 @@ def test_character_that_reaches_the_goal_ends_the_role_play(client, auth, docs, 
     assert turn["message"] == (
         f"Fine, Thursday. {ROLEPLAY_EXIT} {warm_up['questions'][0]}"
     )
+
+
+def test_roleplay_only_plan_never_asks_a_reserve_question_in_character(
+    client, auth, docs, fire
+):
+    # Live (T-26): the reserve question sat in a role-play section, so it came with
+    # the role-play intro again, as if the character asked it.
+    fire.analysis = SALES_ANALYSIS
+    roleplay = SALES_PLAN["sections"][1]
+    fire.plan = {
+        "sections": [{**roleplay, "minutes": 10}],
+        "reserve": [{"section": roleplay["name"], "text": "Walk me through a deal."}],
+    }
+    sid = create(client, auth, docs).get_json()["session"]["id"]
+    started(client, auth, sid)
+
+    # The character chose an exit the clock doesn't allow: its goodbye is kept.
+    fire.turns = [{"goal_reached": True, "action": "bonus", "message": "Deal. Bye."}]
+    r = answer(client, auth, sid, "Thursday with your finance lead?")
+    turn = r.get_json()["turn"]
+    assert turn["action"] == "wrap_up"
+    assert turn["message"].startswith("Deal. Bye.")
+    assert "Walk me through a deal." not in turn["message"]
