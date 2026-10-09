@@ -10,6 +10,8 @@ from app.services.limits import today
 from app.services.scoring import (
     FALLBACK_REWRITE,
     CriterionScore,
+    _detach,
+    _keep,
     Sentence,
     grounding_problems,
     resume_fallback,
@@ -225,6 +227,8 @@ def test_report_scores_each_question_then_summarizes(client, auth, planned, fire
     # The scorer sees the résumé, the rubric and the follow-up exchange.
     score_prompt = fire.calls[before]["prompt"]
     assert RESUME in score_prompt and "I owned the schema." in score_prompt
+    # Typed answers are marked as not spoken (spoken ones may have mishearings).
+    assert '"spoken": false' in score_prompt and "transcription error" in score_prompt
     assert '"name": "API design"' in score_prompt
 
     # Asking again doesn't pay twice.
@@ -307,6 +311,42 @@ FULL_RESUME = (
 )
 def test_fallback_starts_from_the_matching_resume_line(question, expected):
     assert resume_fallback(question, FULL_RESUME).startswith(expected)
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        (
+            "This change cut latency to 300ms.",
+            "[What you changed] cut latency to 300ms.",
+        ),
+        (
+            "These keys ensured no double refunds.",
+            "The keys ensured no double refunds.",
+        ),
+        ("For instance, I moved the queries.", "I moved the queries."),
+        ("To address this, we added alerts.", "We added alerts."),
+        ("They designed the tables.", "They designed the tables."),
+        ("This was at Acme.", "This was at Acme."),
+    ],
+)
+def test_detach_rewrites_openers_that_point_at_a_dropped_sentence(text, expected):
+    assert _detach(text) == expected
+
+
+def test_kept_sentences_are_detached_only_after_a_gap():
+    sentences = [
+        Sentence(text="I built the API."),
+        Sentence(text="This change cut latency."),
+        Sentence(text="It served 9 million users."),
+        Sentence(text="This change cut latency."),
+    ]
+    kept = _keep(sentences, ["", "", "it uses numbers", ""])
+    assert [s.text for s in kept] == [
+        "I built the API.",
+        "This change cut latency.",
+        "[What you changed] cut latency.",
+    ]
 
 
 def invented(*sentences: dict) -> dict:
@@ -512,3 +552,13 @@ def test_transcribe_works_after_the_interview_for_retries(client, auth, planned,
         headers=auth,
     )
     assert res.status_code == 200 and res.get_json()["text"] == "A spoken retry."
+
+
+def test_spoken_retry_is_flagged_for_transcription_slips(client, auth, planned, fire):
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    build(client, auth, sid)
+    report = client.get(f"/api/sessions/{sid}/report", headers=auth).get_json()
+    qid = report["report"]["questions"][0]["question_id"]
+    assert retry(client, auth, sid, qid).status_code == 201
+    assert '"spoken": true' in fire.calls[-1]["prompt"]

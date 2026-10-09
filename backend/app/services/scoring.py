@@ -219,6 +219,59 @@ def resume_fallback(question: str, resume: str) -> str:
     return f'[Build this from your résumé: "{fact}".] {FALLBACK_STEPS}'
 
 
+# Openers that point back at the previous sentence. When that sentence was dropped
+# (or there is none), linking words are cut and a "this/that/it" subject becomes a
+# placeholder, so the rewrite never refers to something the user can't see.
+LINK_OPENER_RE = re.compile(
+    r"^(?:to address (?:this|that|these|it)|as a result|because of this|"
+    r"for (?:instance|example)|additionally|also|however|in addition|then|so|"
+    r"this way|that way|initially)\b[,:]?\s*",
+    re.IGNORECASE,
+)
+ACTION_VERBS = (
+    r"(?:\w+ed|cut|let|made|led|took|kept|gave|brought|meant|got|helped|saved|"
+    r"enabled|ensured|allowed|caused)\b"
+)
+# "This change cut…" → "[What you changed] cut…"; "These keys ensured…" → "The keys…".
+SUBJECT_OPENER_RE = re.compile(
+    rf"^(?:(?P<det>this|that|these|those)(?: (?P<noun>[a-z]+))?|it) (?={ACTION_VERBS})",
+    re.IGNORECASE,
+)
+VAGUE_NOUNS = frozenset(
+    """change changes move fix approach step steps decision work effort improvement
+    improvements solution update optimization optimizations""".split()
+)
+DANGLING_SUBJECT = "[What you changed] "
+
+
+def _subject(match: re.Match) -> str:
+    noun = match["noun"]
+    if noun and noun.lower() not in VAGUE_NOUNS:
+        return f"The {noun} "
+    return DANGLING_SUBJECT
+
+
+def _detach(text: str) -> str:
+    """Make a sentence stand on its own once the sentence before it is gone."""
+    text = LINK_OPENER_RE.sub("", text, count=1)
+    text = SUBJECT_OPENER_RE.sub(_subject, text, count=1)
+    return text[:1].upper() + text[1:] if text and text[0] != "[" else text
+
+
+def _keep(sentences: list[Sentence], problems: list[str]) -> list[Sentence]:
+    """Grounded sentences, detached from any dropped sentence they followed."""
+    kept: list[Sentence] = []
+    previous_kept = False
+    for s, problem in zip(sentences, problems):
+        if problem:
+            previous_kept = False
+            continue
+        text = s.text if previous_kept else _detach(s.text)
+        kept.append(Sentence(text=text, source=s.source))
+        previous_kept = True
+    return kept
+
+
 def _join(sentences: list[Sentence]) -> str:
     return " ".join(SPACE_RE.sub(" ", s.text).strip() for s in sentences).strip()
 
@@ -256,7 +309,7 @@ def grounded_rewrite(
         sentences = split_sentences(repaired.stronger_version)
         changes = []
         problems = grounding_problems(sentences, sources)
-    kept = [s for s, p in zip(sentences, problems) if not p]
+    kept = _keep(sentences, problems)
     if not any(WORD_RE.search(PLACEHOLDER_RE.sub(" ", s.text).lower()) for s in kept):
         # Nothing but bare placeholders left: start from the résumé instead.
         return resume_fallback(question, resume), []

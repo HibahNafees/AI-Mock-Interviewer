@@ -51,6 +51,7 @@ class Thread:
             {
                 "interviewer": (q.asked_text or q.text)[:1000],
                 "candidate": self.answers[q.id].transcript,
+                "spoken": self.answers[q.id].input_mode == "voice",
             }
             for q in self.asked
             if q.id in self.answers
@@ -255,7 +256,13 @@ def retry(
     )
     db.session.add(answer)
     db.session.flush()
-    exchange = [{"interviewer": question.text, "candidate": text}]
+    exchange = [
+        {
+            "interviewer": question.text,
+            "candidate": text,
+            "spoken": input_mode == "voice",
+        }
+    ]
     try:
         scoring.evaluate(
             user_id,
