@@ -963,7 +963,7 @@ def test_score_prompt_does_not_anchor_on_false_or_null(client, auth, planned, fi
         c["prompt"] for c in fire.calls if "Score one question" in c["prompt"]
     )
     assert '"result": true | false' in prompt and '"covered": true | false' in prompt
-    assert "zero double refunds" in prompt
+    assert '"said"' in prompt and "churn fell" in prompt
     assert "tests SQL" in prompt
 
 
@@ -1025,3 +1025,61 @@ def test_coverage_and_result_follow_the_quoted_evidence(client, auth, planned, f
     )
     assert [m["covered"] for m in e["missing_points"]] == [True, False, False, True]
     assert e["star"]["result"] is True
+
+
+def test_star_and_points_follow_what_the_candidate_said(client, auth, planned, fire):
+    # T-68: the model copied the result but still marked STAR result false and
+    # listed "the situation" and "a result" as missing.
+    fire.scores = [
+        {
+            **SCORE,
+            "said": {
+                "situation": "our checkout kept timing out at peak",
+                "task": None,
+                "actions": ["I added a queue in front of the payment call"],
+                "result": "timeouts went to zero that quarter",
+                "other": [],
+            },
+            "missing_points": [
+                {"point": "The initial situation", "covered": False, "evidence": None},
+                {"point": "The steps they took", "covered": False, "evidence": None},
+                {"point": "A concrete result", "covered": False, "evidence": None},
+                {"point": "Who they worked with", "covered": False, "evidence": None},
+            ],
+            "star": {
+                "situation": False,
+                "task": False,
+                "action": False,
+                "result": False,
+                "note": "",
+            },
+        }
+    ]
+    e = _report_for(
+        client,
+        auth,
+        planned["id"],
+        "Our checkout kept timing out at peak. I added a queue in front of the "
+        "payment call, and timeouts went to zero that quarter.",
+    )
+    assert [m["covered"] for m in e["missing_points"]] == [True, True, True, False]
+    star = e["star"]
+    assert star["situation"] and star["action"] and star["result"]
+    assert not star["task"]
+
+
+def test_invented_said_quotes_are_not_credited(client, auth, planned, fire):
+    fire.scores = [
+        {
+            **SCORE,
+            "said": {"result": "revenue grew forty percent in one year"},
+            "missing_points": [
+                {"point": "A concrete result", "covered": False, "evidence": None}
+            ],
+        }
+    ]
+    e = _report_for(
+        client, auth, planned["id"], "My answer is about the billing API at Acme work."
+    )
+    assert e["missing_points"][0]["covered"] is False
+    assert e["star"]["result"] is False

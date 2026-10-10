@@ -156,6 +156,12 @@ QUOTE_MATCH = 0.6
 RESULT_POINT_RE = re.compile(
     r"\b(results?|outcomes?|impact|metrics?|measurable|quantif)", re.I
 )
+# A missing point about one STAR part is covered by a verified quote for it.
+STAR_POINT_RE = {
+    "situation": re.compile(r"\b(situation|context|background|initial state)", re.I),
+    "actions": re.compile(r"\b(actions?|steps?)\b", re.I),
+    "result": RESULT_POINT_RE,
+}
 TOO_SHORT = (
     "This answer was too short to score ({n} words). Answer with one specific "
     "example: the situation, what you did, and the result."
@@ -190,6 +196,17 @@ class Star(BaseModel):
     result_quote: str | None = Field(default=None, max_length=600)
 
 
+class Said(BaseModel):
+    """What the candidate actually said, copied word for word before any judging:
+    extracting first makes a small model notice results it otherwise misses (T-68)."""
+
+    situation: str | None = Field(default=None, max_length=600)
+    task: str | None = Field(default=None, max_length=600)
+    actions: list[str] = Field(default_factory=list, max_length=8)
+    result: str | None = Field(default=None, max_length=600)
+    other: list[str] = Field(default_factory=list, max_length=8)
+
+
 class Change(BaseModel):
     kind: Literal["added", "cut", "reframed"]
     text: str = Field(min_length=1, max_length=400)
@@ -219,6 +236,7 @@ class ScoreOut(BaseModel):
     # Does the answer attempt the question at all, and where (verified, T-61)?
     answers_question: bool = True
     answer_quote: str | None = Field(default=None, max_length=600)
+    said: Said | None = None
     # How sure the AI is of this judgment, and why (e.g. a garbled transcript).
     confidence: Literal["high", "medium", "low"] = "medium"
     confidence_note: str = Field(default="", max_length=300)
@@ -607,20 +625,45 @@ def quote_found(quote: str, answers: list[str]) -> bool:
 
 
 def verify_coverage(out: ScoreOut, answers: list[str]) -> None:
-    """Decide "covered" and the STAR result from the quoted words, not the model's
+    """Decide "covered" and the STAR parts from the quoted words, not the model's
     yes/no: it marked every point uncovered and every result missing, even
     "zero double refunds since launch" (T-68). A quote that isn't in the answers
     counts as not given; with no quote, the model's own answer stands."""
+
+    def found(quote: str | None) -> str | None:
+        return quote if quote and quote_found(quote, answers) else None
+
+    said = out.said or Said()
+    star_quotes = {
+        "situation": found(said.situation),
+        "task": found(said.task),
+        "actions": next((q for q in said.actions if found(q)), None),
+        "result": found(said.result)
+        or found(out.star.result_quote if out.star else None),
+    }
     for m in out.missing_points:
         if m.evidence:
             m.covered = quote_found(m.evidence, answers)
-    if out.star is not None and out.star.result_quote:
-        out.star.result = quote_found(out.star.result_quote, answers)
-        if out.star.result:
+        if not m.covered and not m.evidence:
             # "Add measurable outcomes" next to a quoted result contradicts it.
-            for m in out.missing_points:
-                if not m.covered and not m.evidence and RESULT_POINT_RE.search(m.point):
-                    m.covered, m.evidence = True, out.star.result_quote
+            part = next(
+                (k for k, r in STAR_POINT_RE.items() if r.search(m.point)), None
+            )
+            if part and star_quotes[part]:
+                m.covered, m.evidence = True, star_quotes[part]
+    if out.star is not None:
+        for part, field in (
+            ("situation", "situation"),
+            ("task", "task"),
+            ("actions", "action"),
+            ("result", "result"),
+        ):
+            if star_quotes[part]:
+                setattr(out.star, field, True)
+        if star_quotes["result"]:
+            out.star.result_quote = star_quotes["result"]
+        elif out.star.result_quote:
+            out.star.result = False  # quoted words the candidate never said
 
 
 def _too_short(

@@ -20,11 +20,12 @@ Return JSON with exactly this shape:
 {
   "answers_question": true,
   "answer_quote": "the exact words (5 to 25) from the candidate's answers where they address the question, or null",
-  "criteria": [{"name": "criterion name from the rubric", "score": 3, "comment": "one sentence on why"}, {"name": "a criterion this question doesn't test", "score": null, "comment": ""}],
+  "said": {"situation": "their exact words setting the scene, or null", "task": "their exact words on what they had to do, or null", "actions": ["their exact words for each thing they did"], "result": "their exact words on how it turned out, or null", "other": ["their exact words for any other key point"]},
+  "criteria": [{"name": "criterion name from the rubric", "score": 1 | 2 | 3 | 4 | 5 | null, "comment": "one sentence on why, or empty when null"}],
   "summary": "one or two sentences: the main strength and the main gap",
   "weak_moments": [{"quote": "exact words copied from the candidate's answer", "why": "what weakens it"}],
   "missing_points": [{"point": "something a strong answer covers", "evidence": "the exact words (5 to 25) from the candidate's answers that cover this point, or null", "covered": true | false}],
-  "star": {"situation": true | false, "task": true | false, "action": true | false, "result_quote": "the exact words (5 to 25) from the candidate's answers where they say how it turned out, or null", "result": true | false, "note": "one sentence"},
+  "star": {"situation": true | false, "task": true | false, "action": true | false, "result": true | false, "note": "one sentence"},
   "stronger_version": [{"text": "one sentence of the rewrite", "source": "the exact words from the résumé or an answer that this sentence is based on, or null"}],
   "changes": [{"kind": "added", "text": "what changed", "reason": "why it helps"}],
   "tips": ["one tip specific to this field or question type"],
@@ -35,8 +36,10 @@ Return JSON with exactly this shape:
 
 First decide "answers_question": does the candidate attempt THIS question at all? Greetings or small talk ("Hi, I'm doing well, how are you?"), "I don't know" with nothing else, or an answer to a different question → false. If false, use "answer_quote": null and judge only what was actually said. If true, "answer_quote" must be copied word for word from the candidate's answers. Never describe content the candidate didn't say.
 
+Next fill "said": before judging anything, read EVERY candidate answer in the exchange, follow-up answers included, and copy their own words (5 to 25 each, word for word) for the situation, the task, each action, the result and any other key point. The result is anything they say happened because of their work: a number ("churn fell from 8% to 5%"), an outcome ("the client renewed for two more years", "she was running releases on her own within a month"), or a decision that followed ("leadership approved it"). Use null or [] only for parts they truly never said. Judge everything below from "said".
+
 Scoring:
-- List every rubric criterion, using the names exactly as written. Score it from 1 (missing or poor) to 5 (excellent for the $difficulty level) whenever the question or the answer gives evidence about it: a question about speeding up a database query tests SQL; a question about building an API tests API design; an answer that describes code they wrote shows the language. Use null only when neither the question nor the answer touches that criterion. Example: a question about mentoring doesn't test SQL, so SQL is null — never 1 just because the answer didn't mention it.
+- List every rubric criterion, using the names exactly as written. Score it from 1 (missing or poor) to 5 (excellent for the $difficulty level) whenever the question or the answer gives evidence about it: a question about data modelling tests SQL; a question about integrating two systems tests API design; an answer that describes code they wrote shows the language. Use null only when neither the question nor the answer touches that criterion. Example: a question about mentoring doesn't test SQL, so SQL is null — never 1 just because the answer didn't mention it.
 - Always score Structure, Clarity and Relevance (or whatever general communication criteria the rubric has).
 $criteria_rule- An exchange item with a "hint" means the candidate asked for that hint before answering: say so in the summary and judge what they did with it, without other penalty for asking.
 - Judge only what the candidate said. An off-topic, empty or very short answer scores 1–2.
@@ -48,8 +51,8 @@ $criteria_rule- An exchange item with a "hint" means the candidate asked for tha
 
 Feedback:
 - weak_moments: 0 to 3 items. "quote" must be copied word for word from the candidate's answers (5 to 25 words) so it can be highlighted.
-- missing_points: 3 to 6 points a strong answer to this question would cover, each marked covered true or false. Read the whole exchange, follow-up answers included: a point the candidate made anywhere is covered: true. Include the points they did cover, not only the gaps, and never ask for something they already gave (e.g. metrics they stated). For each point, first look for the candidate's words that cover it and copy them into "evidence"; if you found them, covered is true; if they never said it, "evidence" is null and covered is false.
-- star: only for behavioral questions ("Tell me about a time…"); otherwise use null. Mark each part true when the candidate gave it anywhere in the exchange. "result" is true when they said what happened because of their work: a number ("p95 dropped to 300 ms"), an outcome ("zero double refunds since launch"), or a decision or change that followed ("they agreed to hourly reports"). It is false only when they never said how it turned out. Copy the words where they say it into "result_quote" (null if they never did).
+- missing_points: 3 to 6 points a strong answer to this question would cover, each marked covered true or false. Read the whole exchange, follow-up answers included: a point the candidate made anywhere is covered: true. Include the points they did cover, not only the gaps, and never ask for something they already gave (e.g. numbers they stated). For each point, look in "said" for the words that cover it and copy them into "evidence"; if you found them, covered is true; if they never said it, "evidence" is null and covered is false.
+- star: only for behavioral questions ("Tell me about a time…"); otherwise use null. Mark each part true when the candidate gave it anywhere in the exchange. "result" is true when they said what happened because of their work: a number, an outcome, or a decision or change that followed. It is false only when they never said how it turned out ("said"."result" is null).
 - In a role-play, the stronger version is a better version of the candidate's FIRST reply to the character, in the same spoken role-play style.
 - tips: 0 to 2 short tips about content or field-specific expectations (not pace or filler words; those are measured separately).
 - strengths: 1 to 3 specific things the candidate did well, each pointing to what they actually said (e.g. "Named the exact metric: p95 latency from 1.8 s to 300 ms"). No empty praise; if nothing worked, return [].
