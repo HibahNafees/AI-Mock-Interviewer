@@ -1,10 +1,11 @@
 """Progress numbers for the dashboard. Computed from saved rows; no Fire calls."""
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from ..extensions import db
-from ..models import Answer, Evaluation, Question, Report, Session
+from . import practice
+from ..models import Answer, Evaluation, Question, Report, Session, User
 from .limits import today
 
 INTERVIEWS_PER_LEVEL = 2
@@ -74,7 +75,11 @@ def user_stats(user_id: int) -> dict:
 
     # Skills: every criterion the user was scored on, averaged across first attempts.
     first_ids = [a.id for a, _ in answers if a.attempt_no == 1]
+    session_of = {a.id: q.session_id for a, q in answers}
+    order = {s.id: n for n, s in enumerate(sessions)}
     skill_scores: dict[str, list[int]] = defaultdict(list)
+    # Per skill, scores per session in interview order (for "since your first").
+    by_session: dict[str, dict[int, list[int]]] = defaultdict(lambda: defaultdict(list))
     names: dict[str, str] = {}
     if first_ids:
         for e in db.session.scalars(
@@ -86,13 +91,30 @@ def user_stats(user_id: int) -> dict:
                 key = c["name"].strip().lower()
                 names.setdefault(key, c["name"].strip())
                 skill_scores[key].append(c["score"])
+                by_session[key][order[session_of[e.answer_id]]].append(c["score"])
+
+    def change(key: str) -> float | None:
+        runs = by_session[key]
+        if len(runs) < 2:
+            return None
+        return round(_avg(runs[max(runs)]) - _avg(runs[min(runs)]), 2)
+
     skills = sorted(
         (
-            {"name": names[k], "score": _avg(v), "count": len(v)}
+            {"name": names[k], "score": _avg(v), "count": len(v), "change": change(k)}
             for k, v in skill_scores.items()
         ),
         key=lambda s: (-s["count"], s["name"]),
     )[:6]
+
+    user = db.session.get(User, user_id)
+    week_start = datetime.combine(
+        today() - timedelta(days=today().weekday()), datetime.min.time()
+    )
+    this_week = sum(
+        1 for s in completed if (s.started_at or s.created_at) >= week_start
+    )
+    bank = practice.queue(user_id)
 
     level = min(MAX_LEVEL, 1 + len(completed) // INTERVIEWS_PER_LEVEL)
     return {
@@ -120,6 +142,12 @@ def user_stats(user_id: int) -> dict:
             key=lambda r: (-r["interviews"], r["role"]),
         ),
         "skills": skills,
+        "goal": {"weekly": user.weekly_goal, "done_this_week": this_week},
+        "practice": {
+            "due": len(bank["due"]),
+            "upcoming": len(bank["upcoming"]),
+            "mastered": bank["mastered"],
+        },
         "streak_days": _streak(
             {(s.started_at or s.created_at).date() for s in started}
         ),

@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from ..extensions import db
 from ..models import Answer, Evaluation, Question, Report, Session
 from ..models.base import utcnow
-from . import interviewer, scoring, stories
+from . import interviewer, practice, scoring, stories
 from .analytics import Clip, delivery, session_summary
 from .fire import FireError
 from .limits import LimitReached, check_budget
@@ -211,6 +211,14 @@ def generate(report_id: int, user_id: int) -> None:
         report.verdict_reason = summary.reasoning
         report.top_takeaways_json = [t for t in summary.takeaways if t.strip()][:3]
         report.exercises_json = [x for x in summary.exercises if x.strip()][:3]
+        # Once, when the report is first complete: missed questions join the bank.
+        practice.record_session(
+            user_id,
+            session,
+            items,
+            done,
+            lambda section: scoring.section_module(session, section),
+        )
     report.status = "ready"
     db.session.commit()
     _update_story_bank(user_id, session, report, items, done)
@@ -324,7 +332,7 @@ def retry(
         else None
     )
     try:
-        scoring.evaluate(
+        evaluation = scoring.evaluate(
             user_id,
             session,
             answer.id,
@@ -344,6 +352,13 @@ def retry(
             db.session.delete(orphan)
             db.session.commit()
         raise
+    module = scoring.section_module(session, question.section)
+    if module != "roleplay":
+        # Practicing a question again counts as a review in the question bank.
+        practice.review(
+            user_id, session, question.text, question.section, module, evaluation
+        )
+        db.session.commit()
     return answer
 
 

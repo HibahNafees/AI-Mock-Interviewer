@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..extensions import db
 from ..models import Answer, Session, User
-from ..services import interviewer, limits, planning, voice
+from ..services import interviewer, limits, planning, practice, voice
 from ..services.transcription import TranscriptionError, transcribe
 from ..services.timer import is_paused, timer_state
 from .common import current_user_id, first_error
@@ -187,6 +187,31 @@ def create():
     db.session.add(session)
     db.session.flush()
     planning.save_plan(session, plan, role_title=summary["role_title"])
+    return jsonify(session=session_dict(session, detail=True)), 201
+
+
+class PracticeBody(BaseModel):
+    duration_min: int = Field(default=10, ge=5, le=30)
+
+
+@bp.post("/practice")
+@jwt_required()
+def practice_session():
+    """A weak-spot interview from the question bank (no Fire call to plan it)."""
+    try:
+        body = PracticeBody.model_validate(request.get_json(silent=True) or {})
+    except ValidationError as err:
+        return jsonify(error=first_error(err)), 400
+    user_id = current_user_id()
+    limits.check_can_start(user_id, body.duration_min)
+    session = practice.build_session(user_id, body.duration_min)
+    if session is None:
+        return (
+            jsonify(
+                error="Nothing to practice yet: questions you score under 4 show up here."
+            ),
+            404,
+        )
     return jsonify(session=session_dict(session, detail=True)), 201
 
 
