@@ -59,6 +59,20 @@ export function pickVoices(voices) {
   return { interviewer, character }
 }
 
+// Panel interviewers in panel order (lead first), each with a different system
+// voice while there are enough, else the same voice at a different pitch.
+const PANEL_PITCH = [1.0, 0.85, 1.2]
+export function panelVoices(voices, panel) {
+  const lead = voices.find((v) => v.default) ?? voices[0] ?? null
+  const others = voices.filter((v) => v !== lead)
+  const out = {}
+  ;(panel ?? []).forEach((p, i) => {
+    const voice = i === 0 ? lead : (others[i - 1] ?? lead)
+    out[p.key] = { voice, pitch: voice === lead && i > 0 ? PANEL_PITCH[i] : null }
+  })
+  return out
+}
+
 // Short utterances: Chrome cuts long ones off after ~15 seconds.
 export function sentences(text) {
   return (text.match(/[^.!?]+[.!?]*/g) ?? []).map((s) => s.trim()).filter(Boolean)
@@ -77,19 +91,22 @@ const STOPPED = ['interrupted', 'canceled']
 
 // Speaks [{who, text}] in order. Returns { done, cancel }; done resolves to
 // { ok: false } if the browser couldn't speak (no voices installed, autoplay blocked).
-export function speakSegments(segments, persona = 'neutral') {
+export function speakSegments(segments, persona = 'neutral', panel = null) {
   if (!canSpeak() || !segments?.length) return SILENT
   const synth = window.speechSynthesis
   synth.cancel()
-  const { interviewer, character } = pickVoices(voicesForPage())
+  const available = voicesForPage()
+  const { interviewer, character } = pickVoices(available)
+  const panelists = panelVoices(available, panel)
   const utterances = segments.flatMap((seg) =>
     sentences(seg.text).map((text) => {
       const u = new window.SpeechSynthesisUtterance(text)
-      const voice = seg.who === 'character' ? character : interviewer
+      const member = seg.who === 'interviewer' ? panelists[seg.panelist] : null
+      const voice = member ? member.voice : seg.who === 'character' ? character : interviewer
       if (voice) u.voice = voice
       const { rate, pitch } = styleFor(seg.who, persona, character === interviewer)
       u.rate = rate
-      u.pitch = pitch
+      u.pitch = member?.pitch ?? pitch
       return u
     }),
   )
@@ -114,7 +131,7 @@ export function speakSegments(segments, persona = 'neutral') {
 }
 
 // Plays Fire clips [{who, audio}] in order; falls back to the browser voice.
-export function playClips(clips, segments, persona) {
+export function playClips(clips, segments, persona, panel) {
   let audio = null
   let fallback = null
   let stopped = false
@@ -135,7 +152,7 @@ export function playClips(clips, segments, persona) {
         })
       } catch {
         if (!stopped) {
-          fallback = speakSegments(segments, persona)
+          fallback = speakSegments(segments, persona, panel)
           result = await fallback.done
         }
         break
@@ -155,7 +172,7 @@ export function playClips(clips, segments, persona) {
 }
 
 // One interviewer message: Fire clips when the backend sent them, else the browser.
-export function say({ segments, clips, persona }) {
-  if (clips?.length) return playClips(clips, segments, persona)
-  return speakSegments(segments, persona)
+export function say({ segments, clips, persona, panel }) {
+  if (clips?.length) return playClips(clips, segments, persona, panel)
+  return speakSegments(segments, persona, panel)
 }

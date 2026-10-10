@@ -16,6 +16,7 @@ const STATUS = {
 const MODE_LABEL = {
   reverse: ['You interviewed', 'bg-accent-100 text-accent-700'],
   debrief: ['Debrief', 'bg-navy-100 text-navy-700'],
+  negotiation: ['Negotiation', 'bg-emerald-100 text-emerald-700'],
 }
 
 const TIPS = [

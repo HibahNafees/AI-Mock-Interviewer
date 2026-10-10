@@ -9,6 +9,19 @@ import { answerModePref, canRecord, setAnswerModePref } from '../lib/recording'
 import { voicePref } from '../lib/voice'
 
 const DURATIONS = [10, 30, 45, 60]
+const NEGOTIATION_DURATIONS = [5, 10, 15, 20]
+const FORMATS = [
+  ['standard', 'One interviewer'],
+  ['panel', '👥 Panel'],
+  ['negotiation', '💰 Salary negotiation'],
+]
+const FORMAT_BLURBS = {
+  standard: 'A one-to-one interview.',
+  panel:
+    'Two or three interviewers (hiring manager, a future colleague and HR) take turns, each with their own voice.',
+  negotiation:
+    'A recruiter calls with an offer below what you want. Practice anchoring, justifying your number and staying calm. Scored on all three.',
+}
 
 // Role detection for the chosen job description, and the interview types that fit.
 function useJobAnalysis(jdId) {
@@ -67,6 +80,8 @@ export default function Setup() {
   const [answerMode, setAnswerMode] = useState(answerModePref)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [format, setFormat] = useState('standard')
+  const [terms, setTerms] = useState({ offer: '', target: '', company: '' })
   const [company, setCompany] = useState(null)
   const [whyUs, setWhyUs] = useState(true)
   const job = useJobAnalysis(jdId)
@@ -88,6 +103,20 @@ export default function Setup() {
   const offered = job.status === 'ready' ? job.modules : []
   // A type that fit the previous job description may not fit this one.
   const chosen = focus === 'mixed' || offered.some((m) => m.name === focus) ? focus : 'mixed'
+  const negotiating = format === 'negotiation'
+  const termsReady = !negotiating || (terms.offer.trim() && terms.target.trim())
+  // A negotiation is a short call; the plan is fixed, so it starts right away.
+  const length = negotiating ? Math.min(duration, 20) : duration
+  const startNowFor = startNow || negotiating
+
+  function chooseFormat(f) {
+    setFormat(f)
+    if (f !== 'standard') setPressure(0)
+    if (f === 'negotiation' && duration > 20) {
+      setDuration(10)
+      setCustom(false)
+    }
+  }
 
   async function submit(e) {
     e.preventDefault()
@@ -99,16 +128,18 @@ export default function Setup() {
         body: {
           resume_id: resumeId,
           jd_id: jdId,
-          duration_min: duration,
+          duration_min: length,
           difficulty,
           persona,
           focus: chosen,
           pressure_level: pressure,
-          ...(company && whyUs ? { company_research_id: company.id } : {}),
+          format,
+          ...(negotiating ? { negotiation: terms } : {}),
+          ...(company && whyUs && !negotiating ? { company_research_id: company.id } : {}),
         },
       })
       setAnswerModePref(answerMode)
-      if (!startNow) {
+      if (!startNowFor) {
         navigate(`/interview/${session.id}`)
         return
       }
@@ -135,7 +166,7 @@ export default function Setup() {
   return (
     <form onSubmit={submit} className="space-y-6">
       <header>
-        <p className="eyebrow">{startNow ? 'Set up your interview' : 'Step 1 of 2'}</p>
+        <p className="eyebrow">{startNowFor ? 'Set up your interview' : 'Step 1 of 2'}</p>
         <h1 className="mt-1 text-3xl font-extrabold text-slate-900">New interview</h1>
         <p className="mt-2 text-slate-600">
           Add your résumé and the job you're going for, then choose how you want to practice.
@@ -159,7 +190,7 @@ export default function Setup() {
       )}
       {resumeId && jdId && job.status === 'ready' && <GapAnalysis resumeId={resumeId} jdId={jdId} />}
       {jdId && job.status === 'ready' && <QuestionsCoach jdId={jdId} />}
-      {jdId && job.status === 'ready' && (
+      {jdId && job.status === 'ready' && !negotiating && (
         <CompanyResearch
           role={job.analysis.role_title}
           research={company}
@@ -190,7 +221,33 @@ export default function Setup() {
         </section>
       )}
 
-      {job.status === 'ready' && (
+      <section className="card space-y-3 p-5">
+        <h2 className="font-semibold text-slate-900">Format</h2>
+        <Choice name="Format" options={FORMATS} value={format} onChange={chooseFormat} />
+        <p className="text-sm text-slate-500">{FORMAT_BLURBS[format]}</p>
+        {negotiating && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              ['offer', 'The offer', 'e.g. $80,000 base'],
+              ['target', "What you're aiming for", 'e.g. $92,000'],
+              ['company', 'Company (optional)', 'e.g. Acme'],
+            ].map(([key, label, hint]) => (
+              <label key={key} className="space-y-1 text-sm font-medium text-ink">
+                <span>{label}</span>
+                <input
+                  value={terms[key]}
+                  maxLength={120}
+                  onChange={(e) => setTerms((t) => ({ ...t, [key]: e.target.value }))}
+                  placeholder={hint}
+                  className="field"
+                />
+              </label>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {job.status === 'ready' && !negotiating && (
         <section className="card space-y-3 p-5">
           <h2 className="font-semibold text-slate-900">Interview type</h2>
           <p className="text-sm text-slate-600">
@@ -220,8 +277,11 @@ export default function Setup() {
           <h2 className="font-semibold text-slate-900">Length</h2>
           <Choice
             name="Length"
-            options={[...DURATIONS.map((d) => [d, `${d} min`]), ['custom', 'Custom']]}
-            value={custom ? 'custom' : duration}
+            options={[
+              ...(negotiating ? NEGOTIATION_DURATIONS : DURATIONS).map((d) => [d, `${d} min`]),
+              ['custom', 'Custom'],
+            ]}
+            value={custom ? 'custom' : length}
             onChange={(v) => {
               setCustom(v === 'custom')
               if (v !== 'custom') setDuration(v)
@@ -232,13 +292,13 @@ export default function Setup() {
               <input
                 type="range"
                 min={5}
-                max={60}
-                value={duration}
+                max={negotiating ? 20 : 60}
+                value={length}
                 onChange={(e) => setDuration(Number(e.target.value))}
                 aria-label="Custom length in minutes"
                 className="accent-brand-600"
               />
-              <span>{duration} minutes</span>
+              <span>{length} minutes</span>
             </label>
           )}
         </section>
@@ -258,7 +318,7 @@ export default function Setup() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="font-semibold text-slate-900">Interviewer</h2>
+          <h2 className="font-semibold text-slate-900">{negotiating ? 'Recruiter' : 'Interviewer'}</h2>
           <Choice
             name="Interviewer"
             options={[
@@ -272,48 +332,52 @@ export default function Setup() {
         </section>
       </div>
 
-      <section className="card space-y-3 p-5">
-        <h2 className="font-semibold text-slate-900">
-          <span aria-hidden="true">🔥 </span>Pressure
-        </h2>
-        <Choice
-          name="Pressure"
-          options={[
-            [0, 'Off'],
-            [1, '1 · Skeptical'],
-            [2, '2 · Pushback'],
-            [3, '3 · 60 s answers'],
-            [4, '4 · 45 s + curveballs'],
-            [5, '5 · 30 s, demanding'],
-          ]}
-          value={pressure}
-          onChange={setPressure}
-        />
-        <p className="text-sm text-slate-500">
-          {pressure === 0
-            ? 'A normal interview.'
-            : 'Practice staying composed: the interviewer gets tougher between answers (always respectful), and higher levels add answer time limits and curveballs. Scoring stays the same, and you can ease off or stop at any time. Your report shows a composure score.'}
-        </p>
-      </section>
-
-      <div className="card grid gap-6 p-5 md:grid-cols-2">
-        <section className="space-y-3">
-          <h2 className="font-semibold text-slate-900">Before you start</h2>
+      {format === 'standard' && (
+        <section className="card space-y-3 p-5">
+          <h2 className="font-semibold text-slate-900">
+            <span aria-hidden="true">🔥 </span>Pressure
+          </h2>
           <Choice
-            name="Questions"
+            name="Pressure"
             options={[
-              ['review', 'Review the questions first'],
-              ['start', 'Start right away'],
+              [0, 'Off'],
+              [1, '1 · Skeptical'],
+              [2, '2 · Pushback'],
+              [3, '3 · 60 s answers'],
+              [4, '4 · 45 s + curveballs'],
+              [5, '5 · 30 s, demanding'],
             ]}
-            value={startNow ? 'start' : 'review'}
-            onChange={(v) => setStartNow(v === 'start')}
+            value={pressure}
+            onChange={setPressure}
           />
           <p className="text-sm text-slate-500">
-            {startNow
-              ? 'The questions stay a surprise, like a real interview.'
-              : 'See the plan, edit any question or the minutes, then start.'}
+            {pressure === 0
+              ? 'A normal interview.'
+              : 'Practice staying composed: the interviewer gets tougher between answers (always respectful), and higher levels add answer time limits and curveballs. Scoring stays the same, and you can ease off or stop at any time. Your report shows a composure score.'}
           </p>
         </section>
+      )}
+
+      <div className="card grid gap-6 p-5 md:grid-cols-2">
+        {!negotiating && (
+          <section className="space-y-3">
+            <h2 className="font-semibold text-slate-900">Before you start</h2>
+            <Choice
+              name="Questions"
+              options={[
+                ['review', 'Review the questions first'],
+                ['start', 'Start right away'],
+              ]}
+              value={startNow ? 'start' : 'review'}
+              onChange={(v) => setStartNow(v === 'start')}
+            />
+            <p className="text-sm text-slate-500">
+              {startNow
+                ? 'The questions stay a surprise, like a real interview.'
+                : 'See the plan, edit any question or the minutes, then start.'}
+            </p>
+          </section>
+        )}
         <section className="space-y-3">
           <h2 className="font-semibold text-slate-900">Answer by</h2>
           <Choice
@@ -337,16 +401,18 @@ export default function Setup() {
       )}
       <button
         type="submit"
-        disabled={busy || !resumeId || !jdId || job.status !== 'ready'}
+        disabled={busy || !resumeId || !jdId || job.status !== 'ready' || !termsReady}
         className="btn-primary"
       >
         {busy
-          ? startNow
+          ? startNowFor
             ? 'Getting your interview ready…'
             : 'Building your interview plan…'
-          : startNow
-            ? 'Start my interview'
-            : 'Build my interview plan'}
+          : negotiating
+            ? 'Start the call'
+            : startNow
+              ? 'Start my interview'
+              : 'Build my interview plan'}
       </button>
       {busy && (
         <p className="text-sm text-slate-500">

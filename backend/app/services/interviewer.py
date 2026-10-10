@@ -19,7 +19,7 @@ from ..models.base import utcnow
 from .fire import FireError
 from .limits import LimitReached
 from .llm import chat_json, render
-from . import pressure
+from . import negotiation, panel, pressure
 from .timer import SECTION_NUDGE_SEC, WRAP_UP_SEC, TimerState, is_paused, timer_state
 
 log = logging.getLogger(__name__)
@@ -65,6 +65,14 @@ ICEBREAKERS = [
     "How are you feeling about today's interview?",
 ]
 ICEBREAKER_SECTION = "Ice-breaker"
+PANEL_GREETING = (
+    "Hello {name}, thanks for joining. This is a {minutes}-minute panel interview for "
+    "the {role} role. {panel} Before we dive in: {ice}"
+)
+PANEL_OPENING = (
+    "Hello {name}, thanks for joining. This is a {minutes}-minute panel interview for "
+    "the {role} role. {panel} Let's begin."
+)
 INTO_PLAN = {
     "friendly": "Let's get started.",
     "neutral": "Let's get started.",
@@ -198,21 +206,48 @@ def _entering(session: Session, question: Question, previous: Question | None) -
 INTERVIEWER, CHARACTER = "interviewer", "character"
 
 
-def _segments(parts: list[tuple[str, str]]) -> list[dict]:
-    """[(who, text)] → [{"who", "text"}], dropping blanks and joining same-speaker runs.
+def _segments(parts: list[tuple]) -> list[dict]:
+    """[(who, text[, panelist])] → [{"who", "text"[, "panelist"]}], dropping blanks
+    and joining same-speaker runs.
 
-    Lets the browser voice the interviewer and a role-play character differently.
+    Lets the browser voice the interviewer, a role-play character and each panel
+    interviewer differently.
     """
     out: list[dict] = []
-    for who, text in parts:
+    for who, text, *rest in parts:
         text = text.strip()
+        key = rest[0] if rest and who == INTERVIEWER else None
         if not text:
             continue
-        if out and out[-1]["who"] == who:
+        if out and out[-1]["who"] == who and out[-1].get("panelist") == key:
             out[-1]["text"] += f" {text}"
         else:
-            out.append({"who": who, "text": text})
+            out.append({"who": who, "text": text, **({"panelist": key} if key else {})})
     return out
+
+
+def _by(session: Session, key: str | None, parts: list[tuple]) -> list[tuple]:
+    """Panel: the interviewer lines in `parts` without a speaker are `key`'s."""
+    if session.mode != "panel" or key is None:
+        return parts
+    return [p if len(p) > 2 else (*p, key) for p in parts]
+
+
+def _handover(
+    session: Session, from_key: str | None, nxt: Question | None, first: bool = False
+) -> list[tuple]:
+    """Panel: the outgoing interviewer hands over when `nxt` belongs to someone else."""
+    to_key = panel.owner(session, nxt.section) if nxt is not None else None
+    if to_key is None or to_key == from_key:
+        return []
+    bye, hello = panel.handover(to_key, first)
+    return [(INTERVIEWER, bye, from_key or panel.LEAD), (INTERVIEWER, hello, to_key)]
+
+
+def _persona(session: Session, section: str | None) -> str:
+    text = PERSONAS.get(session.persona or "neutral", PERSONAS["neutral"])
+    key = panel.owner(session, section)
+    return f"{text}. {panel.persona_note(key, session)}" if key else text
 
 
 def _speaker_of(session: Session, question: Question) -> str:
@@ -268,6 +303,21 @@ def start(session: Session, user_name: str) -> Question:
         raise ValueError("The plan has no questions")
     session.status = "active"
     session.started_at = utcnow()
+    first_by = panel.owner(session, first.section)
+    if session.mode == "negotiation":
+        # Straight into the call: no small talk, no "interview" opening.
+        _ask(
+            first,
+            _segments(
+                [
+                    (INTERVIEWER, negotiation.intro(session)),
+                    (INTERVIEWER, _entering(session, first, None)),
+                    (CHARACTER, first.text),
+                ]
+            ),
+        )
+        db.session.commit()
+        return first
     if current_app.config.get("ICEBREAKER", True):
         ice = Question(
             session_id=session.id,
@@ -279,38 +329,64 @@ def start(session: Session, user_name: str) -> Question:
             is_icebreaker=True,
         )
         db.session.add(ice)
-        greeting = GREETINGS.get(session.persona or "neutral", GREETINGS["neutral"])
+        greeting = (
+            PANEL_GREETING
+            if session.mode == "panel"
+            else GREETINGS.get(session.persona or "neutral", GREETINGS["neutral"])
+        )
         _ask(
             ice,
             _segments(
-                [
-                    (
-                        INTERVIEWER,
-                        greeting.format(
-                            name=user_name.split(" ")[0],
-                            minutes=session.duration_min,
-                            role=(session.plan_json or {}).get("role_title") or "this",
-                            ice=ice.text,
-                        ),
-                    )
-                ]
+                _by(
+                    session,
+                    panel.LEAD,
+                    [
+                        (
+                            INTERVIEWER,
+                            greeting.format(
+                                name=user_name.split(" ")[0],
+                                minutes=session.duration_min,
+                                role=(session.plan_json or {}).get("role_title")
+                                or "this",
+                                ice=ice.text,
+                                panel=(
+                                    panel.introductions(session)
+                                    if session.mode == "panel"
+                                    else ""
+                                ),
+                            ),
+                        )
+                    ],
+                )
             ),
         )
         db.session.commit()
         return ice
-    opening = OPENINGS.get(session.persona or "neutral", OPENINGS["neutral"]).format(
+    opening = (
+        PANEL_OPENING
+        if session.mode == "panel"
+        else OPENINGS.get(session.persona or "neutral", OPENINGS["neutral"])
+    ).format(
         name=user_name,
         minutes=session.duration_min,
         role=(session.plan_json or {}).get("role_title") or "this",
+        panel=panel.introductions(session) if session.mode == "panel" else "",
     )
     _ask(
         first,
         _segments(
             [
-                (INTERVIEWER, opening),
-                (INTERVIEWER, _entering(session, first, None)),
-                (_speaker_of(session, first), first.text),
-                *_time_note(session, first),
+                *_by(session, panel.LEAD, [(INTERVIEWER, opening)]),
+                *_handover(session, panel.LEAD, first, first=True),
+                *_by(
+                    session,
+                    first_by,
+                    [
+                        (INTERVIEWER, _entering(session, first, None)),
+                        (_speaker_of(session, first), first.text),
+                        *_time_note(session, first),
+                    ],
+                ),
             ]
         ),
     )
@@ -333,7 +409,11 @@ def options(session: Session, asked: list[Question], timer: TimerState) -> dict:
         root = db.session.get(Question, current.follow_up_of_id) or current
     follow_ups = sum(1 for q in asked if q.follow_up_of_id == root.id)
     in_roleplay = scenario_of(session, root.section) is not None
-    max_follow_ups = MAX_ROLEPLAY_TURNS if in_roleplay else MAX_FOLLOW_UPS
+    max_follow_ups = (
+        negotiation.MAX_TURNS
+        if session.mode == "negotiation"
+        else MAX_ROLEPLAY_TURNS if in_roleplay else MAX_FOLLOW_UPS
+    )
 
     order = _section_order(session)
     here = order.index(root.section) if root.section in order else 0
@@ -441,7 +521,11 @@ def take_turn(
             session, user_id, asked, current, text, duration_ms, input_mode
         )
     timer = timer_state(session, asked)
-    invite = current_app.config.get("CANDIDATE_QUESTIONS", True)
+    # A negotiation ends with the call, not "any questions for me?".
+    invite = (
+        current_app.config.get("CANDIDATE_QUESTIONS", True)
+        and session.mode != "negotiation"
+    )
 
     def sign_off(out_of_time: bool = False) -> str:
         """Invite the candidate's questions, or close if that's switched off."""
@@ -493,7 +577,7 @@ def take_turn(
         else:
             prompt = render(
                 "interviewer_turn",
-                persona=PERSONAS.get(session.persona or "neutral", PERSONAS["neutral"]),
+                persona=_persona(session, current.section),
                 history=_history(asked[:-1]),
                 section=timer.section or "",
                 nudges=(
@@ -572,6 +656,35 @@ def take_turn(
             parts = [(INTERVIEWER, sign_off())]
     if out.action in ("next_question", "bonus"):
         parts += _time_note(session, opts.get(out.action))
+    cur_by = panel.owner(session, current.section)
+    if session.mode == "panel":
+        nxt = opts.get(out.action) if out.action in ("next_question", "bonus") else None
+        hand = _handover(session, cur_by, nxt)
+        if hand:
+            # Someone else asks next: they open with the question as planned (the
+            # model worded it in the current interviewer's voice).
+            lead_in = [said] if in_character else []
+            if scenario is not None:
+                lead_in.append((INTERVIEWER, ROLEPLAY_EXIT))
+            to_by = hand[-1][2]
+            parts = (
+                _by(session, cur_by, lead_in)
+                + hand
+                + _by(
+                    session,
+                    to_by,
+                    [
+                        (INTERVIEWER, _entering(session, nxt, current)),
+                        (_speaker_of(session, nxt), nxt.text),
+                        *_time_note(session, nxt),
+                    ],
+                )
+            )
+        else:
+            # The app's sign-off and invitation come from the lead interviewer.
+            parts = _by(
+                session, panel.LEAD if out.action == "wrap_up" else cur_by, parts
+            )
     segments = _segments(parts)
     out.message = " ".join(s["text"] for s in segments)
 
@@ -661,7 +774,7 @@ def _after_icebreaker(
             user_id,
             render(
                 "icebreaker_reply",
-                persona=PERSONAS.get(session.persona or "neutral", PERSONAS["neutral"]),
+                persona=_persona(session, None),
                 question=ice.text,
                 answer=text,
             ),
@@ -675,11 +788,24 @@ def _after_icebreaker(
         reply = ICEBREAKER_FALLBACK
     segments = _segments(
         [
-            (INTERVIEWER, reply),
-            (INTERVIEWER, INTO_PLAN.get(session.persona or "neutral", "")),
-            (INTERVIEWER, _entering(session, first, ice)),
-            (_speaker_of(session, first), first.text),
-            *_time_note(session, first),
+            *_by(
+                session,
+                panel.LEAD,
+                [
+                    (INTERVIEWER, reply),
+                    (INTERVIEWER, INTO_PLAN.get(session.persona or "neutral", "")),
+                ],
+            ),
+            *_handover(session, panel.LEAD, first, first=True),
+            *_by(
+                session,
+                panel.owner(session, first.section),
+                [
+                    (INTERVIEWER, _entering(session, first, ice)),
+                    (_speaker_of(session, first), first.text),
+                    *_time_note(session, first),
+                ],
+            ),
         ]
     )
     _save_answer(session, ice, text, duration_ms, input_mode)
@@ -732,7 +858,7 @@ def _after_candidate_question(
             user_id,
             render(
                 "candidate_question",
-                persona=PERSONAS.get(session.persona or "neutral", PERSONAS["neutral"]),
+                persona=_persona(session, None),
                 role=plan.get("role_title") or "the role",
                 analysis=plan.get("analysis") or {},
                 jd=(jd.raw_text[:MAX_JD_CHARS] if jd else "(not available)"),
@@ -752,13 +878,25 @@ def _after_candidate_question(
     # The answer, or a short "No problem at all." when they had no questions.
     answer = reply.answer.strip()
     if reply.has_question and asked_so_far < MAX_CANDIDATE_QUESTIONS:
-        segments = _segments([(INTERVIEWER, answer), (INTERVIEWER, ANYTHING_ELSE)])
+        segments = _segments(
+            _by(
+                session,
+                panel.LEAD,
+                [(INTERVIEWER, answer), (INTERVIEWER, ANYTHING_ELSE)],
+            )
+        )
         _ask(_qa_question(session, qa, ANYTHING_ELSE), segments)
         db.session.commit()
         message = " ".join(s["text"] for s in segments)
         return {"action": "your_questions", "message": message, "segments": segments}
 
-    segments = _segments([(INTERVIEWER, answer), (INTERVIEWER, closing(session))])
+    segments = _segments(
+        _by(
+            session,
+            panel.LEAD,
+            [(INTERVIEWER, answer), (INTERVIEWER, closing(session))],
+        )
+    )
     session.status = "completed"
     session.ended_at = utcnow()
     db.session.commit()
@@ -817,7 +955,12 @@ def skip(session: Session) -> dict:
     )
     if current.is_candidate_qa:
         return _finish(
-            session, [(INTERVIEWER, "No problem."), (INTERVIEWER, closing(session))]
+            session,
+            _by(
+                session,
+                panel.LEAD,
+                [(INTERVIEWER, "No problem."), (INTERVIEWER, closing(session))],
+            ),
         )
     if current.is_icebreaker:
         nxt = first
@@ -827,26 +970,37 @@ def skip(session: Session) -> dict:
         opts.pop("follow_up", None)
         nxt = opts.get("next_question") or opts.get("bonus")
     scenario = scenario_of(session, current.section)
+    cur_by = panel.owner(session, current.section)
     parts = [(INTERVIEWER, SKIP_ACK)]
     if scenario is not None and (nxt is None or nxt.section != current.section):
         parts.append((INTERVIEWER, ROLEPLAY_EXIT))
+    parts = _by(session, cur_by, parts)
     if nxt is not None:
-        parts += [
-            (INTERVIEWER, _entering(session, nxt, current)),
-            (_speaker_of(session, nxt), nxt.text),
-            *_time_note(session, nxt),
-        ]
+        parts += _handover(session, cur_by, nxt) + _by(
+            session,
+            panel.owner(session, nxt.section),
+            [
+                (INTERVIEWER, _entering(session, nxt, current)),
+                (_speaker_of(session, nxt), nxt.text),
+                *_time_note(session, nxt),
+            ],
+        )
         segments = _segments(parts)
         _ask(nxt, segments)
         db.session.commit()
         action = "bonus" if nxt is opts.get("bonus") else "next_question"
         return _reply(action, segments)
-    if current_app.config.get("CANDIDATE_QUESTIONS", True):
-        segments = _segments(parts + [(INTERVIEWER, INVITE)])
+    if (
+        current_app.config.get("CANDIDATE_QUESTIONS", True)
+        and session.mode != "negotiation"
+    ):
+        segments = _segments(parts + _by(session, panel.LEAD, [(INTERVIEWER, INVITE)]))
         _ask(_qa_question(session, current, INVITE), segments)
         db.session.commit()
         return _reply("your_questions", segments)
-    return _finish(session, parts + [(INTERVIEWER, closing(session))])
+    return _finish(
+        session, parts + _by(session, panel.LEAD, [(INTERVIEWER, closing(session))])
+    )
 
 
 def _reply(action: str, segments: list[dict]) -> dict:

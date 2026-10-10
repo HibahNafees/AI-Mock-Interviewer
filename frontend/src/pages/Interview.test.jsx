@@ -119,6 +119,7 @@ describe('setup', () => {
       persona: 'tough',
       focus: 'technical',
       pressure_level: 0,
+      format: 'standard',
     })
   })
 })

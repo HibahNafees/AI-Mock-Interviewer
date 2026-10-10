@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ALEX, SAM, fakeSpeech } from '../test-speech'
-import { pickVoices, playClips, say, sentences, speakSegments, voicePref, setVoicePref } from './voice'
+import { panelVoices, pickVoices, playClips, say, sentences, speakSegments, voicePref, setVoicePref } from './voice'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -40,6 +40,25 @@ describe('browser voice', () => {
     const spoken = fakeSpeech([ALEX])
     speakSegments([{ who: 'character', text: 'Hello.' }], 'neutral')
     expect(spoken[0].pitch).not.toBe(1)
+  })
+
+  it('gives each panel interviewer their own voice, or pitch', () => {
+    const panel = [{ key: 'hm' }, { key: 'peer' }, { key: 'hr' }]
+    expect(panelVoices([SAM, ALEX], panel)).toEqual({
+      hm: { voice: ALEX, pitch: null },
+      peer: { voice: SAM, pitch: null },
+      hr: { voice: ALEX, pitch: 1.2 },
+    })
+    const spoken = fakeSpeech()
+    speakSegments(
+      [
+        { who: 'interviewer', panelist: 'hm', text: 'Over to Marcus.' },
+        { who: 'interviewer', panelist: 'peer', text: 'Hi, Marcus here.' },
+      ],
+      'neutral',
+      panel.slice(0, 2),
+    )
+    expect(spoken.map((u) => u.voice.name)).toEqual(['Alex', 'Sam'])
   })
 
   it('stops at once when cancelled', async () => {

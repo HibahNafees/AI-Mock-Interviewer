@@ -28,13 +28,25 @@ const BUBBLES = {
     label: 'text-accent-700',
   },
 }
+// Each panel interviewer gets their own colour.
+const PANEL_BUBBLES = {
+  hm: { avatar: 'from-brand-500 to-brand-700', box: 'bg-white ring-brand-100', label: 'text-brand-700' },
+  peer: { avatar: 'from-navy-500 to-navy-700', box: 'bg-navy-50 ring-navy-100', label: 'text-navy-700' },
+  hr: { avatar: 'from-emerald-400 to-emerald-600', box: 'bg-emerald-50 ring-emerald-100', label: 'text-emerald-700' },
+}
+
+// "Priya · hiring manager" for a panel interviewer's line.
+function panelLabel(panel, key) {
+  const p = panel?.find((x) => x.key === key)
+  return p ? `${p.name} · ${p.title.replace(/^(the|a|from the) /, '')}` : 'Interviewer'
+}
 
 // One interviewer (or role-play character) message, with an avatar.
-function Bubble({ who = 'interviewer', label, children }) {
-  const style = BUBBLES[who]
+function Bubble({ who = 'interviewer', panelist, label, children }) {
+  const style = (panelist && PANEL_BUBBLES[panelist]) || BUBBLES[who]
   return (
     <div className="flex max-w-[88%] items-start gap-3">
-      {who === 'interviewer' ? (
+      {who === 'interviewer' && !panelist ? (
         <Mascot className="mt-0.5 h-10 w-10 shrink-0" />
       ) : (
         <span
@@ -52,22 +64,26 @@ function Bubble({ who = 'interviewer', label, children }) {
   )
 }
 
-function Transcript({ items, plan }) {
+function Transcript({ items, plan, panel }) {
   return (
     <ol className="space-y-5">
       {items.map((t) => {
         const scenario = scenarioFor(plan, t.section)
         // Each speaker's part in its own bubble ("Deal." from the character, then
-        // the interviewer stepping out); older messages have no segments.
+        // the interviewer stepping out; panel interviewers handing over); older
+        // messages have no segments.
         const parts =
-          t.segments?.length > 1
+          t.segments?.length > 1 || t.segments?.[0]?.panelist
             ? t.segments.map((seg) => ({
                 who: seg.who,
+                panelist: seg.who === 'interviewer' ? seg.panelist : undefined,
                 text: seg.text,
                 label:
                   seg.who === 'character' && scenario
                     ? `${characterName(scenario)} · role-play`
-                    : 'Interviewer',
+                    : seg.panelist
+                      ? panelLabel(panel, seg.panelist)
+                      : 'Interviewer',
               }))
             : [
                 {
@@ -79,7 +95,7 @@ function Transcript({ items, plan }) {
         return (
           <li key={t.question_id} className="space-y-3">
             {parts.map((p, i) => (
-              <Bubble key={i} who={p.who} label={p.label}>
+              <Bubble key={i} who={p.who} panelist={p.panelist} label={p.label}>
                 {p.text}
               </Bubble>
             ))}
@@ -162,7 +178,7 @@ function PlanStep({ session, setSession, onGreeting }) {
     <div className="space-y-6">
       <header>
         <p className="eyebrow">Step 2 of 2</p>
-        <h1 className="mt-1 text-3xl font-extrabold text-slate-900">Your interview plan</h1>
+        <h1 className="mt-1 text-3xl font-extrabold text-slate-900">{session.negotiation ? 'Your negotiation' : 'Your interview plan'}</h1>
         <p className="mt-1 text-slate-600">
           {session.role_title} · {session.duration_min} minutes · {session.difficulty} ·{' '}
           {session.persona} interviewer
@@ -179,15 +195,24 @@ function PlanStep({ session, setSession, onGreeting }) {
           </p>
         )}
       </header>
-      <p className="text-sm text-slate-600">
-        Edit any question or the minutes per section, then start when you're ready.
-      </p>
-      <PlanEditor
-        key={session.id}
-        plan={session.plan}
-        duration={session.duration_min}
-        onSave={savePlan}
-      />
+      {session.negotiation ? (
+        <p className="text-sm text-slate-600">
+          A recruiter will call with an offer of {session.negotiation.offer}. You're aiming for{' '}
+          {session.negotiation.target}.
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-slate-600">
+            Edit any question or the minutes per section, then start when you're ready.
+          </p>
+          <PlanEditor
+            key={session.id}
+            plan={session.plan}
+            duration={session.duration_min}
+            onSave={savePlan}
+          />
+        </>
+      )}
       {error && (
         <p role="alert" className="text-sm text-red-600">
           {error}
@@ -199,7 +224,7 @@ function PlanStep({ session, setSession, onGreeting }) {
         disabled={busy}
         className="btn-primary"
       >
-        {busy ? 'Starting…' : 'Start interview'}
+        {busy ? 'Starting…' : session.negotiation ? 'Start the call' : 'Start interview'}
       </button>
     </div>
   )
@@ -271,7 +296,7 @@ function LiveStep({ session, setSession, greeting }) {
       if (remember) lastSaid.current = message
       voice.current?.cancel()
       const turn = ++said.current
-      const handle = say({ ...message, persona })
+      const handle = say({ ...message, persona, panel: session.panel })
       voice.current = handle
       setSpeaking(true)
       handle.done.then((result) => {
@@ -284,7 +309,7 @@ function LiveStep({ session, setSession, greeting }) {
         else askedAt.current = Date.now()
       })
     },
-    [persona],
+    [persona, session.panel],
   )
 
   // Speak the first question, and stop talking when the page goes away. (No
@@ -487,11 +512,17 @@ function LiveStep({ session, setSession, greeting }) {
       {roleplay && (
         <p className="rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
           <span aria-hidden="true">🎭 </span>
-          <span className="mr-1 font-bold">Role-play:</span> the interviewer is playing{' '}
-          {roleplay.character}. Your goal: {roleplay.goal}
+          <span className="mr-1 font-bold">{session.negotiation ? 'Negotiation:' : 'Role-play:'}</span> the
+          interviewer is playing {roleplay.character}. Your goal: {roleplay.goal}
+          {session.negotiation && (
+            <>
+              {' '}
+              (you're aiming for <span className="font-semibold">{session.negotiation.target}</span>)
+            </>
+          )}
         </p>
       )}
-      <Transcript items={session.transcript} plan={session.plan} />
+      <Transcript items={session.transcript} plan={session.plan} panel={session.panel} />
       {closing && !active && (
         <Bubble label="Interviewer">{closing}</Bubble>
       )}

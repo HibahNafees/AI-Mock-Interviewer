@@ -32,11 +32,20 @@ class Config:
     # Interviewer voice: "browser" (free Web Speech API in the browser) or "fire"
     # (Fire /v1/speech, billed; no speech model was deployed on 2026-10-09, T-27).
     VOICE_PROVIDER = os.environ.get("VOICE_PROVIDER", "browser")
-    # Fire voice ids by speaker: "friendly", "neutral", "tough", "character".
+    # Fire voice ids by speaker: "friendly", "neutral", "tough", "character", and
+    # the panel interviewers "panel_hm", "panel_peer", "panel_hr".
     # Unset ones use the speech model's default voice.
     FIRE_VOICES = {
         k: os.environ[f"FIRE_VOICE_{k.upper()}"]
-        for k in ("friendly", "neutral", "tough", "character")
+        for k in (
+            "friendly",
+            "neutral",
+            "tough",
+            "character",
+            "panel_hm",
+            "panel_peer",
+            "panel_hr",
+        )
         if os.environ.get(f"FIRE_VOICE_{k.upper()}")
     }
     # Per-user daily caps (usage_limits).

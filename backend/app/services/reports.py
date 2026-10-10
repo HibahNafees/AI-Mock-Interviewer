@@ -17,7 +17,17 @@ from sqlalchemy.exc import IntegrityError
 from ..extensions import db
 from ..models import Answer, Debrief, Evaluation, Question, Report, Session
 from ..models.base import utcnow
-from . import coach, debriefs, interviewer, practice, pressure, scoring, stories
+from . import (
+    coach,
+    debriefs,
+    interviewer,
+    negotiation,
+    panel,
+    practice,
+    pressure,
+    scoring,
+    stories,
+)
 from .analytics import Clip, delivery, session_summary
 from .fire import FireError
 from .limits import LimitReached, check_budget
@@ -282,12 +292,17 @@ def _summarize(user_id, session, report, items, done) -> SummaryOut:
                 ][:3],
             }
         )
+    role = (session.plan_json or {}).get("role_title") or "the role"
+    verdict = report.verdict
+    if session.mode == "negotiation":
+        role = f"an offer negotiation for {role}"
+        verdict = negotiation.VERDICTS.get(verdict, verdict)
     prompt = render(
         "report_summary",
-        role=(session.plan_json or {}).get("role_title") or "the role",
+        role=role,
         difficulty=session.difficulty or "mid",
         overall=f"{report.overall_score:.1f}",
-        verdict=report.verdict,
+        verdict=verdict,
         questions=questions,
         delivery=report.analytics_json,
     )
@@ -494,6 +509,7 @@ def report_dict(session: Session, report: Report) -> dict:
     analysis = (session.plan_json or {}).get("analysis") or {}
     return {
         "session_id": session.id,
+        "mode": session.mode,
         "status": report.status,
         "role_title": (session.plan_json or {}).get("role_title", ""),
         "duration_min": session.duration_min,
@@ -509,6 +525,8 @@ def report_dict(session: Session, report: Report) -> dict:
         ),
         "unanswered": unanswered(session, items),
         "debrief": _debrief_info(session),
+        "negotiation": negotiation.info(session),
+        "panel": panel.info(session),
         "their_questions": (session.plan_json or {}).get("their_questions"),
         "pressure": (
             {**pressure.info(session), "composure": pressure.composure(session, report)}

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from .. import modules
 from ..extensions import db
 from ..models import Document, JdAnalysis, Question, Session, User
+from . import panel
 from .llm import chat_json, render
 
 ALL_MODULES = tuple(modules.MODULES) + modules.LATER
@@ -58,6 +59,9 @@ class Scenario(BaseModel):
     character: str = Field(min_length=1, max_length=300)
     setting: str = Field(default="", max_length=400)
     goal: str = Field(min_length=1, max_length=300)
+    # Instructions only the character sees (e.g. how far a recruiter may move);
+    # never shown to the candidate before the report.
+    private: str = Field(default="", max_length=1200)
 
 
 class PlanSectionOut(BaseModel):
@@ -363,6 +367,14 @@ def save_plan(session: Session, plan: PlanOut, role_title: str = "") -> None:
             )
         )
     previous = session.plan_json or {}
+    hidden = {
+        s["name"]: (s.get("scenario") or {}).get("private", "")
+        for s in previous.get("sections", [])
+    }
+    for s in plan.sections:
+        # An edited plan keeps the character's private instructions.
+        if s.scenario is not None and not s.scenario.private:
+            s.scenario.private = hidden.get(s.name, "")
     session.plan_json = {
         **previous,
         "role_title": role_title or previous.get("role_title", ""),
@@ -371,11 +383,19 @@ def save_plan(session: Session, plan: PlanOut, role_title: str = "") -> None:
                 "name": s.name,
                 "module": s.module,
                 "minutes": s.minutes,
-                "scenario": s.scenario.model_dump() if s.scenario else None,
+                "scenario": (
+                    s.scenario.model_dump(
+                        exclude={"private"} if not s.scenario.private else None
+                    )
+                    if s.scenario
+                    else None
+                ),
             }
             for s in plan.sections
         ],
     }
+    if session.mode == "panel":
+        panel.assign(session)
     db.session.commit()
 
 
@@ -388,9 +408,15 @@ def plan_view(session: Session) -> dict:
     ).all()
     sections = []
     for s in (session.plan_json or {}).get("sections", []):
+        scenario = s.get("scenario")
         sections.append(
             {
                 **s,
+                "scenario": (
+                    {k: v for k, v in scenario.items() if k != "private"}
+                    if scenario
+                    else None
+                ),
                 "questions": [
                     q.text for q in rows if q.section == s["name"] and not q.is_bonus
                 ],

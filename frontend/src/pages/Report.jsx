@@ -11,6 +11,12 @@ const VERDICT = {
   'lean hire': ['Lean hire', 'bg-amber-100 text-amber-800'],
   'no hire': ['No hire', 'bg-red-100 text-red-800'],
 }
+// A negotiation is judged as a negotiation, not as hire / no hire.
+const NEGOTIATION_VERDICT = {
+  hire: ['Strong negotiation', 'bg-green-100 text-green-800'],
+  'lean hire': ['Solid, room to push', 'bg-amber-100 text-amber-800'],
+  'no hire': ['Needs more practice', 'bg-red-100 text-red-800'],
+}
 const CHANGE = {
   added: 'bg-green-100 text-green-800',
   cut: 'bg-red-100 text-red-800',
@@ -631,7 +637,8 @@ function NextRound({ debrief }) {
 
 function Summary({ report }) {
   const a = report.analytics
-  const [label, color] = VERDICT[report.verdict] ?? ['–', 'bg-slate-100 text-slate-600']
+  const verdicts = report.mode === 'negotiation' ? NEGOTIATION_VERDICT : VERDICT
+  const [label, color] = verdicts[report.verdict] ?? ['–', 'bg-slate-100 text-slate-600']
   const fillers = Object.entries(a?.fillers ?? {})
   return (
     <div className="space-y-4">
@@ -852,7 +859,15 @@ export default function Report() {
     <section className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="eyebrow">{report.debrief ? 'Debrief of a real interview' : 'Interview report'}</p>
+          <p className="eyebrow">
+            {report.debrief
+              ? 'Debrief of a real interview'
+              : report.negotiation
+                ? 'Negotiation report'
+                : report.panel
+                  ? 'Panel interview report'
+                  : 'Interview report'}
+          </p>
           <h1 className="mt-1 text-3xl font-extrabold text-slate-900">
             {report.debrief
               ? `${report.debrief.role}${report.debrief.company ? ` at ${report.debrief.company}` : ''}`
@@ -861,6 +876,11 @@ export default function Report() {
           <p className="mt-1 text-slate-600">
             {report.role_title} · {report.duration_min} minutes · {report.difficulty}
           </p>
+          {report.negotiation && (
+            <p className="mt-1 text-sm text-slate-500">
+              Offer {report.negotiation.offer} · your target {report.negotiation.target}
+            </p>
+          )}
         </div>
         <div className="flex gap-3 text-sm print:hidden">
           <Link to={`/interview/${id}`} className="btn-secondary">

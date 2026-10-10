@@ -6,9 +6,18 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..extensions import db
 from ..models import Answer, CompanyResearch, Session, User
-from ..services import interviewer, limits, planning, practice, pressure, voice
+from ..services import (
+    interviewer,
+    limits,
+    panel,
+    planning,
+    practice,
+    pressure,
+    voice,
+)
 from ..services.transcription import TranscriptionError, transcribe
 from ..services.timer import is_paused, timer_state
+from ..services import negotiation as nego
 from .common import current_user_id, first_error
 from .documents import owned_document
 
@@ -33,6 +42,9 @@ class CreateBody(BaseModel):
     pressure_level: int = Field(default=0, ge=0, le=5)
     # From POST /api/company/research: adds a "Why this company" section.
     company_research_id: int | None = None
+    # panel: 2–3 interviewers; negotiation: a recruiter role-play about an offer.
+    format: Literal["standard", "panel", "negotiation"] = "standard"
+    negotiation: nego.NegotiationIn | None = None
 
 
 class PlanSectionIn(BaseModel):
@@ -137,6 +149,8 @@ def session_dict(session: Session, detail: bool = False) -> dict:
         data["rubric"] = session.rubric_json
         data["voice"] = voice.info(session)
         data["pressure"] = pressure.info(session)
+        data["panel"] = panel.info(session)
+        data["negotiation"] = nego.info(session)
         data["transcript"] = _transcript(session)
         data["timer"] = (
             timer_state(session, interviewer.asked_questions(session)).to_dict()
@@ -161,31 +175,63 @@ def create():
     if resume is None or jd is None:
         return jsonify(error="Choose your résumé and a job description first"), 404
 
+    if body.format != "standard" and body.pressure_level:
+        return jsonify(error="Pressure mode works with a standard interview"), 400
+    if body.format == "negotiation":
+        if body.negotiation is None:
+            return jsonify(error="Enter the offer and what you're aiming for"), 400
+        if not nego.MIN_MINUTES <= body.duration_min <= nego.MAX_MINUTES:
+            return (
+                jsonify(
+                    error=f"A negotiation runs {nego.MIN_MINUTES} to "
+                    f"{nego.MAX_MINUTES} minutes"
+                ),
+                400,
+            )
+
     limits.check_can_plan(user_id)
     limits.check_can_start(user_id, body.duration_min)
     analysis = planning.analyze_jd(user_id, jd)
-    if body.focus != planning.MIXED and body.focus not in planning.offered_modules(
-        analysis
-    ):
-        return jsonify(error="That interview type doesn't fit this job"), 400
-    plan = planning.build_plan(
-        user_id, resume, analysis, body.duration_min, body.difficulty, body.focus
-    )
-    rubric = planning.build_rubric(user_id, analysis, body.difficulty, body.focus)
-    research = (
-        db.session.get(CompanyResearch, body.company_research_id)
-        if body.company_research_id
-        else None
-    )
-    if research is not None:
-        planning.add_why_us(plan, research.result_json["why_us_questions"])
-
     summary = planning.analysis_summary(analysis)
+    research = None
+    if body.format == "negotiation":
+        # Fixed recruiter scenario and rubric: no Fire call to plan it.
+        user = db.session.get(User, user_id)
+        plan = nego.plan(
+            body.negotiation,
+            summary["role_title"] or "this",
+            user.name if user else "",
+            body.persona,
+            body.duration_min,
+        )
+        rubric = nego.RUBRIC.model_copy(deep=True)
+    else:
+        if body.focus != planning.MIXED and body.focus not in planning.offered_modules(
+            analysis
+        ):
+            return jsonify(error="That interview type doesn't fit this job"), 400
+        plan = planning.build_plan(
+            user_id, resume, analysis, body.duration_min, body.difficulty, body.focus
+        )
+        rubric = planning.build_rubric(user_id, analysis, body.difficulty, body.focus)
+        research = (
+            db.session.get(CompanyResearch, body.company_research_id)
+            if body.company_research_id
+            else None
+        )
+        if research is not None:
+            planning.add_why_us(plan, research.result_json["why_us_questions"])
+
+    mode = (
+        body.format
+        if body.format != "standard"
+        else "pressure" if body.pressure_level else "standard"
+    )
     session = Session(
         user_id=user_id,
         resume_id=resume.id,
         jd_id=jd.id,
-        mode="pressure" if body.pressure_level else "standard",
+        mode=mode,
         pressure_level=body.pressure_level or None,
         duration_min=body.duration_min,
         difficulty=body.difficulty,
@@ -197,6 +243,11 @@ def create():
             "jd_analysis_id": analysis.id,
             "focus": body.focus,
             **({"pressure_start": body.pressure_level} if body.pressure_level else {}),
+            **(
+                {"negotiation": body.negotiation.model_dump()}
+                if body.format == "negotiation"
+                else {}
+            ),
             **(
                 {
                     "company": {
@@ -273,6 +324,8 @@ def edit_plan(session_id: int):
             jsonify(error="The plan can't change once the interview has started"),
             409,
         )
+    if session.mode == "negotiation":
+        return jsonify(error="A negotiation's plan can't be edited"), 409
     try:
         body = PlanIn.model_validate(request.get_json(silent=True) or {})
     except ValidationError as err:

@@ -57,7 +57,10 @@ def synthesize(
     persona = session.persona or "neutral"
     clips = []
     for seg in segments:
-        voice = voices.get("character" if seg["who"] == "character" else persona)
+        if seg["who"] == "character":
+            voice = voices.get("character")
+        else:
+            voice = voices.get(f"panel_{seg.get('panelist')}") or voices.get(persona)
         try:
             result = get_fire().speech(seg["text"], voice)
         except FireError as err:
