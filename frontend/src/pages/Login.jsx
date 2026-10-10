@@ -23,6 +23,13 @@ export default function Login() {
       footer={
         <>
           New here? <Link to="/signup" className="font-semibold text-brand-700 hover:underline">Create an account</Link>
+          <span className="mt-2 block">
+            Or{' '}
+            <Link to="/decode" className="font-semibold text-brand-700 hover:underline">
+              decode a job description free
+            </Link>
+            , no account needed.
+          </span>
         </>
       }
     />

@@ -108,6 +108,40 @@ SUMMARY = {
 }
 
 
+DECODE = {
+    "role_title": "Backend Engineer",
+    "summary": "A backend role that likely centres on talking to stakeholders.",
+    "team_size": {
+        "guess": "small team",
+        "why": "one product",
+        "evidence": "invented words",
+    },
+    "pace": {
+        "guess": "fast-moving",
+        "why": "ship weekly",
+        "evidence": "ship features every week",
+    },
+    "priorities": [
+        {
+            "point": "Keeping stakeholders aligned",
+            "evidence": "work closely with stakeholders",
+        },
+        {"point": "Made up", "evidence": "a phrase that is not in the posting"},
+    ],
+    "green_flags": [
+        {"point": "Mentoring", "evidence": "mentoring from senior engineers"}
+    ],
+    "red_flags": [{"point": "Always on", "evidence": "available around the clock"}],
+    "likely_questions": [
+        {
+            "question": "How do you handle conflicting stakeholder asks?",
+            "why": "stakeholders x4",
+        }
+    ],
+    "competencies": [{"name": "Communication", "why": "stakeholders"}],
+}
+
+
 class FakeFire:
     """Answers by prompt type; interviewer turns come from `turns` (else next_question)."""
 
@@ -129,6 +163,7 @@ class FakeFire:
         self.spoken: list[tuple[str, str | None]] = []
         self.speech_error: Exception | None = None
         self.small_talk_error: Exception | None = None
+        self.decode: dict = DECODE
         # Story-extraction replies (default: no stories).
         self.stories: list[dict | Exception] = []
         # Replies to "Do you have any questions for me?" turns.
@@ -168,6 +203,8 @@ class FakeFire:
             )
             if isinstance(body, Exception):
                 raise body
+        elif "Read between the lines of a job description" in prompt:
+            body = self.decode
         elif "reusable interview stories" in prompt:
             body = self.stories.pop(0) if self.stories else {"stories": []}
             if isinstance(body, Exception):

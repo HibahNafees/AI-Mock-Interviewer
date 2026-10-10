@@ -14,6 +14,10 @@ EXPECTED_TABLES = {
     "peer_rooms",
     "question_bank",
     "usage_limits",
+    # Phase 8: decoded job descriptions (hash + interpretation, no JD text) and
+    # signed-out Fire spend.
+    "jd_decodes",
+    "anon_spend",
 }
 
 

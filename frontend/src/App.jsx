@@ -3,6 +3,7 @@ import ComingSoon from './components/ComingSoon'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/Dashboard'
+import Decoder from './pages/Decoder'
 import Interview from './pages/Interview'
 import Login from './pages/Login'
 import Report from './pages/Report'
@@ -15,6 +16,9 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      {/* Public: the decoder works without an account and its results are shareable. */}
+      <Route path="/decode" element={<Decoder standalone />} />
+      <Route path="/decode/:token" element={<Decoder standalone />} />
       <Route
         element={
           <ProtectedRoute>
@@ -27,7 +31,8 @@ export default function App() {
         <Route path="interview/:id" element={<Interview />} />
         <Route path="report/:id" element={<Report />} />
         <Route path="stories" element={<Stories />} />
-        <Route path="decoder" element={<ComingSoon title="JD decoder" phase={8} />} />
+        <Route path="decoder" element={<Decoder />} />
+        <Route path="decoder/:token" element={<Decoder />} />
         <Route path="debrief" element={<ComingSoon title="Debrief" phase={8} />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

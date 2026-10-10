@@ -6,7 +6,7 @@ from flask import current_app
 from sqlalchemy import func
 
 from ..extensions import db
-from ..models import Answer, Question, Session, UsageLimit
+from ..models import AnonSpend, Answer, JdDecode, Question, Session, UsageLimit
 
 LONG_SESSION_MIN = 60
 
@@ -37,11 +37,18 @@ def _row(user_id: int) -> UsageLimit:
     return row
 
 
-def record_fire_call(user_id: int, price_usd: float) -> None:
-    """Add one Fire call's charged price to today's row for this user."""
-    row = _row(user_id)
+def record_fire_call(user_id: int | None, price_usd: float) -> None:
+    """Add one Fire call's charged price to today's row for this user (or to the
+    signed-out tally, which counts toward the same monthly budget)."""
+    if user_id is None:
+        row = db.session.get(AnonSpend, today())
+        if row is None:
+            row = AnonSpend(date=today(), llm_calls=0, fire_spend_usd=0)
+            db.session.add(row)
+    else:
+        row = _row(user_id)
     row.llm_calls += 1
-    row.fire_spend_usd = (row.fire_spend_usd or 0) + price_usd
+    row.fire_spend_usd = float(row.fire_spend_usd or 0) + price_usd
     db.session.commit()
 
 
@@ -53,7 +60,12 @@ def month_spend_usd() -> float:
             UsageLimit.date >= start
         )
     )
-    return float(total or 0)
+    anon = db.session.scalar(
+        db.select(func.coalesce(func.sum(AnonSpend.fire_spend_usd), 0)).where(
+            AnonSpend.date >= start
+        )
+    )
+    return float(total or 0) + float(anon or 0)
 
 
 def check_budget() -> None:
@@ -131,3 +143,39 @@ def check_can_retry(user_id: int) -> None:
     cap = current_app.config["DAILY_RETRIES"]
     if made >= cap:
         raise LimitReached(f"You've used today's {cap} retries; try again tomorrow.")
+
+
+def check_can_decode(user_id: int | None, ip_hash: str | None) -> None:
+    """Decoder caps: per user per day, or per visitor and overall when signed out."""
+    check_budget()
+    cfg = current_app.config
+    if user_id is not None:
+        if _row(user_id).decoder_runs >= cfg["DAILY_DECODER_RUNS"]:
+            raise LimitReached(
+                f"You've used today's {cfg['DAILY_DECODER_RUNS']} decoder runs. "
+                "Come back tomorrow."
+            )
+        return
+    start = datetime.combine(today(), datetime.min.time())
+    runs = (
+        db.select(func.count())
+        .select_from(JdDecode)
+        .where(JdDecode.user_id.is_(None), JdDecode.created_at >= start)
+    )
+    if (
+        db.session.scalar(runs.where(JdDecode.ip_hash == ip_hash))
+        >= cfg["ANON_DECODER_RUNS"]
+    ):
+        raise LimitReached(
+            "That's today's free decodes. Sign up (free) to decode more job descriptions."
+        )
+    if db.session.scalar(runs) >= cfg["ANON_DECODER_DAILY"]:
+        raise LimitReached(
+            "The free decoder is busy today. Sign up (free) or try again tomorrow."
+        )
+
+
+def record_decode(user_id: int | None) -> None:
+    if user_id is not None:
+        _row(user_id).decoder_runs += 1
+        db.session.commit()

@@ -44,6 +44,10 @@ class Config:
     DAILY_LONG_SESSIONS = int(os.environ.get("DAILY_LONG_SESSIONS", "1"))
     DAILY_PLANS = int(os.environ.get("DAILY_PLANS", "10"))
     DAILY_RETRIES = int(os.environ.get("DAILY_RETRIES", "20"))
+    DAILY_DECODER_RUNS = int(os.environ.get("DAILY_DECODER_RUNS", "5"))
+    # Signed-out decoder use: per visitor (IP) and across all visitors, per day.
+    ANON_DECODER_RUNS = int(os.environ.get("ANON_DECODER_RUNS", "3"))
+    ANON_DECODER_DAILY = int(os.environ.get("ANON_DECODER_DAILY", "30"))
     # Tests build reports in the request instead of a background thread.
     REPORTS_INLINE = False
     MAX_UPLOAD_BYTES = 5 * 1024 * 1024
