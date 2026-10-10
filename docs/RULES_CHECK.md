@@ -23,3 +23,20 @@ Every ⚠️ / ❌ gets a ticket (`orchestration.tickets`); the next check confi
 | Safety and privacy | ⚠️ | Fire key only in backend `.env`; no audio stored (clips dropped after transcription); documents expire after 30 days and can be deleted; licensed-profession disclaimer; respectful-pressure rules in prompts. Gaps: no explicit "avoid discriminatory, invasive or irrelevant questions" instruction — **T-42**; expired documents are hidden but not yet purged (Phase 10). Debrief (no recordings) is Phase 8. |
 
 **Open from this check:** T-40, T-41, T-42, T-43.
+
+---
+
+## Re-check after fixing the Phase 6 gaps (2026-10-10)
+
+| Area | Status | What changed |
+|---|---|---|
+| Interview preparation | ✅ | Plan prompt: don't assume a skill is missing because the résumé doesn't list it — ask about it (**T-42**). |
+| During the interview | ✅ | **Get a hint** (one per question, noted in the score), **Skip question** (listed as unanswered), **Pause / Resume** (clock stops) — **T-40**. |
+| Adaptive difficulty | ✅ | Interviewer raises the challenge one step after strong, complete answers and never after a struggle; gives fair hints on request (**T-43**); never treats nervousness, accent or limited experience as lack of ability (**T-42**). |
+| Scoring | ✅ | Scorer: evidence-based comments across relevance, accuracy, reasoning, specificity, structure, ownership, impact, role alignment; missing evidence ≠ lack of knowledge; no penalty for concise-but-correct answers, accent or nervousness (**T-42**); each answer labelled "AI coach's judgment" with a confidence level and reason (**T-41**). |
+| Answer coaching | ✅ | "What you did well" (1–3 specific strengths) added to each answer (**T-41**). |
+| Final report | ✅ | Competency averages, 2–3 recommended exercises, "Questions you didn't get to", and "Couldn't be scored" on failed evaluations (**T-41**). |
+| Safety and privacy | ⚠️ | Plan, turn and role-play prompts forbid discriminatory, invasive or irrelevant questions (**T-42**). Still planned: purge expired documents (Phase 10); debrief without recordings (Phase 8). |
+| Story bank and progress | ⏳ | Phase 7. |
+
+Core behavior, personalities and modes remain ✅. **Open from this check:** none (the ⚠️/⏳ items are scheduled phases).
