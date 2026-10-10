@@ -13,6 +13,10 @@ Full spec: `docs/SPEC.md` (read the relevant section before starting each phase)
 5. **Respectful at every pressure level.** No insults, slurs, or personal attacks in pressure mode or role-plays.
 6. **Scores are practice feedback**, not assessments. Show a disclaimer for licensed/specialized professions.
 
+## Interviewer rules (check after every phase)
+
+`docs/INTERVIEWER_RULES.md` defines how the interviewer and coach must behave (core behavior, preparation, interview controls, adaptive difficulty, scoring, coaching, personalities, modes, report, story bank, safety). **At the end of every phase, check everything built so far against it**, add a dated section to `docs/RULES_CHECK.md` (✅ / ⚠️ / ❌ / ⏳ per area, with evidence), and file a ticket for every gap before calling the phase done.
+
 ## Stack
 
 | Layer | Choice |
