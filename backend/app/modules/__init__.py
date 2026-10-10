@@ -31,10 +31,16 @@ MODULES: dict[str, Module] = {
         Module("scenario", "Scenario", "“What would you do if…” judgment calls"),
         Module("portfolio", "Portfolio walkthrough", "Walk through your past work"),
         Module("roleplay", "Role-play", "The interviewer plays a character"),
+        Module(
+            "coding", "Coding", "Solve a problem in a code editor and talk it through"
+        ),
+        Module(
+            "system_design",
+            "System design",
+            "Sketch a system on a whiteboard and explain it",
+        ),
     )
 }
-# Built in Phase 9 (need Monaco / Excalidraw); never planned before then.
-LATER = ("coding", "system_design")
 DEFAULT = "behavioral"
 
 

@@ -18,6 +18,7 @@ from ..services import (
 from ..services.transcription import TranscriptionError, transcribe
 from ..services.timer import is_paused, timer_state
 from ..services import negotiation as nego
+from ..services.work import WorkIn
 from .common import current_user_id, first_error
 from .documents import owned_document
 
@@ -78,6 +79,8 @@ class TurnBody(BaseModel):
     input_mode: Literal["text", "voice"] = "text"
     # Ask for Fire audio of the reply (only used when VOICE_PROVIDER=fire).
     speak: bool = False
+    # Code from the editor or the whiteboard sketch (coding / system design).
+    work: WorkIn | None = None
 
     @field_validator("text")
     @classmethod
@@ -117,6 +120,7 @@ def _transcript(session: Session) -> list[dict]:
                 "is_follow_up": q.follow_up_of_id is not None,
                 "is_bonus": q.is_bonus,
                 "answer": a.transcript if a else None,
+                "work": a.work_json if a else None,
                 "duration_ms": a.duration_ms if a else None,
                 "input_mode": a.input_mode if a else None,
             }
@@ -392,7 +396,12 @@ def turn(session_id: int):
 
     user_id = current_user_id()
     result = interviewer.take_turn(
-        session, user_id, body.text, body.duration_ms, body.input_mode
+        session,
+        user_id,
+        body.text,
+        body.duration_ms,
+        body.input_mode,
+        body.work.model_dump() if body.work else None,
     )
     speech = (
         voice.synthesize(user_id, session, result["segments"]) if body.speak else None

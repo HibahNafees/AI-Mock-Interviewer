@@ -20,6 +20,7 @@ from .fire import FireError
 from .limits import LimitReached
 from .llm import chat_json, render
 from . import negotiation, panel, pressure
+from .work import HISTORY_CHARS, with_work
 from .timer import SECTION_NUDGE_SEC, WRAP_UP_SEC, TimerState, is_paused, timer_state
 
 log = logging.getLogger(__name__)
@@ -488,7 +489,9 @@ def nudges(
 def _history(asked: list[Question]) -> list[dict]:
     ids = [q.id for q in asked[-HISTORY_TURNS:]]
     answers = {
-        a.question_id: a.transcript
+        a.question_id: with_work(a.transcript[:1500], a.work_json)[
+            : 1500 + HISTORY_CHARS
+        ]
         for a in db.session.scalars(
             db.select(Answer).where(Answer.question_id.in_(ids)).filter_by(attempt_no=1)
         )
@@ -496,7 +499,7 @@ def _history(asked: list[Question]) -> list[dict]:
     return [
         {
             "interviewer": (q.asked_text or q.text)[:800],
-            "candidate": answers.get(q.id, "")[:1500],
+            "candidate": answers.get(q.id, ""),
         }
         for q in asked[-HISTORY_TURNS:]
     ]
@@ -508,6 +511,7 @@ def take_turn(
     text: str,
     duration_ms: int | None,
     input_mode: str = "text",
+    work: dict | None = None,
 ) -> dict:
     """Save the answer to the current question and produce the interviewer's reply."""
     asked = asked_questions(session)
@@ -559,7 +563,7 @@ def take_turn(
             difficulty=session.difficulty or "mid",
             role=(session.plan_json or {}).get("role_title") or "the role",
             current_question=current.asked_text or current.text,
-            answer=text,
+            answer=with_work(text, work),
             minutes_left=str(max(0, round(timer.remaining_sec / 60))),
             choices=choices,
             module_guidance=modules.guidance(module, "interview"),
@@ -688,7 +692,7 @@ def take_turn(
     segments = _segments(parts)
     out.message = " ".join(s["text"] for s in segments)
 
-    now = _save_answer(session, current, text, duration_ms, input_mode)
+    now = _save_answer(session, current, text, duration_ms, input_mode, work)
 
     if out.action == "follow_up":
         root_id = current.follow_up_of_id or current.id
@@ -728,6 +732,7 @@ def _save_answer(
     text: str,
     duration_ms: int | None,
     input_mode: str,
+    work: dict | None = None,
 ):
     now = utcnow()
     ended_ms = int((now - session.started_at).total_seconds() * 1000)
@@ -741,6 +746,7 @@ def _save_answer(
             duration_ms=duration_ms,
             attempt_no=1,
             input_mode=input_mode,
+            work_json=work,
         )
     )
     return now

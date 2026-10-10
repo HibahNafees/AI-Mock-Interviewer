@@ -112,6 +112,9 @@ class Answer(db.Model):
     input_mode: Mapped[str] = mapped_column(
         String(10), nullable=False, default="text", server_default="text"
     )
+    # Code from the editor or a whiteboard sketch as text (services/work.py):
+    # {"kind": "code" | "whiteboard", "language", "content"}. Never an image.
+    work_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = created_at_column()
 
 

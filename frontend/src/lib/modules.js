@@ -7,6 +7,8 @@ export const MODULE_LABELS = {
   scenario: 'Scenario',
   portfolio: 'Portfolio walkthrough',
   roleplay: 'Role-play',
+  coding: 'Coding',
+  system_design: 'System design',
 }
 
 export function moduleLabel(name) {
@@ -17,6 +19,11 @@ export function moduleLabel(name) {
 export function scenarioFor(plan, sectionName) {
   const section = plan?.sections?.find((s) => s.name === sectionName)
   return section?.module === 'roleplay' ? section.scenario ?? null : null
+}
+
+// The module of a plan section ("coding", "technical", …), or null.
+export function moduleOf(plan, sectionName) {
+  return plan?.sections?.find((s) => s.name === sectionName)?.module ?? null
 }
 
 // "Dana, an operations manager who…" → "Dana"

@@ -1,0 +1,6 @@
+[plan]
+One system design problem typical of this job at the chosen difficulty (e.g. "Design a URL shortener" for mid level, a multi-region service for senior), phrased as one spoken question with a sentence of scale or constraints. The candidate sketches on a whiteboard and explains. Give a system design section at least 8 minutes and only one problem; leave room for follow-ups.
+[interview]
+The candidate sketches on a whiteboard; a text description of their sketch (boxes, labels and arrows) arrives with each answer in a [Whiteboard sketch] block. Review it like a real interviewer: check they clarified requirements and scale, then probe one area at a time (data model and storage, the API, a bottleneck under load, what happens when a component fails, consistency or caching trade-offs). Ask about what's on the sketch and what's missing from it. Don't design it for them.
+[score]
+Judge the design from the explanation and the [Whiteboard sketch] description: requirements and scale clarified, sensible components and data flow, a fitting data model, trade-offs named (consistency, latency, cost), and how it handles load and failure. A clear, simple design with reasoned trade-offs beats a long list of technologies. A sketch description may be terse or incomplete: don't mark down layout, only the content.

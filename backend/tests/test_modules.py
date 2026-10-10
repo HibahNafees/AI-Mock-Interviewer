@@ -79,11 +79,11 @@ def test_analysis_offers_only_modules_that_fit_and_exist(client, auth, docs, fir
     assert res.status_code == 200, res.get_json()
     body = res.get_json()
     assert body["analysis"]["role_title"] == "Backend Engineer"
-    # "coding" fits the job but arrives in a later phase.
     assert [m["name"] for m in body["modules"]] == [
         "behavioral",
         "resume_deepdive",
         "technical",
+        "coding",
     ]
     assert body["modules"][2]["label"] == "Technical Q&A"
     # Cached per document: setup can ask again for free.

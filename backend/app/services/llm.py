@@ -28,7 +28,10 @@ def render(template: str, /, **values: object) -> str:
     (e.g. $name) without clashing with it."""
     text = (PROMPTS_DIR / f"{template}.txt").read_text()
     return Template(text).substitute(
-        {k: v if isinstance(v, str) else json.dumps(v) for k, v in values.items()}
+        {
+            k: v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
+            for k, v in values.items()
+        }
     )
 
 

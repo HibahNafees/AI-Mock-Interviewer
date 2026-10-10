@@ -29,6 +29,7 @@ from . import (
     stories,
 )
 from .analytics import Clip, delivery, session_summary
+from .work import with_work
 from .fire import FireError
 from .limits import LimitReached, check_budget
 from .llm import chat_json, render
@@ -61,7 +62,9 @@ class Thread:
         return [
             {
                 "interviewer": (q.asked_text or q.text)[:1000],
-                "candidate": self.answers[q.id].transcript,
+                "candidate": with_work(
+                    self.answers[q.id].transcript, self.answers[q.id].work_json
+                ),
                 "spoken": self.answers[q.id].input_mode == "voice",
                 **({"hint": q.hint_text} if q.hint_text else {}),
             }
@@ -319,6 +322,7 @@ def retry(
     text: str,
     duration_ms: int | None,
     input_mode: str,
+    work: dict | None = None,
 ) -> Answer:
     """Save a new attempt at a planned question and score it on its own."""
     attempts = db.session.scalar(
@@ -330,13 +334,14 @@ def retry(
         duration_ms=duration_ms,
         attempt_no=(attempts or 1) + 1,
         input_mode=input_mode,
+        work_json=work,
     )
     db.session.add(answer)
     db.session.flush()
     exchange = [
         {
             "interviewer": question.text,
-            "candidate": text,
+            "candidate": with_work(text, work),
             "spoken": input_mode == "voice",
         }
     ]
@@ -485,6 +490,7 @@ def report_dict(session: Session, report: Report) -> dict:
                     {
                         "interviewer": q.asked_text or q.text,
                         "answer": t.answers[q.id].transcript,
+                        "work": t.answers[q.id].work_json,
                         "is_follow_up": q.follow_up_of_id is not None,
                         "input_mode": t.answers[q.id].input_mode,
                     }
@@ -499,6 +505,7 @@ def report_dict(session: Session, report: Report) -> dict:
                     {
                         "attempt_no": a.attempt_no,
                         "answer": a.transcript,
+                        "work": a.work_json,
                         "input_mode": a.input_mode,
                         "evaluation": scoring.evaluation_dict(evals.get(a.id)),
                     }

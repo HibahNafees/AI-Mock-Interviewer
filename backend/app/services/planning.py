@@ -11,7 +11,7 @@ from ..models import Document, JdAnalysis, Question, Session, User
 from . import panel
 from .llm import chat_json, render
 
-ALL_MODULES = tuple(modules.MODULES) + modules.LATER
+ALL_MODULES = tuple(modules.MODULES)
 MIXED = "mixed"
 # "Roleplay: Objection Handling" next to "Objection Handling" (live check, T-21).
 ROLEPLAY_PREFIX_RE = re.compile(
@@ -200,7 +200,7 @@ def analysis_summary(analysis: JdAnalysis) -> dict:
 
 
 def offered_modules(analysis: JdAnalysis) -> list[str]:
-    """Modules that fit this job and exist now (coding/system design come later)."""
+    """Modules that fit this job."""
     fit = [f for f in analysis_summary(analysis)["formats"] if modules.known(f)]
     return fit or ["behavioral", "resume_deepdive"]
 

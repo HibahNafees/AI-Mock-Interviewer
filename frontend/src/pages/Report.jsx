@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Recorder from '../components/Recorder'
+import WorkView from '../components/WorkView'
 import { NoRecordingsNotice } from './Debrief'
 import { api } from '../lib/api'
 import { canRecord, MAX_ANSWER_MS } from '../lib/recording'
@@ -217,6 +218,7 @@ function Evaluation({ e, said, roleplay }) {
               <p className="whitespace-pre-wrap">
                 <Highlighted text={s.answer} moments={e.weak_moments} />
               </p>
+              <WorkView work={s.work} />
             </div>
           ))}
         </div>
@@ -491,9 +493,10 @@ function QuestionCard({ q, index, sessionId, onAttempt, failed }) {
       ) : (
         <div className="space-y-2">
           {q.exchange.map((s, i) => (
-            <p key={i} className="whitespace-pre-wrap text-slate-700">
-              {s.answer}
-            </p>
+            <div key={i}>
+              <p className="whitespace-pre-wrap text-slate-700">{s.answer}</p>
+              <WorkView work={s.work} />
+            </div>
           ))}
         </div>
       )}

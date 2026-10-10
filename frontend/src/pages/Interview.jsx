@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import PlanEditor from '../components/PlanEditor'
 import Recorder from '../components/Recorder'
 import { Mascot } from '../components/Art'
 import Timer from '../components/Timer'
+import WorkView from '../components/WorkView'
 import { api } from '../lib/api'
-import { characterName, scenarioFor } from '../lib/modules'
+import { characterName, moduleOf, scenarioFor } from '../lib/modules'
+import { describeScene } from '../lib/whiteboard'
 import { answerModePref, canRecord, MAX_ANSWER_MS, setAnswerModePref } from '../lib/recording'
 import { canSpeak, FILLERS, say, setVoicePref, voicePref, warmUpVoices } from '../lib/voice'
 
@@ -111,6 +113,7 @@ function Transcript({ items, plan, panel }) {
                   You{t.input_mode === 'voice' ? ' · transcribed' : ''}
                 </p>
                 <p className="leading-relaxed whitespace-pre-wrap">{t.answer}</p>
+                <WorkView work={t.work} dark />
               </div>
             )}
           </li>
@@ -231,6 +234,12 @@ function PlanStep({ session, setSession, onGreeting }) {
 }
 
 const EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a' }
+// Loaded only when an interview reaches a coding or system design section.
+const CodePad = lazy(() => import('../components/CodePad'))
+const Whiteboard = lazy(() => import('../components/Whiteboard'))
+const NEW_CODE = { language: 'python', content: '' }
+// Sent as the spoken part when the answer is only in the editor or on the board.
+const SEE_WORK = { code: '(My answer is in the code editor.)', whiteboard: '(My answer is on the whiteboard.)' }
 
 function LiveStep({ session, setSession, greeting }) {
   const [mode, setMode] = useState(answerModePref)
@@ -269,6 +278,19 @@ function LiveStep({ session, setSession, greeting }) {
       ? session.pressure.time_limit_sec
       : null
   const current = session.transcript.at(-1)
+  // Coding round: a code editor; system design: a whiteboard. Both stay for the
+  // whole section (follow-ups included) and reset in the next one.
+  const tool = active ? { coding: 'code', system_design: 'whiteboard' }[moduleOf(session.plan, current?.section)] : null
+  const [code, setCode] = useState(NEW_CODE)
+  const [codeSection, setCodeSection] = useState(null)
+  if (tool && codeSection !== current?.section) {
+    setCodeSection(current?.section)
+    setCode(NEW_CODE)
+  }
+  const board = useRef([])
+  useEffect(() => {
+    board.current = []
+  }, [current?.section])
   const hintUsed = Boolean(current?.hint)
   // Small talk and "any questions for me?" get no hints.
   const noHints = !current || ['Ice-breaker', 'Your questions'].includes(current.section)
@@ -390,13 +412,29 @@ function LiveStep({ session, setSession, greeting }) {
     }
   }
 
+  // The code or sketch to send with this answer, or null.
+  function currentWork() {
+    if (tool === 'code' && code.content.trim()) return { kind: 'code', language: code.language, content: code.content }
+    if (tool === 'whiteboard') {
+      const content = describeScene(board.current)
+      if (content) return { kind: 'whiteboard', content }
+    }
+    return null
+  }
+
   async function sendTurn(answer, meta) {
     setPhase('thinking')
+    const work = currentWork()
     try {
       const data = await api(`/sessions/${session.id}/turns`, {
         method: 'POST',
         // Only Fire voice needs the backend; the browser voice speaks the text.
-        body: { text: answer, ...meta, ...(fireVoice && voiceOn ? { speak: true } : {}) },
+        body: {
+          text: answer.trim() || SEE_WORK[work?.kind] || answer,
+          ...meta,
+          ...(work ? { work } : {}),
+          ...(fireVoice && voiceOn ? { speak: true } : {}),
+        },
       })
       setText('')
       spoken.current = null
@@ -441,7 +479,7 @@ function LiveStep({ session, setSession, greeting }) {
 
   function sendTyped(e) {
     e.preventDefault()
-    if (!text.trim() || busy) return
+    if ((!text.trim() && !currentWork()) || busy) return
     setError('')
     const meta = spoken.current
       ? { ...spoken.current, input_mode: 'voice' }
@@ -572,95 +610,106 @@ function LiveStep({ session, setSession, greeting }) {
           )}
         </div>
       ) : active ? (
-        <div className="card space-y-4 p-5">
-          {mode === 'voice' ? (
-            <div className="space-y-2">
-              <Recorder
-                onRecorded={onRecorded}
-                onStart={stopSpeaking}
-                disabled={busy}
-                autoStartKey={recordKey}
-                limitMs={answerLimit ? answerLimit * 1000 : null}
-              />
-              <p className="text-xs text-slate-500">
-                Recording starts by itself when the interviewer finishes the question.
-              </p>
-            </div>
-          ) : (
-            <form onSubmit={sendTyped} className="space-y-2">
-              {answerLimit && (
-                <TypedClock key={turns} seconds={answerLimit} running={!busy && !speaking} onTimeUp={timeUp} />
+        <div className="space-y-4">
+          {tool && (
+            <Suspense fallback={<p className="text-sm text-slate-500">Loading…</p>}>
+              {tool === 'code' ? (
+                <CodePad code={code} onChange={setCode} />
+              ) : (
+                <Whiteboard key={current?.section} onChange={(elements) => (board.current = elements)} />
               )}
-              <textarea
-                aria-label="Your answer"
-                rows={5}
-                value={text}
-                disabled={busy}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendTyped(e)
-                }}
-                placeholder="Type your answer… (Ctrl+Enter to send)"
-                className="field"
-              />
-              <button
-                type="submit"
-                disabled={busy || !text.trim()}
-                className="btn-primary"
-              >
-                Send answer
+            </Suspense>
+          )}
+          <div className="card space-y-4 p-5">
+            {mode === 'voice' ? (
+              <div className="space-y-2">
+                <Recorder
+                  onRecorded={onRecorded}
+                  onStart={stopSpeaking}
+                  disabled={busy}
+                  autoStartKey={recordKey}
+                  limitMs={answerLimit ? answerLimit * 1000 : null}
+                />
+                <p className="text-xs text-slate-500">
+                  Recording starts by itself when the interviewer finishes the question.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={sendTyped} className="space-y-2">
+                {answerLimit && (
+                  <TypedClock key={turns} seconds={answerLimit} running={!busy && !speaking} onTimeUp={timeUp} />
+                )}
+                <textarea
+                  aria-label="Your answer"
+                  rows={5}
+                  value={text}
+                  disabled={busy}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendTyped(e)
+                  }}
+                  placeholder="Type your answer… (Ctrl+Enter to send)"
+                  className="field"
+                />
+                <button
+                  type="submit"
+                  disabled={busy || (!text.trim() && !tool)}
+                  className="btn-primary"
+                >
+                  Send answer
+                </button>
+              </form>
+            )}
+            {error && (
+              <p role="alert" className="text-sm text-red-600">
+                {error}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
+              {!noHints && (
+                <button type="button" disabled={busy || hintUsed} onClick={() => control('hint')} className="btn-link">
+                  <span aria-hidden="true">💡 </span>
+                  {hintUsed ? 'Hint shown' : 'Get a hint'}
+                </button>
+              )}
+              <button type="button" disabled={busy} onClick={skip} className="btn-link">
+                <span aria-hidden="true">⏭ </span>Skip question
               </button>
-            </form>
-          )}
-          {error && (
-            <p role="alert" className="text-sm text-red-600">
-              {error}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
-            {!noHints && (
-              <button type="button" disabled={busy || hintUsed} onClick={() => control('hint')} className="btn-link">
-                <span aria-hidden="true">💡 </span>
-                {hintUsed ? 'Hint shown' : 'Get a hint'}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  stopSpeaking()
+                  control('pause')
+                }}
+                className="btn-link"
+              >
+                <span aria-hidden="true">⏸ </span>Pause
+              </button>
+            {hasVoice && (
+              <button type="button" disabled={busy} onClick={repeat} className="btn-link">
+                <span aria-hidden="true">↻ </span>Repeat the question
               </button>
             )}
-            <button type="button" disabled={busy} onClick={skip} className="btn-link">
-              <span aria-hidden="true">⏭ </span>Skip question
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                stopSpeaking()
-                control('pause')
-              }}
-              className="btn-link"
-            >
-              <span aria-hidden="true">⏸ </span>Pause
-            </button>
-          {hasVoice && (
-            <button type="button" disabled={busy} onClick={repeat} className="btn-link">
-              <span aria-hidden="true">↻ </span>Repeat the question
-            </button>
-          )}
-          {canRecord() && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setError('')
-                spoken.current = null
-                setMode((m) => {
-                  const next = m === 'voice' ? 'text' : 'voice'
-                  setAnswerModePref(next)
-                  return next
-                })
-              }}
-              className="btn-link"
-            >
-              {mode === 'voice' ? 'Type instead' : 'Speak instead'}
-            </button>
-          )}
+            {canRecord() && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setError('')
+                  spoken.current = null
+                  setMode((m) => {
+                    const next = m === 'voice' ? 'text' : 'voice'
+                    setAnswerModePref(next)
+                    return next
+                  })
+                }}
+                className="btn-link"
+              >
+                {mode === 'voice' ? 'Type instead' : 'Speak instead'}
+              </button>
+            )}
+            </div>
           </div>
         </div>
       ) : (

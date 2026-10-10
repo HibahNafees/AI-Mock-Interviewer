@@ -66,7 +66,13 @@ def retry(session_id: int, question_id: int):
     user_id = current_user_id()
     limits.check_can_retry(user_id)
     answer = reports.retry(
-        user_id, session, question, body.text, body.duration_ms, body.input_mode
+        user_id,
+        session,
+        question,
+        body.text,
+        body.duration_ms,
+        body.input_mode,
+        body.work.model_dump() if body.work else None,
     )
     evals = reports.evaluations_for([first.id, answer.id])
     before = evals.get(first.id)
@@ -75,6 +81,7 @@ def retry(session_id: int, question_id: int):
             attempt={
                 "attempt_no": answer.attempt_no,
                 "answer": answer.transcript,
+                "work": answer.work_json,
                 "input_mode": answer.input_mode,
                 "evaluation": scoring.evaluation_dict(evals.get(answer.id)),
             },
