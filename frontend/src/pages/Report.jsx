@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Recorder from '../components/Recorder'
 import WorkView from '../components/WorkView'
 import { NoRecordingsNotice } from './Debrief'
 import { api } from '../lib/api'
 import { canRecord, MAX_ANSWER_MS } from '../lib/recording'
+import { describeScene } from '../lib/whiteboard'
+
+// Try again on a coding or design question brings back the editor or whiteboard.
+const CodePad = lazy(() => import('../components/CodePad'))
+const Whiteboard = lazy(() => import('../components/Whiteboard'))
+const TOOLS = { coding: 'code', system_design: 'whiteboard' }
 
 const POLL_MS = 2500
 const VERDICT = {
@@ -326,13 +332,35 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
   const [error, setError] = useState('')
   const [started, setStarted] = useState(0)
   const busy = phase !== 'idle'
+  const tool = TOOLS[question.module] ?? null
+  // Start from the code they wrote the first time.
+  const firstCode = question.exchange.find((s) => s.work?.kind === 'code')?.work
+  const [code, setCode] = useState(() => ({
+    language: firstCode?.language ?? 'python',
+    content: firstCode?.content ?? '',
+  }))
+  const board = useRef([])
+
+  function currentWork() {
+    if (tool === 'code' && code.content.trim()) return { kind: 'code', language: code.language, content: code.content }
+    if (tool === 'whiteboard') {
+      const content = describeScene(board.current)
+      if (content) return { kind: 'whiteboard', content }
+    }
+    return null
+  }
 
   async function send(answer, meta) {
     setPhase('scoring')
+    const work = currentWork()
     try {
       const data = await api(`/sessions/${sessionId}/questions/${question.question_id}/retry`, {
         method: 'POST',
-        body: { text: answer, ...meta },
+        body: {
+          text: answer.trim() || (work?.kind === 'code' ? '(My answer is in the code editor.)' : '(My answer is on the whiteboard.)'),
+          ...meta,
+          ...(work ? { work } : {}),
+        },
       })
       setText('')
       onAttempt(question.question_id, data.attempt)
@@ -363,7 +391,7 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
 
   function sendTyped(e) {
     e.preventDefault()
-    if (!text.trim() || busy) return
+    if ((!text.trim() && !currentWork()) || busy) return
     setError('')
     send(text, { duration_ms: Math.min(Date.now() - started, MAX_ANSWER_MS), input_mode: 'text' })
   }
@@ -381,6 +409,7 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
             </span>
           </p>
           <p className="mt-2 whitespace-pre-wrap text-slate-700">{last.answer}</p>
+          <WorkView work={last.work} />
           {last.evaluation && (
             <details className="mt-2">
               <summary className="cursor-pointer font-medium text-brand-700">Feedback on this attempt</summary>
@@ -405,6 +434,15 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
       ) : (
         <div className="space-y-3 rounded-2xl border border-brand-100 bg-brand-50/40 p-4">
           <p className="text-sm text-slate-600">Answer “{question.text}” again.</p>
+          {tool && (
+            <Suspense fallback={<p className="text-sm text-slate-500">Loading…</p>}>
+              {tool === 'code' ? (
+                <CodePad code={code} onChange={setCode} />
+              ) : (
+                <Whiteboard onChange={(elements) => (board.current = elements)} />
+              )}
+            </Suspense>
+          )}
           {mode === 'voice' ? (
             <Recorder onRecorded={onRecorded} disabled={busy} />
           ) : (
@@ -419,7 +457,7 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
               />
               <button
                 type="submit"
-                disabled={busy || !text.trim()}
+                disabled={busy || (!text.trim() && !tool)}
                 className="btn-primary text-sm"
               >
                 Score my new answer
@@ -652,8 +690,8 @@ function BodyLanguageCard({ b }) {
           <span aria-hidden="true">📷 </span>Body language
         </p>
         <p className="text-sm text-slate-600">
-          From your camera on {b.answers} answer{b.answers === 1 ? '' : 's'}, measured on your device. It isn't
-          part of your score.
+          From your camera on {b.answers} answer{b.answers === 1 ? '' : 's'}, measured on your device. A rough
+          guide (lighting and camera angle affect it), and not part of your score.
         </p>
       </div>
       <ul className="grid gap-3 sm:grid-cols-3">

@@ -5,6 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { AuthProvider } from '../lib/auth'
 
+vi.mock('../lib/monaco', () => ({
+  default: ({ value, onChange }) => (
+    <textarea aria-label="Monaco" value={value} onChange={(e) => onChange(e.target.value)} />
+  ),
+}))
+
 const ADA = { id: 1, name: 'Ada', email: 'ada@example.com' }
 const EVALUATION = {
   score: 3.4,
@@ -333,5 +339,36 @@ describe('report', () => {
     expect(screen.getByLabelText('Before 3.4 out of 5')).toBeInTheDocument()
     expect(sent).toMatchObject({ text: 'I led billing and cut failures by 30%.', input_mode: 'text' })
     expect(sent.duration_ms).toBeGreaterThanOrEqual(0)
+  })
+
+  it('tries a coding question again in the editor, starting from the first code', async () => {
+    let sent
+    const first = { kind: 'code', language: 'go', content: 'func allow() {}' }
+    const coding = { ...QUESTION, module: 'coding', exchange: [{ ...QUESTION.exchange[0], work: first }] }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7/report': [200, { report: { ...READY, questions: [coding] } }],
+      'POST /api/sessions/7/questions/3/retry': (opts) => {
+        sent = JSON.parse(opts.body)
+        return [
+          201,
+          {
+            attempt: { attempt_no: 2, answer: sent.text, work: sent.work, input_mode: 'text', evaluation: EVALUATION },
+            before_score: 3.4,
+          },
+        ]
+      },
+    })
+    renderAt('/report/7')
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+    const editor = await screen.findByLabelText('Monaco')
+    expect(editor).toHaveValue('func allow() {}')
+    await userEvent.type(editor, ' // fixed')
+    await userEvent.click(screen.getByRole('button', { name: 'Score my new answer' }))
+    await screen.findByText('(attempt 2)')
+    expect(sent).toMatchObject({
+      text: '(My answer is in the code editor.)',
+      work: { kind: 'code', language: 'go', content: 'func allow() {} // fixed' },
+    })
   })
 })
