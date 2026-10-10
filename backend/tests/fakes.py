@@ -108,6 +108,30 @@ SUMMARY = {
 }
 
 
+GAPS = {
+    "summary": "Good backend fit; no payments experience.",
+    "requirements": [
+        {
+            "requirement": "API design",
+            "status": "covered",
+            "evidence": "Built the Acme billing API",
+            "likely_question": "How did you version it?",
+        },
+        {
+            "requirement": "MySQL tuning",
+            "status": "covered",
+            "evidence": "tuned Oracle clusters",
+            "likely_question": None,
+        },
+        {
+            "requirement": "Payments domain",
+            "status": "missing",
+            "evidence": "built payment rails",
+            "likely_question": "How would you learn the payments domain?",
+        },
+    ],
+}
+
 REVERSE_CANDIDATE = {
     "name": "Sam",
     "headline": "Backend engineer, 4 years, payments",
@@ -189,6 +213,7 @@ class FakeFire:
         self.small_talk_error: Exception | None = None
         self.decode: dict = DECODE
         self.reverse_candidate: dict = REVERSE_CANDIDATE
+        self.gaps: dict = GAPS
         self.next_round: dict | Exception = {
             "questions": [
                 {
@@ -247,6 +272,8 @@ class FakeFire:
             )
             if isinstance(body, Exception):
                 raise body
+        elif "Compare a candidate's résumé with a job description" in prompt:
+            body = self.gaps
         elif "Create a realistic job candidate" in prompt:
             body = self.reverse_candidate
         elif "Stay in character as the candidate" in prompt:

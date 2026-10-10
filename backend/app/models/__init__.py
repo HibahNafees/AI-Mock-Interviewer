@@ -1,5 +1,6 @@
 from .decoder import AnonSpend, JdDecode
 from .documents import Document, JdAnalysis
+from .extras import GapAnalysis
 from .interview import Answer, Evaluation, Question, Report, Session
 from .peer import PeerRoom
 from .progress import Debrief, QuestionBankItem, Story, UsageLimit
@@ -11,6 +12,7 @@ __all__ = [
     "Debrief",
     "Document",
     "Evaluation",
+    "GapAnalysis",
     "JdAnalysis",
     "JdDecode",
     "PeerRoom",

@@ -7,6 +7,7 @@ from ..extensions import db
 from ..models import Document
 from ..models.base import utcnow
 from .. import modules
+from ..services import gaps as gap_service
 from ..services import limits, planning
 from ..services.parsing import ParseError, extract_text, validate_text
 from .common import current_user_id
@@ -137,6 +138,19 @@ def analyze(doc_id: int):
             for n in planning.offered_modules(analysis)
         ],
     )
+
+
+@bp.post("/<int:doc_id>/gaps")
+@jwt_required()
+def gaps(doc_id: int):
+    """Résumé gap analysis for this job description (one Fire call, cached)."""
+    jd = owned_document(doc_id, "job_description")
+    resume_id = (request.get_json(silent=True) or {}).get("resume_id")
+    resume = owned_document(int(resume_id), "resume") if resume_id else None
+    if jd is None or resume is None:
+        return jsonify(error="Choose your résumé and a job description first"), 404
+    limits.check_budget()
+    return jsonify(gaps=gap_service.analyze(current_user_id(), resume, jd))
 
 
 @bp.delete("/<int:doc_id>")
