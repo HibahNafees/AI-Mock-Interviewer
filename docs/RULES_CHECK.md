@@ -109,7 +109,7 @@ Other areas unchanged (✅). **Open from this check:** none.
 Browser check found and fixed T-51 (Monaco's CDN loader broke the whiteboard) and T-52 (body-language sampling could freeze slow devices).
 Other areas unchanged (✅).
 
-### Live check against the real Fire API (2026-10-10, ~$0.046)
+### Live check against the real Fire API (2026-10-10, ~$0.05 incl. two negotiation re-runs)
 
 Panel (15 min, with company research): stripe.com/about summarized faithfully (no invented facts) and its two "Why us?" questions became a section; Priya opened and introduced the panel, then handed to Elena (behavioral), Marcus (technical, design) and back to Elena, each with a natural handover; Priya took the candidate's questions and signed off. Coding (10 min): a role-fit problem with an example; follow-ups on edge cases, complexity and trade-offs; the scorer read the code and caught that it solved a different problem. Design (10 min): follow-ups came from the sketch text (cache invalidation, load when the cache fails). Negotiation (5 min): the recruiter held, then moved in small steps after a justified number and agreed a bonus and review; scored on anchoring, justification, composure and clarity.
 
