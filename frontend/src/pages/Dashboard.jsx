@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { HeroScene, IconTile, Mascot } from '../components/Art'
 import ScoreChart from '../components/ScoreChart'
 import { api } from '../lib/api'
@@ -93,6 +93,101 @@ function LevelCard({ s }) {
   )
 }
 
+function PracticeCard({ practice }) {
+  const navigate = useNavigate()
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const queued = practice.due + practice.upcoming
+
+  async function start() {
+    setError('')
+    setBusy(true)
+    try {
+      const { session } = await api('/sessions/practice', { method: 'POST', body: { duration_min: 10 } })
+      navigate(`/interview/${session.id}`)
+    } catch (err) {
+      setError(err.message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card flex flex-col gap-4 p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold">Practice queue</h2>
+          <p className="text-sm text-slate-500">Questions you scored under 4 come back to practice</p>
+        </div>
+        <IconTile tone="brand">🔁</IconTile>
+      </div>
+      <dl className="grid grid-cols-3 gap-3 text-center">
+        {[
+          ['Due now', practice.due, 'text-brand-700'],
+          ['Coming up', practice.upcoming, 'text-ink'],
+          ['Mastered', practice.mastered, 'text-emerald-700'],
+        ].map(([label, n, tone]) => (
+          <div key={label} className="rounded-2xl bg-[#faf5ef] p-3">
+            <dt className="text-xs font-medium text-slate-500">{label}</dt>
+            <dd className={`font-display text-2xl font-extrabold tabular-nums ${tone}`}>{n}</dd>
+          </div>
+        ))}
+      </dl>
+      <button type="button" onClick={start} disabled={busy || queued === 0} className="btn-primary self-start">
+        {busy ? 'Building your practice…' : 'Practice my weak spots'}
+      </button>
+      {queued === 0 && <p className="text-xs text-slate-500">Nothing queued yet. Nice work!</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-600">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function GoalCard({ goal, onChange }) {
+  const pct = Math.min(100, (goal.done_this_week / goal.weekly) * 100)
+  const met = goal.done_this_week >= goal.weekly
+
+  async function set(weekly) {
+    if (weekly < 1 || weekly > 14) return
+    const data = await api('/stats/goal', { method: 'PUT', body: { weekly_goal: weekly } })
+    onChange(data.stats)
+  }
+
+  return (
+    <div className="card flex flex-col gap-4 p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold">This week's goal</h2>
+          <p className="text-sm text-slate-500">Mock interviews completed since Monday</p>
+        </div>
+        <IconTile tone="green">🎯</IconTile>
+      </div>
+      <p className="font-display text-4xl font-extrabold text-ink tabular-nums">
+        {goal.done_this_week}
+        <span className="text-lg font-semibold text-slate-400"> / {goal.weekly}</span>
+      </p>
+      <div className="h-3 overflow-hidden rounded-full bg-[#f3ebe1]" aria-hidden="true">
+        <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="text-sm text-slate-600">
+        {met ? 'Goal reached this week. Great consistency!' : `${goal.weekly - goal.done_this_week} more to reach your goal.`}
+      </p>
+      <div className="flex items-center gap-3 text-sm">
+        <span className="text-slate-500">Weekly goal</span>
+        <button type="button" aria-label="Lower weekly goal" onClick={() => set(goal.weekly - 1)} className="btn-secondary px-3 py-1">
+          −
+        </button>
+        <span className="font-semibold tabular-nums">{goal.weekly}</span>
+        <button type="button" aria-label="Raise weekly goal" onClick={() => set(goal.weekly + 1)} className="btn-secondary px-3 py-1">
+          +
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { user } = useAuth()
   const [sessions, setSessions] = useState([])
@@ -173,6 +268,13 @@ export default function Dashboard() {
             <LevelCard s={s} />
           </div>
 
+          {s.practice && s.goal && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <PracticeCard practice={s.practice} />
+              <GoalCard goal={s.goal} onChange={setStats} />
+            </div>
+          )}
+
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="card p-6">
               <h2 className="text-lg font-bold">Roles you've practiced</h2>
@@ -199,14 +301,24 @@ export default function Dashboard() {
             </div>
             <div className="card p-6">
               <h2 className="text-lg font-bold">Your skills</h2>
-              <p className="text-sm text-slate-500">Average across all your scored answers</p>
+              <p className="text-sm text-slate-500">Average across your answers, and change since your first interview</p>
               {s.skills.length ? (
                 <ul className="mt-4 space-y-3">
                   {s.skills.map((k) => (
                     <li key={k.name}>
-                      <div className="flex justify-between text-sm">
+                      <div className="flex items-baseline justify-between gap-2 text-sm">
                         <span className="font-medium text-slate-700">{k.name}</span>
-                        <span className="font-bold text-ink tabular-nums">{fmt(k.score)}</span>
+                        <span className="flex items-baseline gap-2">
+                          {k.change != null && k.change !== 0 && (
+                            <span
+                              className={`text-xs font-semibold tabular-nums ${k.change > 0 ? 'text-emerald-700' : 'text-brand-700'}`}
+                            >
+                              {k.change > 0 ? '▲ +' : '▼ '}
+                              {k.change.toFixed(1)}
+                            </span>
+                          )}
+                          <span className="font-bold text-ink tabular-nums">{fmt(k.score)}</span>
+                        </span>
                       </div>
                       <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#f3ebe1]" aria-hidden="true">
                         <div

@@ -64,6 +64,21 @@ export default function Setup() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const job = useJobAnalysis(jdId)
+  const [fits, setFits] = useState([])
+
+  useEffect(() => {
+    if (!jdId) {
+      setFits([])
+      return
+    }
+    let live = true
+    api(`/stories/suggest?jd_id=${jdId}`)
+      .then((data) => live && setFits(data.stories ?? []))
+      .catch(() => live && setFits([]))
+    return () => {
+      live = false
+    }
+  }, [jdId])
   const offered = job.status === 'ready' ? job.modules : []
   // A type that fit the previous job description may not fit this one.
   const chosen = focus === 'mixed' || offered.some((m) => m.name === focus) ? focus : 'mixed'
@@ -134,6 +149,27 @@ export default function Setup() {
           {job.error}
         </p>
       )}
+      {fits.length > 0 && (
+        <section className="card space-y-3 p-5">
+          <h2 className="font-semibold text-slate-900">
+            <span aria-hidden="true">📚 </span>Stories that fit this job
+          </h2>
+          <p className="text-sm text-slate-500">From your story bank. Have them ready to tell.</p>
+          <ul className="space-y-2">
+            {fits.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-medium text-ink">{s.title}</span>
+                {s.fits.map((f) => (
+                  <span key={f} className="chip bg-emerald-50 text-emerald-700">
+                    {f}
+                  </span>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {job.status === 'ready' && (
         <section className="card space-y-3 p-5">
           <h2 className="font-semibold text-slate-900">Interview type</h2>
