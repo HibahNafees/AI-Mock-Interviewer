@@ -1,0 +1,103 @@
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import App from '../App'
+import { AuthProvider } from '../lib/auth'
+
+const ADA = { id: 1, name: 'Ada', email: 'ada@example.com' }
+const CANDIDATE = { name: 'Sam', headline: 'Backend engineer, 4 years', resume: ['Led the payments API rewrite'] }
+const OPEN = { id: 9, status: 'active', role_title: 'Backend Engineer', duration_min: 10, candidate: CANDIDATE, transcript: [], max_questions: 15, reveal: null }
+const QA = { question: 'Who led the rewrite?', answer: 'Well, I was part of the team that did it.', input_mode: 'text' }
+const REVEAL = {
+  profile: 'exaggerating',
+  hidden: { truths: ['Joined the rewrite late'], exaggerations: ['Did not lead the rewrite'], strengths: [], weaknesses: [], answer_style: '' },
+  result: {
+    decision: 'no_hire',
+    reasons: 'Could not say what they led.',
+    expected: 'no_hire',
+    decision_matches: true,
+    judgment: { score: 5, comment: 'Probed the claim and caught it.' },
+    questioning: { score: 4, comment: 'Good follow-ups.' },
+    question_feedback: [{ question: 'Who led the rewrite?', score: 5, comment: 'Exactly the right probe.' }],
+    missed_signals: [],
+    good_moves: ['Asked who led it.'],
+    unfair_questions: [],
+    tips: ['Ask for numbers too.'],
+  },
+}
+
+function respond(routes) {
+  const calls = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url, opts = {}) => {
+      const key = `${opts.method || 'GET'} ${url}`
+      calls.push({ key, opts })
+      const hit = routes[key]
+      if (!hit) throw new Error(`unexpected ${key}`)
+      const [status, body] = typeof hit === 'function' ? hit(opts) : hit
+      return { ok: status < 400, status, json: async () => body }
+    }),
+  )
+  return calls
+}
+
+function renderAt(path) {
+  localStorage.setItem('mi_token', 'tok')
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+}
+
+afterEach(() => vi.unstubAllGlobals())
+
+describe('reverse mode', () => {
+  it('sets up a secret candidate for a saved job', async () => {
+    const calls = respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/documents?kind=job_description': [200, { documents: [{ id: 2, title: 'Backend job' }] }],
+      'POST /api/reverse': [201, { reverse: OPEN }],
+      'GET /api/reverse/9': [200, { reverse: OPEN }],
+    })
+    renderAt('/reverse')
+    await userEvent.click(await screen.findByRole('radio', { name: 'Exaggerates their résumé' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Meet the candidate' }))
+    expect(await screen.findByText('Led the payments API rewrite')).toBeInTheDocument()
+    expect(JSON.parse(calls.find((c) => c.key === 'POST /api/reverse').opts.body)).toEqual({ jd_id: 2, profile: 'exaggerating', duration_min: 10 })
+  })
+
+  it('asks questions, decides, and reveals the hidden profile', async () => {
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/reverse/9': [200, { reverse: OPEN }],
+      'POST /api/reverse/9/ask': [200, { reverse: { ...OPEN, transcript: [QA] } }],
+      'POST /api/reverse/9/decide': [200, { reverse: { ...OPEN, status: 'completed', transcript: [QA], reveal: REVEAL } }],
+    })
+    renderAt('/reverse/9')
+    await userEvent.type(await screen.findByLabelText('Your question'), 'Who led the rewrite?')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    expect(await screen.findByText('Well, I was part of the team that did it.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Make your decision' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'No hire' }))
+    await userEvent.type(screen.getByLabelText(/Why\?/), 'Could not say what they led.')
+    await userEvent.click(screen.getByRole('button', { name: 'Reveal the candidate' }))
+    expect(await screen.findByText('Sam was exaggerating their résumé')).toBeInTheDocument()
+    expect(screen.getByText('Did not lead the rewrite')).toBeInTheDocument()
+    expect(screen.getByText('That matches what a careful interviewer would decide.', { exact: false })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Your question')).not.toBeInTheDocument()
+  })
+
+  it('asks for a job description first', async () => {
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/documents?kind=job_description': [200, { documents: [] }],
+    })
+    renderAt('/reverse')
+    expect(await screen.findByText(/Add a job description first/)).toBeInTheDocument()
+  })
+})

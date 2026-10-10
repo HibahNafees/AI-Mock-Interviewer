@@ -26,6 +26,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     from .routes.documents import bp as documents_bp
     from .routes.health import bp as health_bp
     from .routes.reports import bp as reports_bp
+    from .routes.reverse import bp as reverse_bp
     from .routes.sessions import bp as sessions_bp
     from .routes.stats import bp as stats_bp
     from .routes.stories import bp as stories_bp
@@ -34,6 +35,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.register_blueprint(stats_bp, url_prefix="/api")
     app.register_blueprint(decoder_bp, url_prefix="/api/decoder")
     app.register_blueprint(debriefs_bp, url_prefix="/api/debriefs")
+    app.register_blueprint(reverse_bp, url_prefix="/api/reverse")
     app.register_blueprint(stories_bp, url_prefix="/api/stories")
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(documents_bp, url_prefix="/api/documents")

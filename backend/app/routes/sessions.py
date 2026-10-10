@@ -16,6 +16,7 @@ bp = Blueprint("sessions", __name__)
 
 MAX_ANSWER_CHARS = 8000
 PAUSED = "The interview is paused; resume it to continue"
+REVERSE_ONLY = "Open this interview from Reverse mode"
 MAX_ANSWER_MS = 5 * 60 * 1000
 # The browser stops recording at 5 minutes; allow a little slack for timing.
 DURATION_SLACK_MS = 10 * 1000
@@ -285,6 +286,8 @@ def start(session_id: int):
     session = owned_session(session_id)
     if session is None:
         return jsonify(error="Interview not found"), 404
+    if session.mode == "reverse":
+        return jsonify(error=REVERSE_ONLY), 409
     if session.status != "planned":
         return jsonify(error="This interview has already started"), 409
     user_id = current_user_id()
@@ -304,6 +307,8 @@ def turn(session_id: int):
     session = owned_session(session_id)
     if session is None:
         return jsonify(error="Interview not found"), 404
+    if session.mode == "reverse":
+        return jsonify(error=REVERSE_ONLY), 409
     if session.status != "active":
         return jsonify(error="This interview is not in progress"), 409
     if is_paused(session):
@@ -366,6 +371,8 @@ def _live(session_id: int, allow_paused: bool = False):
     session = owned_session(session_id)
     if session is None:
         return None, (jsonify(error="Interview not found"), 404)
+    if session.mode == "reverse":
+        return None, (jsonify(error=REVERSE_ONLY), 409)
     if session.status != "active":
         return None, (jsonify(error="This interview is not in progress"), 409)
     if is_paused(session) and not allow_paused:

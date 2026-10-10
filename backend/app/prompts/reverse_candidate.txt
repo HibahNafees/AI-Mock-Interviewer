@@ -1,0 +1,24 @@
+Create a realistic job candidate for a mock interview where the USER is the interviewer and must decide whether to hire.
+
+Job (JSON analysis): $analysis
+Candidate type (hidden from the user): $profile
+- strong: genuinely well qualified; gives specific, structured answers with real results.
+- average: decent but uneven; some specifics, some vague answers, a real gap or two.
+- weak: underqualified for this level; vague, generic answers, little ownership or results.
+- exaggerating: the résumé overstates their role and impact; when probed for specifics, details are thin or contradict the claims.
+
+Return JSON with exactly this shape:
+{
+  "name": "a first name only",
+  "headline": "one line, e.g. Backend engineer, 4 years, fintech",
+  "resume": ["4 to 6 résumé bullet points as the candidate presents them"],
+  "hidden": {
+    "truths": ["4 to 6 facts about what they actually did and know"],
+    "exaggerations": ["for exaggerating: which résumé claims are inflated and what really happened; otherwise []"],
+    "strengths": ["2 to 3 real strengths"],
+    "weaknesses": ["2 to 3 real weaknesses or gaps for this job"],
+    "answer_style": "one sentence on how they answer (e.g. confident but vague when pressed)"
+  }
+}
+
+Rules: fictional person; no real companies' confidential details; make the résumé consistent with the type (an exaggerating résumé reads impressive). Nothing about age, gender, ethnicity, religion, family or health.

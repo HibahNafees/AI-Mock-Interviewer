@@ -7,6 +7,7 @@ import Decoder from './pages/Decoder'
 import Interview from './pages/Interview'
 import Login from './pages/Login'
 import Report from './pages/Report'
+import Reverse, { ReverseSetup } from './pages/Reverse'
 import Setup from './pages/Setup'
 import Signup from './pages/Signup'
 import Stories from './pages/Stories'
@@ -34,6 +35,8 @@ export default function App() {
         <Route path="decoder" element={<Decoder />} />
         <Route path="decoder/:token" element={<Decoder />} />
         <Route path="debrief" element={<Debrief />} />
+        <Route path="reverse" element={<ReverseSetup />} />
+        <Route path="reverse/:id" element={<Reverse />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

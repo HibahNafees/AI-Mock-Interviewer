@@ -30,6 +30,8 @@ def create_report(session_id: int):
     session = owned_session(session_id)
     if session is None:
         return jsonify(error="Interview not found"), 404
+    if session.mode == "reverse":
+        return jsonify(error="Reverse interviews have their own feedback"), 409
     if session.status != "completed":
         return jsonify(error="Finish the interview to get your report"), 409
     report = reports.request_report(session)

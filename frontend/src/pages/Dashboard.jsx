@@ -12,6 +12,12 @@ const STATUS = {
   abandoned: ['Cancelled', 'bg-slate-100 text-slate-500'],
 }
 
+// Interviews that aren't regular mock interviews get their own label.
+const MODE_LABEL = {
+  reverse: ['You interviewed', 'bg-accent-100 text-accent-700'],
+  debrief: ['Debrief', 'bg-navy-100 text-navy-700'],
+}
+
 const TIPS = [
   'Lead with the answer in one sentence, then give the story behind it.',
   'Numbers stick: "cut load time from 4 s to 1 s" beats "made it faster".',
@@ -361,11 +367,17 @@ export default function Dashboard() {
           <h2 className="text-xl font-bold">Your interviews</h2>
           <ul className="card mt-3 divide-y divide-[#f3ebe1] overflow-hidden">
             {sessions.map((x) => {
-              const [label, color] = STATUS[x.status] ?? [x.status, 'bg-slate-100 text-slate-600']
+              const [label, color] = MODE_LABEL[x.mode] ?? STATUS[x.status] ?? [x.status, 'bg-slate-100 text-slate-600']
               return (
                 <li key={x.id}>
                   <Link
-                    to={x.status === 'completed' ? `/report/${x.id}` : `/interview/${x.id}`}
+                    to={
+                      x.mode === 'reverse'
+                        ? `/reverse/${x.id}`
+                        : x.status === 'completed'
+                          ? `/report/${x.id}`
+                          : `/interview/${x.id}`
+                    }
                     className="flex items-center justify-between gap-3 px-5 py-4 transition hover:bg-brand-50/60"
                   >
                     <span className="flex min-w-0 items-center gap-3">

@@ -108,6 +108,30 @@ SUMMARY = {
 }
 
 
+REVERSE_CANDIDATE = {
+    "name": "Sam",
+    "headline": "Backend engineer, 4 years, payments",
+    "resume": ["Led the payments API rewrite", "Cut errors by 90%"],
+    "hidden": {
+        "truths": ["Fixed bugs on the payments API", "Joined the rewrite late"],
+        "exaggerations": ["Did not lead the rewrite; a teammate did"],
+        "strengths": ["Debugging"],
+        "weaknesses": ["Little design ownership"],
+        "answer_style": "confident until asked for specifics",
+    },
+}
+REVERSE_JUDGE = {
+    "judgment": {"score": 2, "comment": "Hired without probing the leadership claim."},
+    "questioning": {"score": 3, "comment": "Good opener, no follow-up on numbers."},
+    "question_feedback": [
+        {"question": "Tell me about the rewrite.", "score": 3, "comment": "Fine start."}
+    ],
+    "missed_signals": ["Never asked who led the rewrite."],
+    "good_moves": ["Opened with their biggest claim."],
+    "unfair_questions": [],
+    "tips": ["Ask 'what exactly did you do?' after every big claim."],
+}
+
 DECODE = {
     "role_title": "Backend Engineer",
     "summary": "A backend role that likely centres on talking to stakeholders.",
@@ -164,6 +188,7 @@ class FakeFire:
         self.speech_error: Exception | None = None
         self.small_talk_error: Exception | None = None
         self.decode: dict = DECODE
+        self.reverse_candidate: dict = REVERSE_CANDIDATE
         self.next_round: dict | Exception = {
             "questions": [
                 {
@@ -222,6 +247,12 @@ class FakeFire:
             )
             if isinstance(body, Exception):
                 raise body
+        elif "Create a realistic job candidate" in prompt:
+            body = self.reverse_candidate
+        elif "Stay in character as the candidate" in prompt:
+            body = {"answer": "I led the payments API rewrite and cut errors a lot."}
+        elif "performance as an INTERVIEWER" in prompt:
+            body = REVERSE_JUDGE
         elif "Predict what the next round will likely ask" in prompt:
             body = self.next_round
             if isinstance(body, Exception):

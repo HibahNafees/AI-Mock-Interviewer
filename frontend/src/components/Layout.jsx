@@ -8,6 +8,7 @@ const NAV = [
   ['/stories', 'Story bank'],
   ['/decoder', 'JD decoder'],
   ['/debrief', 'Debrief'],
+  ['/reverse', 'Reverse'],
 ]
 
 export function Logo() {

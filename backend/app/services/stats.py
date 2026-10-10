@@ -29,11 +29,12 @@ def _avg(values: list[float]) -> float | None:
 
 
 def user_stats(user_id: int) -> dict:
-    # Mock interviews only: a debrief is a real interview recalled afterwards.
+    # Mock interviews only: a debrief is a real interview recalled afterwards, and
+    # in reverse mode the user is the interviewer.
     sessions = db.session.scalars(
         db.select(Session)
         .filter_by(user_id=user_id)
-        .where(Session.mode != "debrief")
+        .where(Session.mode.not_in(("debrief", "reverse")))
         .order_by(Session.created_at)
     ).all()
     ids = [s.id for s in sessions]
