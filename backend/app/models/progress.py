@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     Date,
     DateTime,
     Float,
@@ -31,7 +32,12 @@ class Story(db.Model):
     competencies_json: Mapped[list[Any] | None] = mapped_column(JSON)
     source_answer_ids_json: Mapped[list[int] | None] = mapped_column(JSON)
     strength: Mapped[float | None] = mapped_column(Float)
+    # Set once the user edits it: later merges never overwrite their wording.
+    user_edited: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     created_at: Mapped[datetime] = created_at_column()
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class Debrief(db.Model):
@@ -60,6 +66,20 @@ class QuestionBankItem(db.Model):
     competency: Mapped[str | None] = mapped_column(String(120))
     last_score: Mapped[float | None] = mapped_column(Float)
     next_review_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    # Where it came from (to reuse that job's résumé, JD and rubric).
+    source_session_id: Mapped[int | None] = fk(
+        "sessions.id", nullable=True, ondelete="SET NULL"
+    )
+    section: Mapped[str | None] = mapped_column(String(120))
+    module: Mapped[str | None] = mapped_column(String(40))
+    interval_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    reviews: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    mastered_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = created_at_column()
 
 
 class UsageLimit(db.Model):

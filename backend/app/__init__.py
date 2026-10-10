@@ -26,9 +26,11 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     from .routes.reports import bp as reports_bp
     from .routes.sessions import bp as sessions_bp
     from .routes.stats import bp as stats_bp
+    from .routes.stories import bp as stories_bp
 
     app.register_blueprint(health_bp, url_prefix="/api")
     app.register_blueprint(stats_bp, url_prefix="/api")
+    app.register_blueprint(stories_bp, url_prefix="/api/stories")
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(documents_bp, url_prefix="/api/documents")
     app.register_blueprint(sessions_bp, url_prefix="/api/sessions")

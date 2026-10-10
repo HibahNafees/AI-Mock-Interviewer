@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from ..extensions import db
 from ..models import Answer, Evaluation, Question, Report, Session
 from ..models.base import utcnow
-from . import interviewer, scoring
+from . import interviewer, scoring, stories
 from .analytics import Clip, delivery, session_summary
 from .fire import FireError
 from .limits import LimitReached, check_budget
@@ -119,6 +119,9 @@ def request_report(session: Session) -> Report:
     report = get_report(session)
     if report is not None:
         if report.status == "ready":
+            if report.stories_at is None:
+                # The story bank update failed last time: try it again.
+                _launch(report.id, session.user_id)
             return report
         fresh = report.started_at and utcnow() - report.started_at < STALE_AFTER
         if report.status == "generating" and fresh:
@@ -209,6 +212,26 @@ def generate(report_id: int, user_id: int) -> None:
         report.top_takeaways_json = [t for t in summary.takeaways if t.strip()][:3]
         report.exercises_json = [x for x in summary.exercises if x.strip()][:3]
     report.status = "ready"
+    db.session.commit()
+    _update_story_bank(user_id, session, report, items, done)
+
+
+def _update_story_bank(user_id, session, report, items, done) -> None:
+    """Once per session, after the report is safe: a failure here never fails it."""
+    if report.stories_at is not None:
+        return
+    scores = {
+        t.root.id: done[t.main_answer.id].score
+        for t in items
+        if t.main_answer.id in done
+    }
+    try:
+        stories.extract(user_id, session, items, scores)
+    except (FireError, LimitReached) as err:
+        log.warning("Story extraction for session %s failed: %s", session.id, err)
+        db.session.rollback()
+        return
+    report.stories_at = utcnow()
     db.session.commit()
 
 

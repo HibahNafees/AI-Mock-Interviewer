@@ -129,6 +129,8 @@ class FakeFire:
         self.spoken: list[tuple[str, str | None]] = []
         self.speech_error: Exception | None = None
         self.small_talk_error: Exception | None = None
+        # Story-extraction replies (default: no stories).
+        self.stories: list[dict | Exception] = []
         # Replies to "Do you have any questions for me?" turns.
         self.candidate_replies: list[dict | Exception] = []
 
@@ -166,6 +168,12 @@ class FakeFire:
             )
             if isinstance(body, Exception):
                 raise body
+        elif "reusable interview stories" in prompt:
+            body = self.stories.pop(0) if self.stories else {"stories": []}
+            if isinstance(body, Exception):
+                raise body
+            if callable(body):  # built from the answer ids in the prompt
+                body = body(prompt)
         elif "asked for a hint" in prompt:
             body = {"hint": "Think about where the requests are counted."}
         elif "moment of small talk" in prompt:

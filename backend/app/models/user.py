@@ -16,6 +16,10 @@ class User(db.Model):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     created_at: Mapped[datetime] = created_at_column()
+    # Practice goal: mock interviews per week.
+    weekly_goal: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=3, server_default="3"
+    )
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
