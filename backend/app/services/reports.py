@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from ..extensions import db
 from ..models import Answer, Debrief, Evaluation, Question, Report, Session
 from ..models.base import utcnow
-from . import debriefs, interviewer, practice, pressure, scoring, stories
+from . import coach, debriefs, interviewer, practice, pressure, scoring, stories
 from .analytics import Clip, delivery, session_summary
 from .fire import FireError
 from .limits import LimitReached, check_budget
@@ -211,6 +211,14 @@ def generate(report_id: int, user_id: int) -> None:
         report.verdict_reason = summary.reasoning
         report.top_takeaways_json = [t for t in summary.takeaways if t.strip()][:3]
         report.exercises_json = [x for x in summary.exercises if x.strip()][:3]
+        # Their questions at the end ("any questions for me?"), rated once.
+        try:
+            rated = coach.rate_their_questions(user_id, session)
+        except (FireError, LimitReached) as err:
+            log.warning("Rating their questions for %s failed: %s", session.id, err)
+            rated = None
+        if rated:
+            session.plan_json = {**(session.plan_json or {}), "their_questions": rated}
         # Once, when the report is first complete: missed questions join the bank.
         practice.record_session(
             user_id,
@@ -501,6 +509,7 @@ def report_dict(session: Session, report: Report) -> dict:
         ),
         "unanswered": unanswered(session, items),
         "debrief": _debrief_info(session),
+        "their_questions": (session.plan_json or {}).get("their_questions"),
         "pressure": (
             {**pressure.info(session), "composure": pressure.composure(session, report)}
             if session.mode == "pressure"

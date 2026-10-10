@@ -8,7 +8,7 @@ from ..models import Document
 from ..models.base import utcnow
 from .. import modules
 from ..services import gaps as gap_service
-from ..services import limits, planning
+from ..services import coach, limits, planning
 from ..services.parsing import ParseError, extract_text, validate_text
 from .common import current_user_id
 
@@ -151,6 +151,17 @@ def gaps(doc_id: int):
         return jsonify(error="Choose your résumé and a job description first"), 404
     limits.check_budget()
     return jsonify(gaps=gap_service.analyze(current_user_id(), resume, jd))
+
+
+@bp.post("/<int:doc_id>/questions-to-ask")
+@jwt_required()
+def questions_to_ask(doc_id: int):
+    """Smart questions to ask them at the end (one Fire call, then cached)."""
+    jd = owned_document(doc_id, "job_description")
+    if jd is None:
+        return jsonify(error="Job description not found"), 404
+    limits.check_budget()
+    return jsonify(coach=coach.questions_to_ask(current_user_id(), jd))
 
 
 @bp.delete("/<int:doc_id>")

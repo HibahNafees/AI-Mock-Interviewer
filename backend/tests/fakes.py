@@ -272,6 +272,40 @@ class FakeFire:
             )
             if isinstance(body, Exception):
                 raise body
+        elif "prepare smart questions to ask the interviewer" in prompt:
+            body = {
+                "questions": [
+                    {
+                        "question": "What would success look like in the first 90 days?",
+                        "why": "shows you plan",
+                        "topic": "role",
+                    },
+                    {
+                        "question": "How does the team handle on-call?",
+                        "why": "the posting mentions it",
+                        "topic": "team",
+                    },
+                ],
+                "avoid": ["Asking about salary in the first round."],
+            }
+        elif "Rate the candidate's questions" in prompt:
+            body = {
+                "questions": [
+                    {
+                        "asked": "What does a typical week look like?",
+                        "score": 3,
+                        "comment": "Fine but generic.",
+                        "better": "What would my first project be?",
+                    },
+                    {
+                        "asked": "Do you offer free lunch?",
+                        "score": 1,
+                        "comment": "Perks first.",
+                        "better": None,
+                    },
+                ],
+                "summary": "Ask about the work, not perks.",
+            }
         elif "Compare a candidate's résumé with a job description" in prompt:
             body = self.gaps
         elif "Create a realistic job candidate" in prompt:

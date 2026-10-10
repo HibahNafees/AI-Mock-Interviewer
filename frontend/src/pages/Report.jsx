@@ -616,6 +616,29 @@ function Summary({ report }) {
         </div>
       )}
 
+      {report.their_questions && (
+        <div className="card p-6">
+          <h2 className="text-lg font-bold">Your questions for them</h2>
+          {report.their_questions.summary && <p className="text-sm text-slate-600">{report.their_questions.summary}</p>}
+          <ul className="mt-3 space-y-3 text-sm">
+            {report.their_questions.questions.map((q) => (
+              <li key={q.asked} className="flex gap-3">
+                <span className={`chip h-fit shrink-0 tabular-nums ${scoreColor(q.score)}`}>{q.score}/5</span>
+                <span>
+                  <span className="font-medium text-ink">“{q.asked}”</span>
+                  <span className="block text-slate-600">{q.comment}</span>
+                  {q.better && (
+                    <span className="block text-slate-600">
+                      <span className="font-semibold text-emerald-700">Sharper:</span> {q.better}
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {report.competencies?.length > 0 && (
         <div className="card p-6">
           <h2 className="text-lg font-bold">Competencies</h2>

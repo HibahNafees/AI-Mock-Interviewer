@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DocumentInput from '../components/DocumentInput'
 import GapAnalysis from '../components/GapAnalysis'
+import QuestionsCoach from '../components/QuestionsCoach'
 import { api } from '../lib/api'
 import { answerModePref, canRecord, setAnswerModePref } from '../lib/recording'
 import { voicePref } from '../lib/voice'
@@ -153,6 +154,7 @@ export default function Setup() {
         </p>
       )}
       {resumeId && jdId && job.status === 'ready' && <GapAnalysis resumeId={resumeId} jdId={jdId} />}
+      {jdId && job.status === 'ready' && <QuestionsCoach jdId={jdId} />}
 
       {fits.length > 0 && (
         <section className="card space-y-3 p-5">

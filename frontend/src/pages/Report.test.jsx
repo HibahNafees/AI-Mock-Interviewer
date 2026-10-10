@@ -213,6 +213,28 @@ describe('report', () => {
     expect(screen.getByText(/Started at level 3, eased to level 1/)).toBeInTheDocument()
   })
 
+  it('rates the questions you asked them', async () => {
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7/report': [
+        200,
+        {
+          report: {
+            ...READY,
+            their_questions: {
+              summary: 'Ask about the work, not perks.',
+              questions: [{ asked: 'What does a typical week look like?', score: 3, comment: 'Fine but generic.', better: 'What would my first project be?' }],
+            },
+          },
+        },
+      ],
+    })
+    renderAt('/report/7')
+    expect(await screen.findByText('Your questions for them')).toBeInTheDocument()
+    expect(screen.getByText('“What does a typical week look like?”')).toBeInTheDocument()
+    expect(screen.getByText('What would my first project be?')).toBeInTheDocument()
+  })
+
   it('offers to finish a partly failed report', async () => {
     let posted = 0
     respond({
