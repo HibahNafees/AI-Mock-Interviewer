@@ -209,3 +209,10 @@ def test_roleplay_and_tiny_sessions_cost_nothing(client, auth, docs, fire):
         "I hear you on price, what does the current process cost you?",
     )
     assert not any("reusable interview stories" in c["prompt"] for c in fire.calls)
+
+
+def test_sources_list_each_interview_once(client, auth, planned, fire):
+    fire.stories = [lambda p: etl_story(p, answer_ids=ids(p))]  # both answers
+    interview(client, auth, planned["id"], ETL, MENTOR)
+    [story] = client.get("/api/stories", headers=auth).get_json()["stories"]
+    assert len(story["sources"]) == 1

@@ -212,15 +212,18 @@ def story_dict(story: Story) -> dict:
         "competencies": story.competencies_json or [],
         "strength": story.strength,
         "user_edited": story.user_edited,
-        "sources": [
+        # One entry per interview it came up in (not per answer).
+        "sources": list(
             {
-                "session_id": s.id,
-                "role": (s.plan_json or {}).get("role_title") or "Interview",
-                "question": asked or text,
-                "date": (s.started_at or s.created_at).date().isoformat(),
-            }
-            for _, asked, text, s in rows
-        ],
+                s.id: {
+                    "session_id": s.id,
+                    "role": (s.plan_json or {}).get("role_title") or "Interview",
+                    "question": asked or text,
+                    "date": (s.started_at or s.created_at).date().isoformat(),
+                }
+                for _, asked, text, s in sorted(rows, key=lambda r: r[0], reverse=True)
+            }.values()
+        ),
         "created_at": story.created_at.isoformat() + "Z",
         "updated_at": story.updated_at.isoformat() + "Z" if story.updated_at else None,
     }

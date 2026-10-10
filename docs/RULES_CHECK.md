@@ -60,3 +60,18 @@ Three live interviews (sessions 25–27: mixed loop with a friendly interviewer;
 | Dashboard stats | ✅ Interviews, averages, improvement, level, streak, retries all consistent with the data. |
 
 **Open from this check:** none besides T-27 (Fire has no speech model).
+
+---
+
+## Check after Phase 7 (2026-10-10) — progress and story bank
+
+| Area | Status | Evidence / gap |
+|---|---|---|
+| Story bank and progress | ✅ | Stories extracted from completed sessions (one Fire call each, after the report); STAR summary in the user's words, competencies tagged; every STAR part checked against the source answers and dropped to a visible gap if unsupported ("do not convert assumptions into facts"); hypotheticals, opinions and role-play lines never become stories; duplicates detected (model `same_as` + word-overlap check) and merged keeping the stronger telling; user edits never overwritten; coverage view flags evidence gaps ("no story yet for conflict…"); stories suggested for a job at setup; users can edit, rename or delete. Progress: scores over time, per-skill averages with change since the first interview, practice streak, weekly goal, question bank with spaced repetition, weak-spot interviews from due questions. |
+| Core behavior | ✅ | Weak-spot interviews reuse the same interviewer, controls and rubric; ice-breaker and "any questions?" still apply. |
+| Scoring | ✅ | Practice interviews are scored with the source job's rubric, so scores stay comparable; retries count as spaced-repetition reviews. |
+| Final report | ✅ | Unchanged; the story bank updates only after a report is safe, and a failed extraction never fails the report (retried on the next report request). |
+| Safety and privacy | ⚠️ | Stories and bank items belong to the user (ownership-checked APIs; cascade on account deletion). Still planned: purge expired documents (Phase 10); debrief without recordings (Phase 8). |
+
+Live check (sessions 1–28 backfilled + one weak-spot interview, ~$0.013): stories grounded in the candidate's words with gaps left empty, the same ETL experience merged across three interviews, the practiced questions rescheduled in the queue.
+Other areas unchanged since the previous check (✅). **Open from this check:** none.
