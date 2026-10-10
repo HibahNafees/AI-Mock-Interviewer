@@ -115,3 +115,12 @@ def test_fire_failure_signs_off_politely(qa, client, auth, planned, fire):
     fire.candidate_replies = [FireError("down")]
     body = answer(client, auth, sid, "What are the next steps?").get_json()
     assert body["turn"]["action"] == "wrap_up" and is_closing(body["turn"]["message"])
+
+
+def test_next_steps_only_when_asked(qa, client, auth, planned, fire):
+    # Live re-check (T-47): the answer and the sign-off both promised an email.
+    sid = planned["id"]
+    reach_the_end(client, auth, fire, sid)
+    answer(client, auth, sid, "What does a typical day look like?")
+    prompt = fire.calls[-1]["prompt"]
+    assert "Only if they ask about next steps or the process" in prompt

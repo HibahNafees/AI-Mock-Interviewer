@@ -7,7 +7,9 @@ it doesn't; sentences that still aren't grounded are dropped).
 """
 
 import json
+import logging
 import re
+from difflib import SequenceMatcher
 from string import Template
 from typing import Literal
 
@@ -17,7 +19,10 @@ from .. import modules
 from ..extensions import db
 from ..models import Document, Evaluation, Session
 from .analytics import Clip, delivery, word_count
+from .fire import FireError
 from .llm import chat_json, render
+
+log = logging.getLogger(__name__)
 
 SYSTEM = (
     "You are an expert, fair interview coach. You give honest practice feedback and "
@@ -421,6 +426,69 @@ def grounded_rewrite(
     return _join(kept), changes if len(kept) == len(sentences) else []
 
 
+# Relevance at or below this means the answer missed the question.
+OFF_TOPIC = 2
+OFF_TOPIC_SCORE = 2.5  # ...and the answer as a whole was poor
+# A rewrite this similar to the answer is a copy, not a stronger version (T-46).
+COPY_RATIO = 0.9
+MAX_GAP_PLACEHOLDERS = 2
+
+
+def copy_ratio(rewrite: str, answers: list[str]) -> float:
+    """Share of the rewrite's words that are the candidate's own, in the same order
+    (1.0 = a straight copy of one or more answers)."""
+    a = WORD_RE.findall(PLACEHOLDER_RE.sub(" ", rewrite).lower())
+    b = WORD_RE.findall(" ".join(answers).lower())
+    if not a or not b:
+        return 0.0
+    blocks = SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks()
+    return sum(m.size for m in blocks if m.size >= 3) / len(a)
+
+
+def not_a_copy(
+    user_id: int,
+    stronger: str,
+    changes: list["Change"],
+    missing: list[str],
+    sources: list[str],
+    question: str,
+    resume: str,
+    answers: list[str],
+    words: int,
+) -> tuple[str, list["Change"]]:
+    """One repair call if the rewrite just repeats the answer; then, if it still
+    does, placeholders for the gaps so it is never a copy (live check, T-46)."""
+    if copy_ratio(stronger, answers) < COPY_RATIO or not missing:
+        return stronger, changes
+    gaps = "; ".join(missing[:4])
+    prompt = render(
+        "rewrite_repair",
+        question=question,
+        resume=resume,
+        answers=answers,
+        sentences=[s.model_dump() for s in split_sentences([Sentence(text=stronger)])],
+        problems=(
+            "The whole rewrite repeats the candidate's answer instead of improving it. "
+            "Restructure it (lead with a direct answer, then specifics, then the result) "
+            f"and cover these missing points, with placeholders where facts are missing: {gaps}."
+        ),
+        target_words=str(words),
+    )
+    try:
+        repaired = chat_json(
+            user_id, prompt, RewriteOut, SYSTEM, max_tokens=1200, temperature=0.2
+        )
+        sentences = split_sentences(repaired.stronger_version)
+        kept = _keep(sentences, grounding_problems(sentences, sources))
+        text = _join(kept)
+        if kept and copy_ratio(text, answers) < COPY_RATIO:
+            return text, []
+    except FireError as err:
+        log.warning("Rewrite repair failed: %s", err)
+    adds = " ".join(f"[Add: {m.rstrip('.')}.]" for m in missing[:MAX_GAP_PLACEHOLDERS])
+    return f"{stronger} {adds}", []
+
+
 def weighted_score(
     scores: list[CriterionScore], rubric: dict | None
 ) -> tuple[float, list[dict]]:
@@ -609,22 +677,48 @@ def evaluate(
     )
     score, rows = weighted_score(out.criteria, rubric)
     answers = [e["candidate"] for e in exchange]
-    stronger, changes = grounded_rewrite(
-        user_id,
-        out.stronger_version,
-        # In a role-play the reply may refer to what the character said.
-        [resume_text, *answers]
-        + (
-            [e["interviewer"] for e in exchange] + list(scenario.values())
-            if scenario
-            else []
-        ),
-        question or exchange[0]["interviewer"],
-        resume_text,
-        answers,
-        words,
-        out.changes,
+    relevance = next(
+        (r["score"] for r in rows if _norm(r["name"]) == "relevance"), None
     )
+    off_topic = (
+        relevance is not None and relevance <= OFF_TOPIC and score < OFF_TOPIC_SCORE
+    )
+    if off_topic and not scenario:
+        # The answer missed the question: the AI would have to stitch résumé facts
+        # into a story that never happened (T-48). Point at the résumé instead.
+        stronger, changes = (
+            resume_fallback(question or exchange[0]["interviewer"], resume_text),
+            [],
+        )
+    else:
+        stronger, changes = grounded_rewrite(
+            user_id,
+            out.stronger_version,
+            # In a role-play the reply may refer to what the character said.
+            [resume_text, *answers]
+            + (
+                [e["interviewer"] for e in exchange] + list(scenario.values())
+                if scenario
+                else []
+            ),
+            question or exchange[0]["interviewer"],
+            resume_text,
+            answers,
+            words,
+            out.changes,
+        )
+
+        stronger, changes = not_a_copy(
+            user_id,
+            stronger,
+            changes,
+            [m.point for m in out.missing_points if not m.covered],
+            [resume_text, *answers],
+            question or exchange[0]["interviewer"],
+            resume_text,
+            answers,
+            words,
+        )
 
     said = _norm(" ".join(e["candidate"] for e in exchange))
     weak = [

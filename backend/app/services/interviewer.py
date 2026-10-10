@@ -514,6 +514,18 @@ def take_turn(
             log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
             out = _fallback(opts, sign_off())
             fell_back = True
+        elif scenario is None and out.action == "follow_up":
+            root_id = current.follow_up_of_id or current.id
+            earlier = [
+                q.asked_text or q.text for q in asked if q.follow_up_of_id == root_id
+            ]
+            if any(_same_question(out.message, e) for e in earlier):
+                # The candidate didn't answer it the first time: move on (T-44).
+                log.info("Repeated follow-up; moving on")
+                out = _fallback(
+                    {k: v for k, v in opts.items() if k != "follow_up"}, sign_off()
+                )
+                fell_back = True
         in_character = scenario is not None and not fell_back
 
     said = (CHARACTER if in_character else INTERVIEWER, out.message)
@@ -860,12 +872,39 @@ def resume(session: Session) -> None:
         db.session.commit()
 
 
+SAME_QUESTION = 0.5
+_WORD_RE = re.compile(r"[a-z]+")
+_FILLER = frozenset(
+    """the a an and or to of in on for with you your about can could would tell me
+    more what how did do was were that this it its specific share example thanks
+    thank okay got it just please give some any when where which who there those
+    these situation instance detail detailing explain clarify elaborate describe
+    walk through particular personally""".split()
+)
+
+
+def _stem(word: str) -> str:
+    for end in ("ing", "ed", "ly", "es", "s"):
+        if word.endswith(end) and len(word) - len(end) >= 4:
+            return word[: -len(end)]
+    return word
+
+
+def _same_question(a: str, b: str) -> bool:
+    """Two follow-ups that ask the same thing in different words."""
+    wa = {_stem(w) for w in _WORD_RE.findall(a.lower()) if w not in _FILLER}
+    wb = {_stem(w) for w in _WORD_RE.findall(b.lower()) if w not in _FILLER}
+    if len(wa) < 3 or len(wb) < 3:
+        return False
+    return len(wa & wb) / min(len(wa), len(wb)) >= SAME_QUESTION
+
+
 def _fallback(opts: dict, sign_off: str) -> TurnOut:
     """Used when the model picks a move the clock doesn't allow."""
     for action in ("next_question", "bonus"):
         q = opts.get(action)
         if q is not None:
-            return TurnOut(action=action, message=f"Thank you. Next question: {q.text}")
+            return TurnOut(action=action, message=f"Thanks. Let's move on. {q.text}")
     return TurnOut(action="wrap_up", message=sign_off)
 
 

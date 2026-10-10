@@ -127,7 +127,7 @@ def test_disallowed_move_falls_back_to_plan(client, auth, planned, fire):
     started(client, auth, sid)
     fire.turns = [{"action": "bonus", "message": "Off-plan question"}]
     turn = answer(client, auth, sid).get_json()["turn"]
-    message = "Thank you. Next question: How would you design a rate limiter?"
+    message = "Thanks. Let's move on. How would you design a rate limiter?"
     assert turn == {
         "action": "next_question",
         "message": message,
@@ -262,3 +262,24 @@ def test_praise_is_removed_from_live_turns(client, auth, planned, fire):
     ]
     turn = answer(client, auth, planned["id"]).get_json()["turn"]
     assert turn["message"] == "Thanks. What was your role?"
+
+
+def test_a_repeated_follow_up_moves_on_instead(client, auth, planned, fire):
+    # Live re-check (T-44): the same follow-up was asked twice in a row.
+    sid = planned["id"]
+    started(client, auth, sid)
+    fire.turns = [
+        {
+            "action": "follow_up",
+            "message": "Thanks. What was your specific role in building the billing API?",
+        },
+        {
+            "action": "follow_up",
+            "message": "Can you clarify your specific role when building the billing API?",
+        },
+    ]
+    first = answer(client, auth, sid, "We built a billing API.").get_json()["turn"]
+    assert first["action"] == "follow_up"
+    second = answer(client, auth, sid, "It was a team effort.").get_json()["turn"]
+    assert second["action"] == "next_question"
+    assert second["message"].endswith("How would you design a rate limiter?")

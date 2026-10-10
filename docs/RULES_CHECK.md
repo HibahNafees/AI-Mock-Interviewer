@@ -40,3 +40,23 @@ Every ⚠️ / ❌ gets a ticket (`orchestration.tickets`); the next check confi
 | Story bank and progress | ⏳ | Phase 7. |
 
 Core behavior, personalities and modes remain ✅. **Open from this check:** none (the ⚠️/⏳ items are scheduled phases).
+
+---
+
+## Live re-check against the real Fire API (2026-10-10)
+
+Three live interviews (sessions 25–27: mixed loop with a friendly interviewer; customer-support role-play with a tough one; a behavioral loop answered with deliberately vague replies), their reports, two retries and one spoken clip. Fire spend for the whole check: ~$0.034.
+
+| Area | Result |
+|---|---|
+| Ice-breaker, plan, one question at a time | ✅ Warm small-talk reply, then the first planned question; role-play intro announced by the app. |
+| Hint / skip / pause / resume | ✅ Hint gave an angle, not the answer, and was noted in that question's feedback; skip moved on and the question was listed as unanswered; answering while paused was refused and the clock skipped the pause. |
+| Follow-ups and adaptive challenge | ⚠️→✅ Near-identical follow-ups were asked twice when an answer dodged one — **T-44**, fixed (prompt rule + code check that moves on). |
+| Candidate questions at the end | ✅ Answered from the JD, salary honestly deferred to the recruiter. ⚠️→✅ Email follow-up mentioned twice — **T-47**, fixed. |
+| Scoring and AI uncertainty | ⚠️→✅ Confidence tracked answer quality ("medium" everywhere) — **T-45**, fixed: weak-but-clear answers are now "high". Near-empty retry scored 1 with no Fire call; a better retry scored higher (3.82 → 4.0). |
+| Stronger versions (never invent) | ⚠️→✅ Two rewrites copied the answer — **T-46**, fixed (repair call, then gap placeholders). An off-topic answer's rewrite recombined résumé facts into an invented incident — **T-48**, fixed: answers that missed the question get the résumé outline with placeholders. |
+| Report | ✅ "What you did well", AI-judgment label, competencies, recommended exercises, unanswered questions. |
+| Voice | ✅ Spoken clip transcribed (filler "um" kept). Fire speech still unavailable (T-27). |
+| Dashboard stats | ✅ Interviews, averages, improvement, level, streak, retries all consistent with the data. |
+
+**Open from this check:** none besides T-27 (Fire has no speech model).

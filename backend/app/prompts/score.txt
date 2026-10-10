@@ -28,7 +28,7 @@ Return JSON with exactly this shape:
   "tips": ["one tip specific to this field or question type"],
   "strengths": ["something the candidate did well, citing what they said"],
   "confidence": "high" | "medium" | "low",
-  "confidence_note": "why you're less than sure, or empty"
+  "confidence_note": "why your judgment may be off, or empty"
 }
 
 Scoring:
@@ -49,7 +49,7 @@ Feedback:
 - In a role-play, the stronger version is a better version of the candidate's FIRST reply to the character, in the same spoken role-play style.
 - tips: 0 to 2 short tips about content or field-specific expectations (not pace or filler words; those are measured separately).
 - strengths: 1 to 3 specific things the candidate did well, each pointing to what they actually said (e.g. "Named the exact metric: p95 latency from 1.8 s to 300 ms"). No empty praise; if nothing worked, return [].
-- confidence: how sure you are of these scores. "low" if the transcript looks garbled or misheard, the answer is hard to interpret, or the question barely tests the criteria; "medium" if something is ambiguous; otherwise "high". confidence_note: one short sentence saying why when it isn't "high".
+- confidence: how RELIABLE your judgment is, not how good the answer is. A weak, vague or short answer you understood clearly is "high" confidence (you're sure it's weak). Use "medium" only when part of the answer could reasonably be read two ways or the question tests the criteria only partly; "low" when the transcript looks garbled or misheard, or you had to guess what the candidate meant. Most answers are "high". confidence_note: when not "high", one short sentence on what made the judgment uncertain (never a comment on answer quality); otherwise "".
 
 Stronger version:
 - Rewrite the main answer in the candidate's own voice (first person, natural spoken style), about $target_words words, as a list of sentences.

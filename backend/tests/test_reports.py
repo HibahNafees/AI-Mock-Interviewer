@@ -823,3 +823,93 @@ def test_report_lists_questions_never_answered(client, auth, planned, fire):
     ]
     assert report["unanswered"][0]["asked"] is True  # asked, then ended
     assert report["unanswered"][1]["asked"] is False
+
+
+COPY_ANSWER = "I built the billing API at Acme and owned the schema for it."
+
+
+def copy_score() -> dict:
+    return {
+        **SCORE,
+        "stronger_version": [{"text": COPY_ANSWER, "source": COPY_ANSWER}],
+        "changes": [],
+    }
+
+
+def one_answer_report(client, auth, sid):
+    started(client, auth, sid)
+    answer(client, auth, sid, COPY_ANSWER)
+    client.post(f"/api/sessions/{sid}/end", headers=auth)
+    return build(client, auth, sid).get_json()["report"]["questions"][0]["evaluation"]
+
+
+def test_rewrite_that_copies_the_answer_is_repaired(client, auth, planned, fire):
+    # Live re-check (T-46): the stronger version repeated the answer word for word.
+    fire.scores = [copy_score()]
+    e = one_answer_report(client, auth, planned["id"])
+    repair = next(
+        c["prompt"] for c in fire.calls if 'Fix a "stronger version"' in c["prompt"]
+    )
+    assert (
+        "repeats the candidate's answer" in repair and "A measurable result" in repair
+    )
+    assert e["stronger_version"] == (
+        "I built the Acme billing API. The result was [add the result you achieved]."
+    )
+
+
+def test_rewrite_still_copying_gets_gap_placeholders(client, auth, planned, fire):
+    fire.scores = [copy_score()]
+    fire.repairs = [
+        {"stronger_version": [{"text": COPY_ANSWER, "source": COPY_ANSWER}]}
+    ]
+    e = one_answer_report(client, auth, planned["id"])
+    assert e["stronger_version"] == f"{COPY_ANSWER} [Add: A measurable result.]"
+
+
+def test_confidence_is_about_the_judgment_not_the_answer(client, auth, planned, fire):
+    # Live re-check (T-45): every answer came back "medium" for being weak.
+    one_answer_report(client, auth, planned["id"])
+    prompt = next(
+        c["prompt"] for c in fire.calls if c["prompt"].startswith("Score one")
+    )
+    assert "how RELIABLE your judgment is, not how good the answer is" in prompt
+    assert 'Most answers are "high"' in prompt
+
+
+def test_copy_check_measures_the_rewrite_not_all_answers():
+    # Live re-check (T-46): one short answer copied back slipped past a ratio
+    # taken over all the answers together.
+    from app.services.scoring import copy_ratio
+
+    answers = ["Communication matters a lot to me.", "I learned a lot from that."]
+    assert copy_ratio("I learned a lot from that.", answers) == 1.0
+    assert (
+        copy_ratio("I led the [add the project] and cut costs by [add %].", answers)
+        == 0
+    )
+
+
+def test_off_topic_answer_gets_the_resume_outline_not_a_story(
+    client, auth, planned, fire
+):
+    # Live re-check (T-48): for an answer that missed the question, the AI stitched
+    # résumé facts into an incident that never happened.
+    fire.scores = [
+        {
+            **SCORE,
+            "criteria": [
+                {"name": "API design", "score": 1},
+                {"name": "Structure", "score": 2},
+                {"name": "Clarity", "score": 3},
+                {"name": "Relevance", "score": 2},
+            ],
+            "stronger_version": [
+                {"text": "At Acme I built the billing API during a critical outage."}
+            ],
+        }
+    ]
+    e = one_answer_report(client, auth, planned["id"])
+    assert "critical outage" not in e["stronger_version"]
+    assert "[" in e["stronger_version"]  # an outline with placeholders to fill in
+    assert not any('Fix a "stronger version"' in c["prompt"] for c in fire.calls)
