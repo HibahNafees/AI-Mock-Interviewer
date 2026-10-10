@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import CompanyResearch from '../components/CompanyResearch'
 import DocumentInput from '../components/DocumentInput'
 import GapAnalysis from '../components/GapAnalysis'
 import QuestionsCoach from '../components/QuestionsCoach'
@@ -66,6 +67,8 @@ export default function Setup() {
   const [answerMode, setAnswerMode] = useState(answerModePref)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [company, setCompany] = useState(null)
+  const [whyUs, setWhyUs] = useState(true)
   const job = useJobAnalysis(jdId)
   const [fits, setFits] = useState([])
 
@@ -101,6 +104,7 @@ export default function Setup() {
           persona,
           focus: chosen,
           pressure_level: pressure,
+          ...(company && whyUs ? { company_research_id: company.id } : {}),
         },
       })
       setAnswerModePref(answerMode)
@@ -155,6 +159,15 @@ export default function Setup() {
       )}
       {resumeId && jdId && job.status === 'ready' && <GapAnalysis resumeId={resumeId} jdId={jdId} />}
       {jdId && job.status === 'ready' && <QuestionsCoach jdId={jdId} />}
+      {jdId && job.status === 'ready' && (
+        <CompanyResearch
+          role={job.analysis.role_title}
+          research={company}
+          onChange={setCompany}
+          include={whyUs}
+          onIncludeChange={setWhyUs}
+        />
+      )}
 
       {fits.length > 0 && (
         <section className="card space-y-3 p-5">

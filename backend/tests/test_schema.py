@@ -20,6 +20,7 @@ EXPECTED_TABLES = {
     "anon_spend",
     # Phase 9: résumé gap analysis (cached per résumé + job pair).
     "gap_analyses",
+    "company_research",
 }
 
 

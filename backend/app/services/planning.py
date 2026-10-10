@@ -307,6 +307,29 @@ def normalize_minutes(sections: list, duration_min: int) -> list:
     return sections
 
 
+WHY_US = "Why this company"
+WHY_US_MINUTES = 2
+
+
+def add_why_us(plan: PlanOut, questions: list[str]) -> None:
+    """A short company-fit section at the end, its minutes taken from the longest
+    section so the total stays the same (company research)."""
+    if not questions:
+        return
+    longest = max(plan.sections, key=lambda s: s.minutes)
+    if longest.minutes <= WHY_US_MINUTES:
+        return  # too short an interview to spare the time
+    longest.minutes -= WHY_US_MINUTES
+    plan.sections.append(
+        PlanSectionOut(
+            name=WHY_US,
+            module="behavioral",
+            minutes=WHY_US_MINUTES,
+            questions=questions[:2],
+        )
+    )
+
+
 def save_plan(session: Session, plan: PlanOut, role_title: str = "") -> None:
     """Replace the session's question rows and plan_json with `plan`."""
     db.session.execute(db.delete(Question).filter_by(session_id=session.id))

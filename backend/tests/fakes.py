@@ -190,6 +190,17 @@ DECODE = {
 }
 
 
+COMPANY = {
+    "company": "Acme Pay",
+    "summary": "Acme Pay builds billing software for small shops.",
+    "talking_points": ["Billing for small shops", "Open API for partners"],
+    "why_us_questions": [
+        "What draws you to building billing tools for small shops?",
+        "How would you help our partner API grow?",
+    ],
+}
+
+
 class FakeFire:
     """Answers by prompt type; interviewer turns come from `turns` (else next_question)."""
 
@@ -214,6 +225,7 @@ class FakeFire:
         self.decode: dict = DECODE
         self.reverse_candidate: dict = REVERSE_CANDIDATE
         self.gaps: dict = GAPS
+        self.company: dict = COMPANY
         self.next_round: dict | Exception = {
             "questions": [
                 {
@@ -311,6 +323,8 @@ class FakeFire:
                 ],
                 "summary": "Ask about the work, not perks.",
             }
+        elif 'Help them prepare for "Why do you want to work here?"' in prompt:
+            body = self.company
         elif "Compare a candidate's résumé with a job description" in prompt:
             body = self.gaps
         elif "Create a realistic job candidate" in prompt:

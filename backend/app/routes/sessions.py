@@ -5,7 +5,7 @@ from flask_jwt_extended import jwt_required
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..extensions import db
-from ..models import Answer, Session, User
+from ..models import Answer, CompanyResearch, Session, User
 from ..services import interviewer, limits, planning, practice, pressure, voice
 from ..services.transcription import TranscriptionError, transcribe
 from ..services.timer import is_paused, timer_state
@@ -31,6 +31,8 @@ class CreateBody(BaseModel):
     focus: str = Field(default=planning.MIXED, max_length=40)
     # 0 = off; 1–5 = pressure mode (see services/pressure.py).
     pressure_level: int = Field(default=0, ge=0, le=5)
+    # From POST /api/company/research: adds a "Why this company" section.
+    company_research_id: int | None = None
 
 
 class PlanSectionIn(BaseModel):
@@ -170,6 +172,13 @@ def create():
         user_id, resume, analysis, body.duration_min, body.difficulty, body.focus
     )
     rubric = planning.build_rubric(user_id, analysis, body.difficulty, body.focus)
+    research = (
+        db.session.get(CompanyResearch, body.company_research_id)
+        if body.company_research_id
+        else None
+    )
+    if research is not None:
+        planning.add_why_us(plan, research.result_json["why_us_questions"])
 
     summary = planning.analysis_summary(analysis)
     session = Session(
@@ -188,6 +197,16 @@ def create():
             "jd_analysis_id": analysis.id,
             "focus": body.focus,
             **({"pressure_start": body.pressure_level} if body.pressure_level else {}),
+            **(
+                {
+                    "company": {
+                        k: research.result_json[k]
+                        for k in ("company", "summary", "talking_points")
+                    }
+                }
+                if research is not None
+                else {}
+            ),
         },
     )
     db.session.add(session)
