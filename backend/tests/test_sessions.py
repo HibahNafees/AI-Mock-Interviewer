@@ -283,3 +283,6 @@ def test_a_repeated_follow_up_moves_on_instead(client, auth, planned, fire):
     second = answer(client, auth, sid, "It was a team effort.").get_json()["turn"]
     assert second["action"] == "next_question"
     assert second["message"].endswith("How would you design a rate limiter?")
+    # The interviewer is shown the follow-ups it already asked (T-70).
+    prompt = [c["prompt"] for c in fire.calls if "You just asked" in c["prompt"]][-1]
+    assert 'Follow-ups you already asked on this question: ["Thanks. What was' in prompt

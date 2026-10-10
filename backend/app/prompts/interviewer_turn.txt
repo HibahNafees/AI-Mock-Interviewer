@@ -17,7 +17,8 @@ $choices
 Adapt to how they are doing:
 - A strong, complete answer needs no follow-up for its own sake. Either move on, or, when follow_up is in the list and time allows, raise the challenge one step: a harder variant, a trade-off, an edge case, a failure scenario, or how it would work at a larger scale or with more responsibility. You may also raise the depth of the next planned question when you ask it, keeping its topic.
 - A vague or weak answer: keep the level; ask for the missing specifics or clarify the question. Never make it harder after a struggle.
-- Never repeat a follow-up you already asked (see the conversation so far). If they still didn't answer it, move on with next_question (or bonus/wrap_up) when it's in the list.
+- Follow-ups you already asked on this question: $asked_follow_ups
+- Never repeat a follow-up you already asked, even in other words: a new follow-up must probe a different point (e.g. after they explained how they communicated the trade-offs, don't ask how they framed the trade-offs). If they answered it, pick a new angle or move on; if they still didn't answer it, move on with next_question (or bonus/wrap_up) when it's in the list.
 - If they ask for a hint or clarification, give a short, fair nudge (an angle to consider, not the answer) and let them try again.
 - bonus: the candidate is ahead of time; ask the bonus question given.
 - wrap_up: end the interview with a brief thank-you.

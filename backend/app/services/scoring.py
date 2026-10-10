@@ -143,10 +143,19 @@ SMALL_TALK = frozenset(
 )
 NOT_ANSWERED = (
     "This didn't answer the question{what}, so it scores 1. Answer the question "
-    "itself next time; small talk is fine at the start, before the first question."
+    "itself next time"
+)
+SMALL_TALK_NOTE = "; small talk is fine at the start, before the first question."
+# The scorer's guard (T-61) catches off-topic answers, not greetings (T-71).
+OFF_TOPIC_NOTE = (
+    ": if you're unsure what it's asking, ask the interviewer to clarify or "
+    "for a hint."
 )
 # Share of the scorer's evidence quote that must really be in the answer.
 QUOTE_MATCH = 0.6
+RESULT_POINT_RE = re.compile(
+    r"\b(results?|outcomes?|impact|metrics?|measurable|quantif)", re.I
+)
 TOO_SHORT = (
     "This answer was too short to score ({n} words). Answer with one specific "
     "example: the situation, what you did, and the result."
@@ -167,6 +176,8 @@ class WeakMoment(BaseModel):
 class MissingPoint(BaseModel):
     point: str = Field(min_length=1, max_length=300)
     covered: bool
+    # The candidate's words that cover it; checked against the answers (T-68).
+    evidence: str | None = Field(default=None, max_length=600)
 
 
 class Star(BaseModel):
@@ -175,6 +186,8 @@ class Star(BaseModel):
     action: bool
     result: bool
     note: str = Field(default="", max_length=300)
+    # Where the candidate says how it turned out; checked against the answers.
+    result_quote: str | None = Field(default=None, max_length=600)
 
 
 class Change(BaseModel):
@@ -593,6 +606,23 @@ def quote_found(quote: str, answers: list[str]) -> bool:
     return sum(w in said for w in quoted) / len(quoted) >= QUOTE_MATCH
 
 
+def verify_coverage(out: ScoreOut, answers: list[str]) -> None:
+    """Decide "covered" and the STAR result from the quoted words, not the model's
+    yes/no: it marked every point uncovered and every result missing, even
+    "zero double refunds since launch" (T-68). A quote that isn't in the answers
+    counts as not given; with no quote, the model's own answer stands."""
+    for m in out.missing_points:
+        if m.evidence:
+            m.covered = quote_found(m.evidence, answers)
+    if out.star is not None and out.star.result_quote:
+        out.star.result = quote_found(out.star.result_quote, answers)
+        if out.star.result:
+            # "Add measurable outcomes" next to a quoted result contradicts it.
+            for m in out.missing_points:
+                if not m.covered and not m.evidence and RESULT_POINT_RE.search(m.point):
+                    m.covered, m.evidence = True, out.star.result_quote
+
+
 def _too_short(
     session: Session,
     answer_id: int,
@@ -695,7 +725,7 @@ def evaluate(
             budget_sec,
             resume_text,
             question or exchange[0]["interviewer"],
-            summary=NOT_ANSWERED.format(what=" (it was small talk)"),
+            summary=NOT_ANSWERED.format(what=" (it was small talk)") + SMALL_TALK_NOTE,
             comment="The answer didn't address the question.",
             module=module,
         )
@@ -755,10 +785,11 @@ def evaluate(
             budget_sec,
             resume_text,
             question or exchange[0]["interviewer"],
-            summary=NOT_ANSWERED.format(what=""),
+            summary=NOT_ANSWERED.format(what="") + OFF_TOPIC_NOTE,
             comment="The answer didn't address the question.",
             module=module,
         )
+    verify_coverage(out, answers)
     score, rows = weighted_score(out.criteria, rubric)
     relevance = next(
         (r["score"] for r in rows if _norm(r["name"]) == "relevance"), None

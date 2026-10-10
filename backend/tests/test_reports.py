@@ -933,6 +933,7 @@ def test_small_talk_answer_scores_1_without_a_fire_call(client, auth, planned, f
     )
     assert e["score"] == 1
     assert "didn't answer the question" in e["summary"]
+    assert "small talk is fine" in e["summary"]
     assert all(c["score"] == 1 for c in e["criteria"])
     assert not any("Score one question" in c["prompt"] for c in fire.calls)
 
@@ -943,10 +944,27 @@ def test_scorer_flagged_non_answer_scores_1(client, auth, planned, fire):
         client, auth, planned["id"], "I really enjoy hiking on weekends with my dog."
     )
     assert e["score"] == 1 and e["strengths"] == []
+    # An off-topic answer isn't small talk (T-71).
+    assert "small talk" not in e["summary"] and "clarify" in e["summary"]
     prompt = next(
         c["prompt"] for c in fire.calls if "Score one question" in c["prompt"]
     )
     assert '"answers_question"' in prompt
+
+
+def test_score_prompt_does_not_anchor_on_false_or_null(client, auth, planned, fire):
+    # T-68: the example JSON said "result": false / "covered": false and the model
+    # copied it (0 of 30 results, 0 of 429 points ever credited). T-69: role
+    # criteria came back null on questions that test them.
+    _report_for(
+        client, auth, planned["id"], "My answer is about the billing API at Acme work."
+    )
+    prompt = next(
+        c["prompt"] for c in fire.calls if "Score one question" in c["prompt"]
+    )
+    assert '"result": true | false' in prompt and '"covered": true | false' in prompt
+    assert "zero double refunds" in prompt
+    assert "tests SQL" in prompt
 
 
 def test_invented_evidence_quote_scores_1(client, auth, planned, fire):
@@ -971,3 +989,39 @@ def test_real_evidence_quote_keeps_the_score(client, auth, planned, fire):
         client, auth, planned["id"], "My answer is about the billing API at Acme work."
     )
     assert e["score"] > 1
+
+
+def test_coverage_and_result_follow_the_quoted_evidence(client, auth, planned, fire):
+    # T-68: the model said "not covered" / "no result" while quoting the words.
+    fire.scores = [
+        {
+            **SCORE,
+            "missing_points": [
+                {
+                    "point": "A result",
+                    "covered": False,
+                    "evidence": "zero double refunds since launch",
+                },
+                {
+                    "point": "Their role",
+                    "covered": True,
+                    "evidence": "I led a team of forty people",
+                },
+                {"point": "Trade-offs", "covered": False, "evidence": None},
+                {"point": "Measurable outcomes", "covered": False, "evidence": None},
+            ],
+            "star": {
+                **SCORE["star"],
+                "result": False,
+                "result_quote": "we have had zero double refunds since launch",
+            },
+        }
+    ]
+    e = _report_for(
+        client,
+        auth,
+        planned["id"],
+        "I built the refunds API at Acme and we have had zero double refunds since launch.",
+    )
+    assert [m["covered"] for m in e["missing_points"]] == [True, False, False, True]
+    assert e["star"]["result"] is True

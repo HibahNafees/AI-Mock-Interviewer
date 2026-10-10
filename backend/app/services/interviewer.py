@@ -591,6 +591,12 @@ def take_turn(
                 "interviewer_turn",
                 persona=_persona(session, current.section),
                 history=_history(asked[:-1]),
+                asked_follow_ups=[
+                    q.asked_text or q.text
+                    for q in asked
+                    if q.follow_up_of_id == (current.follow_up_of_id or current.id)
+                ]
+                or "none",
                 section=timer.section or "",
                 nudges=(
                     nudges(timer, opts, root_budget, answer_sec)
