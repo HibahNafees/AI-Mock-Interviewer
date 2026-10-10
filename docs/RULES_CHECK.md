@@ -91,3 +91,20 @@ Other areas unchanged since the previous check (✅). **Open from this check:** 
 
 Live check (~$0.019): decoder quotes verified and "stakeholders" ×4 counted exactly; pressure level 3 announced 60 s limits and pushed back on a vague answer, easing to 1 removed the clock, composure 111%; debrief scored, predicted five next-round questions and built a practice interview; reverse candidate kept its profile hidden, backed down when probed, declined an illegal question, and the verdict flagged it.
 Other areas unchanged (✅). **Open from this check:** none.
+
+## Check after Phase 9 (2026-10-10) — extras
+
+| Area | Status | Evidence / gap |
+|---|---|---|
+| Interview preparation | ✅ | Résumé gap analysis keeps "covered" only when it quotes the résumé and words gaps neutrally ("not on your résumé" ≠ missing skill). Company research reads only the company's own public page (untrusted data), and its "Why us?" questions join the plan as a 2-minute section the user can untick; section minutes still sum to the duration. |
+| Interview modes | ✅ | Coding and system design are planned only when the job analysis lists them. Panel (2–3 interviewers, one per section) and negotiation follow their own rules; pressure is refused with panel or negotiation. Peer practice stays unoffered. |
+| During the interview | ✅ | Code editor and whiteboard appear only in their sections and their contents reach the interviewer, which probes edge cases, complexity, bottlenecks and failures without giving the solution. Panel interviewers introduce themselves and hand over; the lead signs off. Hint, skip, pause, repeat and Try again work in every format; Try again was missing the editor/whiteboard (T-53, fixed). |
+| Interviewer personalities | ✅ | Persona applies to every panelist and sets the recruiter's firmness in a negotiation; the rubric and scorer are the same whatever the persona. |
+| Scoring | ✅ | Code and whiteboard text are judged with the explanation; a code-only answer is still scored (the code counts toward the length guard). Negotiation uses a fixed, visible rubric (anchoring, justification, composure, clarity) and verdicts worded for a negotiation. Body language never reaches the scorer or Fire. |
+| Answer coaching | ✅ | Questions-for-them coach rates the candidate's own questions with a better version; thank-you email uses placeholders for anything unknown; cheat sheet uses only the user's own stories, numbers and weak spots. |
+| Final report | ✅ | Shows code and sketches under the answers, a negotiation header with offer and target, and body language only after 8+ camera samples, labeled as a rough guide and not part of the score. |
+| Safety and privacy | ✅ | Camera is off by default; MediaPipe runs in the browser and only percentages per answer are saved; whiteboard drawings never leave the browser (text description only). Company research blocks private, loopback and link-local addresses, non-standard ports, credentials in URLs and unchecked redirects (SSRF), and caps size and time. Recruiter keeps its room to move private. Still planned: purge expired documents (Phase 10). |
+| Live behavior with Fire | ⏳ | Built and tested with Fire mocked, plus a real-browser check without Fire (panel labels, Monaco, Excalidraw, camera + MediaPipe, code and sketch sent with answers). Not yet checked live: panel handovers, recruiter behavior in a negotiation, coding/design follow-ups and scoring, company research on a real site. |
+
+Browser check found and fixed T-51 (Monaco's CDN loader broke the whiteboard) and T-52 (body-language sampling could freeze slow devices).
+Other areas unchanged (✅). **Open from this check:** the live check above, pending approval for Fire spend.
