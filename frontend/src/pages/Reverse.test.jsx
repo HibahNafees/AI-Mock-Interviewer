@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -99,5 +99,46 @@ describe('reverse mode', () => {
     })
     renderAt('/reverse')
     expect(await screen.findByText(/Add a job description first/)).toBeInTheDocument()
+  })
+
+  it('offers a custom length', async () => {
+    const calls = respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/documents?kind=job_description': [200, { documents: [{ id: 2, title: 'Backend job' }] }],
+      'POST /api/reverse': [201, { reverse: OPEN }],
+      'GET /api/reverse/9': [200, { reverse: OPEN }],
+    })
+    renderAt('/reverse')
+    await userEvent.click(await screen.findByRole('radio', { name: 'Custom' }))
+    const slider = screen.getByLabelText('Custom length in minutes')
+    expect(slider).toHaveAttribute('min', '5')
+    expect(slider).toHaveAttribute('max', '30')
+    fireEvent.change(slider, { target: { value: '15' } })
+    expect(screen.getByText('15 minutes')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Meet the candidate' }))
+    await screen.findByText('Led the payments API rewrite')
+    expect(JSON.parse(calls.find((c) => c.key === 'POST /api/reverse').opts.body).duration_min).toBe(15)
+  })
+
+  it('counts down and nudges a decision when time is up', async () => {
+    const started = new Date(Date.now() - 3 * 60_000).toISOString()
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/reverse/9': [200, { reverse: { ...OPEN, started_at: started, duration_min: 15 } }],
+    })
+    renderAt('/reverse/9')
+    expect(await screen.findByLabelText('Time left')).toHaveTextContent('12 min left of 15')
+    expect(screen.queryByText("Time's up.")).not.toBeInTheDocument()
+  })
+
+  it("says when time's up", async () => {
+    const started = new Date(Date.now() - 20 * 60_000).toISOString()
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/reverse/9': [200, { reverse: { ...OPEN, started_at: started, duration_min: 10, transcript: [QA] } }],
+    })
+    renderAt('/reverse/9')
+    expect(await screen.findByText("Time's up.")).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Make your decision' })).toBeEnabled()
   })
 })

@@ -13,6 +13,15 @@ const PROFILES = [
   ['exaggerating', 'Exaggerates their résumé'],
 ]
 const EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a' }
+// Matches the backend's limits for a reverse interview.
+const MIN_MINUTES = 5
+const MAX_MINUTES = 30
+
+function minutesLeft(v, now) {
+  if (!v.started_at) return null
+  const end = new Date(v.started_at).getTime() + v.duration_min * 60_000
+  return Math.max(0, Math.ceil((end - now) / 60_000))
+}
 
 function Pills({ name, options, value, onChange }) {
   return (
@@ -43,6 +52,7 @@ export function ReverseSetup() {
   const [jdId, setJdId] = useState('')
   const [profile, setProfile] = useState('surprise')
   const [duration, setDuration] = useState(10)
+  const [custom, setCustom] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -113,7 +123,29 @@ export function ReverseSetup() {
           </div>
           <div className="space-y-2">
             <p className="text-sm font-medium text-slate-700">Length</p>
-            <Pills name="Length" options={[[10, '10 min'], [20, '20 min']]} value={duration} onChange={setDuration} />
+            <Pills
+              name="Length"
+              options={[[10, '10 min'], [20, '20 min'], ['custom', 'Custom']]}
+              value={custom ? 'custom' : duration}
+              onChange={(v) => {
+                setCustom(v === 'custom')
+                if (v !== 'custom') setDuration(v)
+              }}
+            />
+            {custom && (
+              <label className="flex items-center gap-3 text-sm">
+                <input
+                  type="range"
+                  min={MIN_MINUTES}
+                  max={MAX_MINUTES}
+                  value={duration}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  aria-label="Custom length in minutes"
+                  className="accent-brand-600"
+                />
+                <span className="font-semibold tabular-nums">{duration} minutes</span>
+              </label>
+            )}
           </div>
           {error && (
             <p role="alert" className="text-sm text-red-600">
@@ -250,6 +282,12 @@ export default function Reverse() {
   const [error, setError] = useState('')
   const bottom = useRef(null)
   const busy = phase !== 'idle'
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 15_000)
+    return () => clearInterval(t)
+  }, [])
 
   useEffect(() => {
     api(`/reverse/${id}`)
@@ -305,6 +343,7 @@ export default function Reverse() {
   if (!v) return error ? <p role="alert" className="text-red-600">{error}</p> : <p className="text-slate-500">Loading…</p>
   const asked = v.transcript.length
   const open = v.status === 'active'
+  const left = open ? minutesLeft(v, now) : null
 
   return (
     <section className="space-y-6">
@@ -326,9 +365,19 @@ export default function Reverse() {
           </ul>
         </div>
         {open && (
-          <p className="chip bg-navy-50 text-navy-700">
-            {asked} / {v.max_questions} questions
-          </p>
+          <div className="flex flex-col items-end gap-2">
+            <p className="chip bg-navy-50 text-navy-700">
+              {asked} / {v.max_questions} questions
+            </p>
+            {left != null && (
+              <p
+                aria-label="Time left"
+                className={`chip ${left <= 1 ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-600'}`}
+              >
+                {left > 0 ? `${left} min left of ${v.duration_min}` : "Time's up"}
+              </p>
+            )}
+          </div>
         )}
       </div>
 
@@ -363,6 +412,12 @@ export default function Reverse() {
       )}
       <div ref={bottom} />
 
+      {open && !deciding && left === 0 && (
+        <p className="rounded-2xl bg-accent-50 p-4 text-sm text-accent-700 ring-1 ring-accent-200">
+          <span className="font-bold">Time's up.</span> In a real interview you'd wrap up now:
+          make your decision below (you can still ask one last question).
+        </p>
+      )}
       {open && !deciding && (
         <div className="card space-y-3 p-5">
           {mode === 'voice' ? (
