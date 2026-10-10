@@ -496,6 +496,74 @@ function QuestionCard({ q, index, sessionId, onAttempt, failed }) {
   )
 }
 
+function ThankYou({ sessionId }) {
+  const [email, setEmail] = useState(null)
+  const [body, setBody] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function draft() {
+    setError('')
+    setBusy(true)
+    try {
+      const { email: e } = await api(`/sessions/${sessionId}/thank-you`, { method: 'POST' })
+      setEmail(e)
+      setBody(e.body)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function copy() {
+    const text = `Subject: ${email.subject}\n\n${body}`
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+    } catch {
+      window.prompt('Copy your email', text)
+    }
+  }
+
+  if (!email) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <button type="button" onClick={draft} disabled={busy} className="btn-secondary">
+          <span aria-hidden="true">✉️</span>
+          {busy ? 'Drafting…' : 'Thank-you email'}
+        </button>
+        <span className="text-xs text-slate-500">A short draft to send after a real interview.</span>
+        {error && (
+          <p role="alert" className="basis-full text-sm text-red-600">
+            {error}
+          </p>
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="card space-y-3 p-6 print:hidden">
+      <h2 className="text-lg font-bold">Thank-you email</h2>
+      <p className="text-sm">
+        <span className="font-semibold">Subject:</span> {email.subject}
+      </p>
+      <textarea
+        aria-label="Email body"
+        rows={9}
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        className="field text-sm"
+      />
+      <p className="text-xs text-slate-500">Fill in anything in [brackets] before sending.</p>
+      <button type="button" onClick={copy} className="btn-primary text-sm">
+        {copied ? 'Copied' : 'Copy email'}
+      </button>
+    </div>
+  )
+}
+
 function NextRound({ debrief }) {
   const navigate = useNavigate()
   const [next, setNext] = useState(debrief.next_round)
@@ -798,6 +866,11 @@ export default function Report() {
           <Link to={`/interview/${id}`} className="btn-secondary">
             Transcript
           </Link>
+          {report.status === 'ready' && (
+            <Link to={`/report/${id}/cheatsheet`} className="btn-secondary">
+              <span aria-hidden="true">📄</span>Cheat sheet
+            </Link>
+          )}
           <button type="button" onClick={() => window.print()} className="btn-secondary">
             Print / save as PDF
           </button>
@@ -831,6 +904,7 @@ export default function Report() {
       {total === 0 && !generating && <p className="text-slate-600">You didn't answer any questions, so there's nothing to score.</p>}
 
       {report.debrief && <NoRecordingsNotice />}
+      {report.status === 'ready' && total > 0 && <ThankYou sessionId={report.session_id} />}
       {report.status === 'ready' && total > 0 && <Summary report={report} />}
       {report.debrief && report.status === 'ready' && <NextRound debrief={report.debrief} />}
 

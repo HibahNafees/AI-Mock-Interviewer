@@ -235,6 +235,19 @@ describe('report', () => {
     expect(screen.getByText('What would my first project be?')).toBeInTheDocument()
   })
 
+  it('drafts a thank-you email to edit and copy', async () => {
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7/report': [200, { report: READY }],
+      'POST /api/sessions/7/thank-you': [200, { email: { subject: 'Thank you for today', body: "Hi [Interviewer's name],\nThanks!" } }],
+    })
+    renderAt('/report/7')
+    await userEvent.click(await screen.findByRole('button', { name: 'Thank-you email' }))
+    expect(await screen.findByText('Thank you for today')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email body')).toHaveValue("Hi [Interviewer's name],\nThanks!")
+    expect(screen.getByRole('link', { name: 'Cheat sheet' })).toHaveAttribute('href', '/report/7/cheatsheet')
+  })
+
   it('offers to finish a partly failed report', async () => {
     let posted = 0
     respond({

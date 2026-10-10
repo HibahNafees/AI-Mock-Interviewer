@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
+import CheatSheet from './pages/CheatSheet'
 import Dashboard from './pages/Dashboard'
 import Debrief from './pages/Debrief'
 import Decoder from './pages/Decoder'
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="setup" element={<Setup />} />
         <Route path="interview/:id" element={<Interview />} />
         <Route path="report/:id" element={<Report />} />
+        <Route path="report/:id/cheatsheet" element={<CheatSheet />} />
         <Route path="stories" element={<Stories />} />
         <Route path="decoder" element={<Decoder />} />
         <Route path="decoder/:token" element={<Decoder />} />

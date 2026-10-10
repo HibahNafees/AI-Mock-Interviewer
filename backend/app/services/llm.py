@@ -21,9 +21,12 @@ FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$")
 M = TypeVar("M", bound=BaseModel)
 
 
-def render(name: str, **values: object) -> str:
-    """Fill prompts/<name>.txt. Templates use $placeholders so JSON braces are safe."""
-    text = (PROMPTS_DIR / f"{name}.txt").read_text()
+def render(template: str, /, **values: object) -> str:
+    """Fill prompts/<template>.txt. Templates use $placeholders so JSON braces are safe.
+
+    `template` is positional-only, so a prompt may use any placeholder name
+    (e.g. $name) without clashing with it."""
+    text = (PROMPTS_DIR / f"{template}.txt").read_text()
     return Template(text).substitute(
         {k: v if isinstance(v, str) else json.dumps(v) for k, v in values.items()}
     )

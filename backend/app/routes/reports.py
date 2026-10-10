@@ -4,7 +4,7 @@ from pydantic import ValidationError
 
 from ..extensions import db
 from ..models import Answer, Question
-from ..services import limits, reports, scoring
+from ..services import afterwards, limits, reports, scoring
 from .common import current_user_id, first_error
 from .sessions import TurnBody, owned_session
 
@@ -82,3 +82,30 @@ def retry(session_id: int, question_id: int):
         ),
         201,
     )
+
+
+@bp.get("/<int:session_id>/cheatsheet")
+@jwt_required()
+def cheat_sheet(session_id: int):
+    """One-page prep sheet from the user's own stories, numbers and weak spots."""
+    session = owned_session(session_id)
+    if session is None:
+        return jsonify(error="Interview not found"), 404
+    report = reports.get_report(session)
+    if report is None or report.status != "ready":
+        return jsonify(error="The report isn't ready yet"), 409
+    return jsonify(sheet=afterwards.cheat_sheet(session, report))
+
+
+@bp.post("/<int:session_id>/thank-you")
+@jwt_required()
+def thank_you(session_id: int):
+    """A drafted thank-you email (one Fire call, then kept)."""
+    session = owned_session(session_id)
+    if session is None:
+        return jsonify(error="Interview not found"), 404
+    report = reports.get_report(session)
+    if report is None or report.status != "ready":
+        return jsonify(error="The report isn't ready yet"), 409
+    limits.check_budget()
+    return jsonify(email=afterwards.thank_you(current_user_id(), session, report))

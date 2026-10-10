@@ -272,6 +272,11 @@ class FakeFire:
             )
             if isinstance(body, Exception):
                 raise body
+        elif "Draft a short thank-you email" in prompt:
+            body = {
+                "subject": "Thank you for today",
+                "body": "Hi [Interviewer's name],\n\nThank you for talking with me about the backend role and the billing API work. I enjoyed it.\n\nBest,\nAda",
+            }
         elif "prepare smart questions to ask the interviewer" in prompt:
             body = {
                 "questions": [
