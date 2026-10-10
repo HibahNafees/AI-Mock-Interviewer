@@ -526,6 +526,30 @@ function Summary({ report }) {
         </div>
       )}
 
+      {report.pressure && (
+        <div className="card flex flex-wrap items-center gap-5 p-6">
+          <span aria-hidden="true" className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-brand-100 to-accent-200 text-2xl">
+            🔥
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="eyebrow">Pressure interview</p>
+            <h2 className="text-lg font-bold">
+              Composure:{' '}
+              {report.pressure.composure?.pct != null ? `${report.pressure.composure.pct}%` : 'not yet'}
+            </h2>
+            <p className="text-sm text-slate-600">{report.pressure.composure?.label}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Started at level {report.pressure.start_level}
+              {report.pressure.level !== report.pressure.start_level &&
+                `, eased to ${report.pressure.level ? `level ${report.pressure.level}` : 'off'}`}
+              {report.pressure.composure?.baseline != null &&
+                ` · compared with your normal ${report.pressure.composure.same_job ? 'interviews for this job' : 'interviews'} (${report.pressure.composure.baseline.toFixed(1)} / 5)`}
+              . Scores use the same standards with or without pressure.
+            </p>
+          </div>
+        </div>
+      )}
+
       {report.competencies?.length > 0 && (
         <div className="card p-6">
           <h2 className="text-lg font-bold">Competencies</h2>

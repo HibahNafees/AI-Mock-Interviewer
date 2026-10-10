@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..extensions import db
 from ..models import Answer, Session, User
-from ..services import interviewer, limits, planning, practice, voice
+from ..services import interviewer, limits, planning, practice, pressure, voice
 from ..services.transcription import TranscriptionError, transcribe
 from ..services.timer import is_paused, timer_state
 from .common import current_user_id, first_error
@@ -28,6 +28,8 @@ class CreateBody(BaseModel):
     difficulty: Literal["entry", "mid", "senior"] = "mid"
     persona: Literal["friendly", "neutral", "tough"] = "neutral"
     focus: str = Field(default=planning.MIXED, max_length=40)
+    # 0 = off; 1–5 = pressure mode (see services/pressure.py).
+    pressure_level: int = Field(default=0, ge=0, le=5)
 
 
 class PlanSectionIn(BaseModel):
@@ -131,6 +133,7 @@ def session_dict(session: Session, detail: bool = False) -> dict:
         data["plan"] = planning.plan_view(session)
         data["rubric"] = session.rubric_json
         data["voice"] = voice.info(session)
+        data["pressure"] = pressure.info(session)
         data["transcript"] = _transcript(session)
         data["timer"] = (
             timer_state(session, interviewer.asked_questions(session)).to_dict()
@@ -172,7 +175,8 @@ def create():
         user_id=user_id,
         resume_id=resume.id,
         jd_id=jd.id,
-        mode="standard",
+        mode="pressure" if body.pressure_level else "standard",
+        pressure_level=body.pressure_level or None,
         duration_min=body.duration_min,
         difficulty=body.difficulty,
         persona=body.persona,
@@ -182,6 +186,7 @@ def create():
             "analysis": summary,
             "jd_analysis_id": analysis.id,
             "focus": body.focus,
+            **({"pressure_start": body.pressure_level} if body.pressure_level else {}),
         },
     )
     db.session.add(session)
@@ -410,6 +415,27 @@ def resume(session_id: int):
     if err:
         return err
     interviewer.resume(session)
+    return jsonify(session=session_dict(session, detail=True))
+
+
+class PressureBody(BaseModel):
+    level: int = Field(ge=0, le=5)
+
+
+@bp.post("/<int:session_id>/pressure")
+@jwt_required()
+def ease_pressure(session_id: int):
+    """Lower or stop the pressure at any time (it can't be raised mid-interview)."""
+    session, err = _live(session_id, allow_paused=True)
+    if err:
+        return err
+    if session.mode != "pressure":
+        return jsonify(error="This isn't a pressure interview"), 409
+    try:
+        body = PressureBody.model_validate(request.get_json(silent=True) or {})
+    except ValidationError as e:
+        return jsonify(error=first_error(e)), 400
+    pressure.lower(session, body.level)
     return jsonify(session=session_dict(session, detail=True))
 
 

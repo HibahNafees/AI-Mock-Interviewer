@@ -118,6 +118,7 @@ describe('setup', () => {
       difficulty: 'mid',
       persona: 'tough',
       focus: 'technical',
+      pressure_level: 0,
     })
   })
 })

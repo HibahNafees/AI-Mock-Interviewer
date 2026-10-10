@@ -19,6 +19,7 @@ from ..models.base import utcnow
 from .fire import FireError
 from .limits import LimitReached
 from .llm import chat_json, render
+from . import pressure
 from .timer import SECTION_NUDGE_SEC, WRAP_UP_SEC, TimerState, is_paused, timer_state
 
 log = logging.getLogger(__name__)
@@ -309,6 +310,7 @@ def start(session: Session, user_name: str) -> Question:
                 (INTERVIEWER, opening),
                 (INTERVIEWER, _entering(session, first, None)),
                 (_speaker_of(session, first), first.text),
+                *_time_note(session, first),
             ]
         ),
     )
@@ -494,7 +496,11 @@ def take_turn(
                 persona=PERSONAS.get(session.persona or "neutral", PERSONAS["neutral"]),
                 history=_history(asked[:-1]),
                 section=timer.section or "",
-                nudges=nudges(timer, opts, root_budget, answer_sec) or ["none"],
+                nudges=(
+                    nudges(timer, opts, root_budget, answer_sec)
+                    + pressure.notes(session.pressure_level or 0)
+                )
+                or ["none"],
                 **common,
             )
         schema = TurnOut if scenario is None else RoleplayTurnOut
@@ -564,6 +570,8 @@ def take_turn(
         elif out.action == "wrap_up" and not fell_back and list(opts) != ["wrap_up"]:
             # The app's natural sign-off, not the model's one-line thank-you.
             parts = [(INTERVIEWER, sign_off())]
+    if out.action in ("next_question", "bonus"):
+        parts += _time_note(session, opts.get(out.action))
     segments = _segments(parts)
     out.message = " ".join(s["text"] for s in segments)
 
@@ -671,6 +679,7 @@ def _after_icebreaker(
             (INTERVIEWER, INTO_PLAN.get(session.persona or "neutral", "")),
             (INTERVIEWER, _entering(session, first, ice)),
             (_speaker_of(session, first), first.text),
+            *_time_note(session, first),
         ]
     )
     _save_answer(session, ice, text, duration_ms, input_mode)
@@ -825,6 +834,7 @@ def skip(session: Session) -> dict:
         parts += [
             (INTERVIEWER, _entering(session, nxt, current)),
             (_speaker_of(session, nxt), nxt.text),
+            *_time_note(session, nxt),
         ]
         segments = _segments(parts)
         _ask(nxt, segments)
@@ -888,6 +898,17 @@ def _stem(word: str) -> str:
         if word.endswith(end) and len(word) - len(end) >= 4:
             return word[: -len(end)]
     return word
+
+
+def _time_note(session: Session, question: Question | None) -> list[tuple[str, str]]:
+    """Pressure mode: announce the answer time limit with each new main question
+    (not in a role-play, where it would break the conversation)."""
+    line = (
+        pressure.time_line(session.pressure_level) if session.mode == "pressure" else ""
+    )
+    if not line or question is None or scenario_of(session, question.section):
+        return []
+    return [(INTERVIEWER, line)]
 
 
 def _same_question(a: str, b: str) -> bool:

@@ -21,7 +21,8 @@ function clock(ms) {
 
 // Records one answer. Stops on "Done", after a few seconds of silence, or at 5 minutes,
 // then calls onRecorded(blob, durationMs). The clip lives only in memory.
-export default function Recorder({ onRecorded, onStart, disabled, autoStartKey = 0 }) {
+// limitMs: pressure mode's answer time limit; the clip is sent the moment it's up.
+export default function Recorder({ onRecorded, onStart, disabled, autoStartKey = 0, limitMs = null }) {
   const [state, setState] = useState('idle') // idle | starting | recording | pending
   const [sendIn, setSendIn] = useState(0)
   const pending = useRef(null) // { blob, duration, timer } after an auto-stop
@@ -180,7 +181,8 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
       setElapsed(ms)
       setLevel(lvl)
       setStopIn(left !== null && left <= COUNTDOWN_FROM_MS ? left : null)
-      if (left === 0 || ms >= MAX_ANSWER_MS) finish(true, true)
+      if (limitMs && ms >= limitMs) finish(true)
+      else if (left === 0 || ms >= MAX_ANSWER_MS) finish(true, true)
     }, 100)
 
     recorder.start(1000)
@@ -246,7 +248,7 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
           <span aria-hidden="true">✕</span>Cancel
         </button>
         <span aria-label="Recording time" className="rounded-full bg-slate-100 px-3 py-1 font-mono text-sm tabular-nums text-slate-700">
-          {clock(elapsed)} / {clock(MAX_ANSWER_MS)}
+          {clock(elapsed)} / {clock(limitMs ?? MAX_ANSWER_MS)}
         </span>
         <span
           aria-hidden="true"

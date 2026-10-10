@@ -58,6 +58,7 @@ export default function Setup() {
   const [custom, setCustom] = useState(false)
   const [difficulty, setDifficulty] = useState('mid')
   const [persona, setPersona] = useState('neutral')
+  const [pressure, setPressure] = useState(0)
   const [focus, setFocus] = useState('mixed')
   const [startNow, setStartNow] = useState(false)
   const [answerMode, setAnswerMode] = useState(answerModePref)
@@ -97,6 +98,7 @@ export default function Setup() {
           difficulty,
           persona,
           focus: chosen,
+          pressure_level: pressure,
         },
       })
       setAnswerModePref(answerMode)
@@ -251,6 +253,30 @@ export default function Setup() {
           />
         </section>
       </div>
+
+      <section className="card space-y-3 p-5">
+        <h2 className="font-semibold text-slate-900">
+          <span aria-hidden="true">🔥 </span>Pressure
+        </h2>
+        <Choice
+          name="Pressure"
+          options={[
+            [0, 'Off'],
+            [1, '1 · Skeptical'],
+            [2, '2 · Pushback'],
+            [3, '3 · 60 s answers'],
+            [4, '4 · 45 s + curveballs'],
+            [5, '5 · 30 s, demanding'],
+          ]}
+          value={pressure}
+          onChange={setPressure}
+        />
+        <p className="text-sm text-slate-500">
+          {pressure === 0
+            ? 'A normal interview.'
+            : 'Practice staying composed: the interviewer gets tougher between answers (always respectful), and higher levels add answer time limits and curveballs. Scoring stays the same, and you can ease off or stop at any time. Your report shows a composure score.'}
+        </p>
+      </section>
 
       <div className="card grid gap-6 p-5 md:grid-cols-2">
         <section className="space-y-3">

@@ -104,6 +104,32 @@ function Transcript({ items, plan }) {
   )
 }
 
+// Countdown for a typed answer under a pressure-mode time limit.
+function TypedClock({ seconds, running, onTimeUp }) {
+  const [left, setLeft] = useState(seconds)
+  const fired = useRef(false)
+  useEffect(() => {
+    if (!running) return
+    const id = setInterval(() => setLeft((s) => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(id)
+  }, [running])
+  useEffect(() => {
+    if (left === 0 && !fired.current) {
+      fired.current = true
+      onTimeUp()
+    }
+  }, [left, onTimeUp])
+  return (
+    <p
+      role="timer"
+      aria-label="Time left for this answer"
+      className={`chip ${left <= 10 ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-600'}`}
+    >
+      {left > 0 ? `${left} s left` : "Time's up: sending what you have"}
+    </p>
+  )
+}
+
 function PlanStep({ session, setSession, onGreeting }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -210,6 +236,13 @@ function LiveStep({ session, setSession, greeting }) {
   const turns = session.transcript.length
   const roleplay = active ? scenarioFor(session.plan, session.timer?.section) : null
   const paused = Boolean(session.timer?.paused)
+  // Pressure mode's per-answer limit (not in small talk, role-plays or Q&A).
+  const answerLimit =
+    session.pressure?.time_limit_sec &&
+    !roleplay &&
+    !['Ice-breaker', 'Your questions'].includes(session.transcript.at(-1)?.section)
+      ? session.pressure.time_limit_sec
+      : null
   const current = session.transcript.at(-1)
   const hintUsed = Boolean(current?.hint)
   // Small talk and "any questions for me?" get no hints.
@@ -306,6 +339,20 @@ function LiveStep({ session, setSession, greeting }) {
     } catch (err) {
       setError(err.message)
     }
+  }
+
+  async function ease(level) {
+    setError('')
+    try {
+      setSession((await api(`/sessions/${session.id}/pressure`, { method: 'POST', body: { level } })).session)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  function timeUp() {
+    // Typed answer in pressure mode: send what's there when the time runs out.
+    if (text.trim() && !busy) sendTyped({ preventDefault() {} })
   }
 
   async function skip() {
@@ -416,6 +463,27 @@ function LiveStep({ session, setSession, greeting }) {
           steps, like you would at the end of a real interview. Or just say you have no questions.
         </p>
       )}
+      {active && session.pressure && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-gradient-to-r from-brand-50 to-accent-50 p-4 text-sm ring-1 ring-brand-200">
+          <span className="font-bold text-brand-800">
+            <span aria-hidden="true">🔥 </span>
+            {session.pressure.level ? `Pressure level ${session.pressure.level}` : 'Pressure stopped'}
+          </span>
+          {session.pressure.time_limit_sec && (
+            <span className="chip bg-white text-brand-700">{session.pressure.time_limit_sec} s per answer</span>
+          )}
+          {session.pressure.level > 0 && (
+            <span className="ml-auto flex gap-2">
+              <button type="button" onClick={() => ease(session.pressure.level - 1)} className="btn-secondary px-3 py-1">
+                Ease off
+              </button>
+              <button type="button" onClick={() => ease(0)} className="btn-secondary px-3 py-1">
+                Stop pressure
+              </button>
+            </span>
+          )}
+        </div>
+      )}
       {roleplay && (
         <p className="rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
           <span aria-hidden="true">🎭 </span>
@@ -481,6 +549,7 @@ function LiveStep({ session, setSession, greeting }) {
                 onStart={stopSpeaking}
                 disabled={busy}
                 autoStartKey={recordKey}
+                limitMs={answerLimit ? answerLimit * 1000 : null}
               />
               <p className="text-xs text-slate-500">
                 Recording starts by itself when the interviewer finishes the question.
@@ -488,6 +557,9 @@ function LiveStep({ session, setSession, greeting }) {
             </div>
           ) : (
             <form onSubmit={sendTyped} className="space-y-2">
+              {answerLimit && (
+                <TypedClock key={turns} seconds={answerLimit} running={!busy && !speaking} onTimeUp={timeUp} />
+              )}
               <textarea
                 aria-label="Your answer"
                 rows={5}

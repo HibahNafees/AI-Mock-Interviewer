@@ -408,3 +408,50 @@ describe('interview controls', () => {
     expect(await screen.findByRole('button', { name: 'Record answer' })).toBeInTheDocument()
   })
 })
+
+describe('pressure mode', () => {
+  const PRESSURED = { ...ACTIVE, pressure: { level: 3, start_level: 3, label: '60 s answers', time_limit_sec: 60 } }
+
+  it('shows the pressure and lets you ease off or stop it', async () => {
+    const calls = respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: PRESSURED }],
+      'POST /api/sessions/7/pressure': (opts) => {
+        const level = JSON.parse(opts.body).level
+        return [200, { session: { ...PRESSURED, pressure: { ...PRESSURED.pressure, level, time_limit_sec: level >= 3 ? 60 : null } } }]
+      },
+    })
+    renderInterview()
+    expect(await screen.findByText('Pressure level 3')).toBeInTheDocument()
+    expect(screen.getByText('60 s per answer')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Ease off' }))
+    expect(await screen.findByText('Pressure level 2')).toBeInTheDocument()
+    expect(screen.queryByText('60 s per answer')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Stop pressure' }))
+    expect(await screen.findByText('Pressure stopped')).toBeInTheDocument()
+    const sent = calls.filter((c) => c.key === 'POST /api/sessions/7/pressure').map((c) => JSON.parse(c.opts.body).level)
+    expect(sent).toEqual([2, 0])
+  })
+
+  it('counts down a typed answer and sends it when time is up', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    localStorage.setItem('mi_answer_mode', 'text')
+    localStorage.setItem('mi_voice', 'off')
+    const calls = respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: PRESSURED }],
+      'POST /api/sessions/7/turns': [200, { turn: TURN, session: { ...PRESSURED, transcript: [{ ...FIRST, answer: 'Partial answer' }] } }],
+    })
+    renderInterview()
+    const box = await screen.findByLabelText('Your answer')
+    expect(screen.getByRole('timer')).toHaveTextContent('60 s left')
+    await act(async () => {
+      box.focus()
+    })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.type(box, 'Partial answer')
+    await act(async () => vi.advanceTimersByTime(61_000))
+    await vi.waitFor(() => expect(calls.some((c) => c.key === 'POST /api/sessions/7/turns')).toBe(true))
+    vi.useRealTimers()
+  })
+})

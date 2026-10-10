@@ -188,6 +188,31 @@ describe('report', () => {
     expect(screen.getByText('Design a rate limiter.')).toBeInTheDocument()
   })
 
+  it('shows the composure score for a pressure interview', async () => {
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7/report': [
+        200,
+        {
+          report: {
+            ...READY,
+            pressure: {
+              level: 1,
+              start_level: 3,
+              label: 'Skeptical',
+              time_limit_sec: null,
+              composure: { pct: 88, baseline: 3.6, same_job: true, label: 'A small dip under pressure' },
+            },
+          },
+        },
+      ],
+    })
+    renderAt('/report/7')
+    expect(await screen.findByText('Composure: 88%')).toBeInTheDocument()
+    expect(screen.getByText('A small dip under pressure')).toBeInTheDocument()
+    expect(screen.getByText(/Started at level 3, eased to level 1/)).toBeInTheDocument()
+  })
+
   it('offers to finish a partly failed report', async () => {
     let posted = 0
     respond({

@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from ..extensions import db
 from ..models import Answer, Evaluation, Question, Report, Session
 from ..models.base import utcnow
-from . import interviewer, practice, scoring, stories
+from . import interviewer, practice, pressure, scoring, stories
 from .analytics import Clip, delivery, session_summary
 from .fire import FireError
 from .limits import LimitReached, check_budget
@@ -478,6 +478,11 @@ def report_dict(session: Session, report: Report) -> dict:
             [evals[t.main_answer.id] for t in items if t.main_answer.id in evals]
         ),
         "unanswered": unanswered(session, items),
+        "pressure": (
+            {**pressure.info(session), "composure": pressure.composure(session, report)}
+            if session.mode == "pressure"
+            else None
+        ),
         "analytics": report.analytics_json,
         "progress": {
             "scored": sum(1 for t in items if t.main_answer.id in evals),
