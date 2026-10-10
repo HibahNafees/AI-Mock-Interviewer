@@ -83,6 +83,9 @@ SCORE = {
     ],
     "changes": [{"kind": "added", "text": "A result", "reason": "Shows impact."}],
     "tips": ["Name the scale you worked at."],
+    "strengths": ["Owned the billing API end to end.", "  "],
+    "confidence": "medium",
+    "confidence_note": "Part of the answer may have been misheard.",
 }
 
 REPAIR = {
@@ -98,6 +101,10 @@ REPAIR = {
 SUMMARY = {
     "reasoning": "Solid ownership, but results were missing.",
     "takeaways": ["Quantify results.", "Lead with the point.", "Keep answers tight."],
+    "exercises": [
+        "Write three STAR stories that end with a number.",
+        "Time a 2-minute answer.",
+    ],
 }
 
 

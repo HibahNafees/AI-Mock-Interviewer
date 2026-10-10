@@ -170,6 +170,11 @@ class ScoreOut(BaseModel):
     stronger_version: list[Sentence] = Field(min_length=1, max_length=25)
     changes: list[Change] = Field(default_factory=list, max_length=8)
     tips: list[str] = Field(default_factory=list, max_length=3)
+    # What the candidate did well, each tied to something they said.
+    strengths: list[str] = Field(default_factory=list, max_length=3)
+    # How sure the AI is of this judgment, and why (e.g. a garbled transcript).
+    confidence: Literal["high", "medium", "low"] = "medium"
+    confidence_note: str = Field(default="", max_length=300)
 
     @model_validator(mode="after")
     def some_criterion_scored(self, info: ValidationInfo) -> "ScoreOut":
@@ -513,6 +518,9 @@ def _too_short(
             "weak_moments": [],
             "star": None,
             "tips": [],
+            "strengths": [],
+            "confidence": "high",
+            "confidence_note": "",
         },
     )
     db.session.add(evaluation)
@@ -637,6 +645,9 @@ def evaluate(
             "weak_moments": weak,
             "star": out.star.model_dump() if out.star else None,
             "tips": [t for t in out.tips if t.strip()][:2],
+            "strengths": [s for s in out.strengths if s.strip()][:3],
+            "confidence": out.confidence,
+            "confidence_note": out.confidence_note.strip(),
         },
     )
     db.session.add(evaluation)
@@ -655,6 +666,9 @@ def evaluation_dict(e: Evaluation | None) -> dict | None:
         "weak_moments": fb.get("weak_moments", []),
         "star": fb.get("star"),
         "tips": fb.get("tips", []),
+        "strengths": fb.get("strengths", []),
+        "confidence": fb.get("confidence"),
+        "confidence_note": fb.get("confidence_note", ""),
         "missing_points": e.missing_points_json or [],
         "stronger_version": e.stronger_version,
         "changes": e.changes_json or [],

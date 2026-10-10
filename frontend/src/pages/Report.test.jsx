@@ -152,6 +152,42 @@ describe('report', () => {
     expect(polls).toBe(2)
   }, 8000)
 
+  it('shows strengths, AI confidence, competencies, exercises and unanswered questions', async () => {
+    // docs/INTERVIEWER_RULES.md, Answer Coaching and Final Report (T-41).
+    const e = {
+      ...EVALUATION,
+      strengths: ['Named the system you built.'],
+      confidence: 'low',
+      confidence_note: 'Part of the answer may have been misheard.',
+    }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7/report': [
+        200,
+        {
+          report: {
+            ...READY,
+            questions: [{ ...QUESTION, evaluation: e }],
+            competencies: [{ name: 'API design', kind: 'role', score: 4, questions: 1 }],
+            exercises: ['Write three STAR stories that end with a number.'],
+            unanswered: [{ text: 'Design a rate limiter.', section: 'Technical', asked: false }],
+          },
+        },
+      ],
+    })
+    renderAt('/report/7')
+    expect(await screen.findByText('What you did well')).toBeInTheDocument()
+    expect(screen.getByText('Named the system you built.')).toBeInTheDocument()
+    expect(screen.getByText("AI coach's judgment")).toBeInTheDocument()
+    expect(screen.getByText('Low confidence')).toBeInTheDocument()
+    expect(screen.getByText('Part of the answer may have been misheard.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Competencies' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Recommended exercises' })).toBeInTheDocument()
+    expect(screen.getByText('Write three STAR stories that end with a number.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: "Questions you didn't get to" })).toBeInTheDocument()
+    expect(screen.getByText('Design a rate limiter.')).toBeInTheDocument()
+  })
+
   it('offers to finish a partly failed report', async () => {
     let posted = 0
     respond({
@@ -163,6 +199,7 @@ describe('report', () => {
       },
     })
     renderAt('/report/7')
+    expect(await screen.findByText("Couldn't be scored")).toBeInTheDocument()
     await userEvent.click(await screen.findByRole('button', { name: 'Finish the report' }))
     expect(await screen.findByText('Top 3 takeaways')).toBeInTheDocument()
     expect(posted).toBe(1)

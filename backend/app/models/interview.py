@@ -149,6 +149,8 @@ class Report(db.Model):
     # When the current generation run started; a stale run may be restarted.
     started_at: Mapped[datetime | None] = mapped_column(DateTime)
     top_takeaways_json: Mapped[list[Any] | None] = mapped_column(JSON)
+    # 2–3 practice drills for the weakest areas.
+    exercises_json: Mapped[list[Any] | None] = mapped_column(JSON)
     analytics_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     # Public share link; set to null to revoke.
     share_token: Mapped[str | None] = mapped_column(String(64), unique=True)

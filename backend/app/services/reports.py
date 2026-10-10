@@ -31,6 +31,7 @@ STALE_AFTER = timedelta(minutes=10)
 class SummaryOut(BaseModel):
     reasoning: str = Field(min_length=1, max_length=1200)
     takeaways: list[str] = Field(min_length=1, max_length=5)
+    exercises: list[str] = Field(default_factory=list, max_length=4)
 
 
 @dataclass
@@ -205,6 +206,7 @@ def generate(report_id: int, user_id: int) -> None:
             return
         report.verdict_reason = summary.reasoning
         report.top_takeaways_json = [t for t in summary.takeaways if t.strip()][:3]
+        report.exercises_json = [x for x in summary.exercises if x.strip()][:3]
     report.status = "ready"
     db.session.commit()
 
@@ -324,6 +326,56 @@ def retry(
 # ---- Views ---------------------------------------------------------------
 
 
+def competencies(evals: list[Evaluation]) -> list[dict]:
+    """Each rubric criterion averaged over the questions that tested it."""
+    rows: dict[str, dict] = {}
+    for e in evals:
+        for c in (e.rubric_scores_json or {}).get("criteria", []):
+            if c.get("score") is None:
+                continue
+            row = rows.setdefault(
+                c["name"].strip().lower(),
+                {
+                    "name": c["name"].strip(),
+                    "kind": c.get("kind", "role"),
+                    "scores": [],
+                },
+            )
+            row["scores"].append(c["score"])
+    out = [
+        {
+            "name": r["name"],
+            "kind": r["kind"],
+            "score": round(sum(r["scores"]) / len(r["scores"]), 2),
+            "questions": len(r["scores"]),
+        }
+        for r in rows.values()
+    ]
+    # Job-specific criteria first, then the communication basics.
+    return sorted(out, key=lambda r: (r["kind"] != "role", -r["score"]))
+
+
+def unanswered(session: Session, items: list["Thread"]) -> list[dict]:
+    """Planned questions the interview never got to, or that got no answer."""
+    answered = {t.root.id for t in items}
+    rows = db.session.scalars(
+        db.select(Question)
+        .filter_by(
+            session_id=session.id,
+            follow_up_of_id=None,
+            is_bonus=False,
+            is_icebreaker=False,
+            is_candidate_qa=False,
+        )
+        .order_by(Question.order_no, Question.id)
+    )
+    return [
+        {"text": q.text, "section": q.section, "asked": q.asked_at is not None}
+        for q in rows
+        if q.id not in answered
+    ]
+
+
 def report_dict(session: Session, report: Report) -> dict:
     items = threads(session)
     answer_ids = [t.main_answer.id for t in items] + [
@@ -382,6 +434,11 @@ def report_dict(session: Session, report: Report) -> dict:
         "verdict": report.verdict,
         "verdict_reason": report.verdict_reason,
         "takeaways": report.top_takeaways_json or [],
+        "exercises": report.exercises_json or [],
+        "competencies": competencies(
+            [evals[t.main_answer.id] for t in items if t.main_answer.id in evals]
+        ),
+        "unanswered": unanswered(session, items),
         "analytics": report.analytics_json,
         "progress": {
             "scored": sum(1 for t in items if t.main_answer.id in evals),

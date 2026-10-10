@@ -160,10 +160,40 @@ function Star({ star }) {
   )
 }
 
+const CONFIDENCE = {
+  high: ['High confidence', 'bg-emerald-50 text-emerald-700 ring-emerald-200'],
+  medium: ['Medium confidence', 'bg-accent-50 text-accent-700 ring-accent-200'],
+  low: ['Low confidence', 'bg-brand-50 text-brand-700 ring-brand-200'],
+}
+
 function Evaluation({ e, said, roleplay }) {
+  const [confLabel, confTone] = CONFIDENCE[e.confidence] ?? []
   return (
     <div className="space-y-5">
-      {e.summary && <p className="text-slate-700">{e.summary}</p>}
+      {e.summary && (
+        <div className="space-y-2">
+          <p className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span className="chip bg-slate-100 text-slate-600">AI coach's judgment</span>
+            {confLabel && <span className={`chip ring-1 ${confTone}`}>{confLabel}</span>}
+            {e.confidence !== 'high' && e.confidence_note && <span>{e.confidence_note}</span>}
+          </p>
+          <p className="text-slate-700">{e.summary}</p>
+        </div>
+      )}
+
+      {e.strengths?.length > 0 && (
+        <div className="rounded-2xl bg-emerald-50/70 p-4 ring-1 ring-emerald-200">
+          <h4 className="text-sm font-semibold text-emerald-800">What you did well</h4>
+          <ul className="mt-1 space-y-1 text-sm text-emerald-900">
+            {e.strengths.map((t) => (
+              <li key={t} className="flex gap-2">
+                <span aria-hidden="true">✓</span>
+                {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
@@ -423,7 +453,7 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
   )
 }
 
-function QuestionCard({ q, index, sessionId, onAttempt }) {
+function QuestionCard({ q, index, sessionId, onAttempt, failed }) {
   const e = q.evaluation
   return (
     <article className="card space-y-5 p-6 break-inside-avoid">
@@ -440,7 +470,13 @@ function QuestionCard({ q, index, sessionId, onAttempt }) {
             </p>
           )}
         </div>
-        {e ? <Score value={e.score} /> : <span className="text-sm text-slate-500">Scoring…</span>}
+        {e ? (
+          <Score value={e.score} />
+        ) : failed ? (
+          <span className="chip bg-brand-100 text-brand-700">Couldn't be scored</span>
+        ) : (
+          <span className="text-sm text-slate-500">Scoring…</span>
+        )}
       </header>
       <Delivery d={q.delivery} />
       {e ? (
@@ -484,6 +520,48 @@ function Summary({ report }) {
                   {i + 1}
                 </span>
                 <span className="text-white/95">{t}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {report.competencies?.length > 0 && (
+        <div className="card p-6">
+          <h2 className="text-lg font-bold">Competencies</h2>
+          <p className="text-sm text-slate-500">Each rubric criterion averaged over the questions that tested it</p>
+          <ul className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+            {report.competencies.map((c) => (
+              <li key={c.name}>
+                <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="font-medium text-slate-800">{c.name}</span>
+                  <span className="font-semibold tabular-nums">{c.score.toFixed(1)}/5</span>
+                </div>
+                <div aria-hidden="true" className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className={`h-full rounded-full bg-gradient-to-r ${barColor(c.score)}`}
+                    style={{ width: `${(c.score / 5) * 100}%` }}
+                  />
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {c.questions} question{c.questions === 1 ? '' : 's'}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {report.exercises?.length > 0 && (
+        <div className="card p-6">
+          <h2 className="text-lg font-bold">Recommended exercises</h2>
+          <ol className="mt-3 space-y-2">
+            {report.exercises.map((x, i) => (
+              <li key={x} className="flex gap-3">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent-100 text-sm font-bold text-accent-700">
+                  {i + 1}
+                </span>
+                <span className="text-slate-700">{x}</span>
               </li>
             ))}
           </ol>
@@ -639,9 +717,40 @@ export default function Report() {
 
       <div className="space-y-4">
         {report.questions.map((q, i) => (
-          <QuestionCard key={q.question_id} q={q} index={i} sessionId={report.session_id} onAttempt={onAttempt} />
+          <QuestionCard
+            key={q.question_id}
+            q={q}
+            index={i}
+            sessionId={report.session_id}
+            onAttempt={onAttempt}
+            failed={report.status === 'failed'}
+          />
         ))}
       </div>
+
+      {report.unanswered?.length > 0 && (
+        <div className="card p-6">
+          <h2 className="text-lg font-bold">Questions you didn't get to</h2>
+          <p className="text-sm text-slate-500">
+            Not scored. Practice them in your next interview.
+          </p>
+          <ul className="mt-3 space-y-2 text-sm">
+            {report.unanswered.map((u) => (
+              <li key={u.text} className="flex gap-2">
+                <span aria-hidden="true" className="text-slate-400">○</span>
+                <span>
+                  {u.text}
+                  <span className="text-slate-500">
+                    {' '}
+                    · {u.section}
+                    {u.asked ? ' · asked, not answered' : ''}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   )
 }

@@ -25,13 +25,20 @@ Return JSON with exactly this shape:
   "star": {"situation": true, "task": true, "action": true, "result": false, "note": "one sentence"},
   "stronger_version": [{"text": "one sentence of the rewrite", "source": "the exact words from the résumé or an answer that this sentence is based on, or null"}],
   "changes": [{"kind": "added", "text": "what changed", "reason": "why it helps"}],
-  "tips": ["one tip specific to this field or question type"]
+  "tips": ["one tip specific to this field or question type"],
+  "strengths": ["something the candidate did well, citing what they said"],
+  "confidence": "high" | "medium" | "low",
+  "confidence_note": "why you're less than sure, or empty"
 }
 
 Scoring:
 - List every rubric criterion, using the names exactly as written. Score it from 1 (missing or poor) to 5 (excellent for the $difficulty level) only if this question gives the candidate a fair chance to show it; otherwise use null. Example: a question about mentoring doesn't test SQL, so SQL is null — never 1 just because the answer didn't mention it.
 - Always score Structure, Clarity and Relevance (or whatever general communication criteria the rubric has).
 $criteria_rule- Judge only what the candidate said. An off-topic, empty or very short answer scores 1–2.
+- Base every score on evidence in the answer and say what that evidence is in the comment. Evaluate relevance, accuracy, reasoning, specificity, structure, ownership, impact and role alignment where they apply.
+- Missing evidence is not lack of knowledge: if the candidate simply didn't mention something, say it wasn't shown rather than that they don't know it, and never assume a skill is missing because the résumé doesn't list it.
+- Don't reward confidence alone, and don't penalize a concise answer that is correct and complete.
+- Never mark down nervousness, hesitations, filler words, an accent, grammar of a non-native speaker, or limited professional experience (judge potential at the entry level); delivery is measured separately.
 - This is practice feedback, not a hiring decision: be honest, specific and kind.
 
 Feedback:
@@ -40,6 +47,8 @@ Feedback:
 - star: only for behavioral questions ("Tell me about a time…"); otherwise use null.
 - In a role-play, the stronger version is a better version of the candidate's FIRST reply to the character, in the same spoken role-play style.
 - tips: 0 to 2 short tips about content or field-specific expectations (not pace or filler words; those are measured separately).
+- strengths: 1 to 3 specific things the candidate did well, each pointing to what they actually said (e.g. "Named the exact metric: p95 latency from 1.8 s to 300 ms"). No empty praise; if nothing worked, return [].
+- confidence: how sure you are of these scores. "low" if the transcript looks garbled or misheard, the answer is hard to interpret, or the question barely tests the criteria; "medium" if something is ambiguous; otherwise "high". confidence_note: one short sentence saying why when it isn't "high".
 
 Stronger version:
 - Rewrite the main answer in the candidate's own voice (first person, natural spoken style), about $target_words words, as a list of sentences.

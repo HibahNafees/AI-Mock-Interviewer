@@ -21,7 +21,7 @@ from app.services.scoring import (
 )
 
 from tests.conftest import RESUME
-from tests.fakes import SCORE
+from tests.fakes import SCORE, SUMMARY
 from tests.test_transcription import CLIP
 from tests.test_sessions import answer, started
 
@@ -745,3 +745,81 @@ def test_too_short_retry_scores_one(client, auth, planned, fire):
     body = retry(client, auth, sid, qid, text="so").get_json()
     assert body["attempt"]["evaluation"]["score"] == 1
     assert len(fire.calls) == calls
+
+
+def test_fairness_rules_reach_every_prompt(client, auth, planned, fire):
+    # docs/INTERVIEWER_RULES.md, Safety and Scoring (T-42).
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    build(client, auth, sid)
+    prompts = {
+        kind: next(c["prompt"] for c in fire.calls if marker in c["prompt"])
+        for kind, marker in (
+            ("plan", "question plan"),
+            ("turn", "live mock interview"),
+            ("score", "Score one question"),
+        )
+    }
+    assert "Never ask about age, family" in prompts["plan"]
+    assert "Don't assume the candidate lacks a skill" in prompts["plan"]
+    assert "Never ask about age, family" in prompts["turn"]
+    assert "nervousness, an accent" in prompts["turn"]
+    assert "Missing evidence is not lack of knowledge" in prompts["score"]
+    assert "don't penalize a concise answer" in prompts["score"]
+    assert "an accent" in prompts["score"]
+
+
+def test_interviewer_adapts_the_challenge(client, auth, planned, fire):
+    # docs/INTERVIEWER_RULES.md, Adaptive Difficulty (T-43).
+    sid = planned["id"]
+    started(client, auth, sid)
+    answer(client, auth, sid, "I designed the billing API and owned its schema.")
+    prompt = next(
+        c["prompt"] for c in fire.calls if "live mock interview" in c["prompt"]
+    )
+    assert "raise the challenge one step" in prompt
+    assert "Never make it harder after a struggle" in prompt
+
+
+def test_report_covers_strengths_confidence_competencies_and_exercises(
+    client, auth, planned, fire
+):
+    # docs/INTERVIEWER_RULES.md, Answer Coaching and Final Report (T-41).
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    report = build(client, auth, sid).get_json()["report"]
+
+    e = report["questions"][0]["evaluation"]
+    assert e["strengths"] == ["Owned the billing API end to end."]  # blanks dropped
+    assert e["confidence"] == "medium"
+    assert e["confidence_note"] == "Part of the answer may have been misheard."
+    prompt = next(
+        c["prompt"] for c in fire.calls if c["prompt"].startswith("Score one")
+    )
+    assert '"strengths"' in prompt and '"confidence"' in prompt
+
+    assert report["exercises"] == SUMMARY["exercises"]
+    names = [c["name"] for c in report["competencies"]]
+    assert names[0] == "API design"  # job criteria first
+    assert set(names) == {"API design", "Structure", "Clarity", "Relevance"}
+    structure = next(c for c in report["competencies"] if c["name"] == "Structure")
+    assert structure == {
+        "name": "Structure",
+        "kind": "universal",
+        "score": 3.0,
+        "questions": 2,
+    }
+
+
+def test_report_lists_questions_never_answered(client, auth, planned, fire):
+    sid = planned["id"]
+    started(client, auth, sid)
+    answer(client, auth, sid, "I built the billing API at Acme and owned the schema.")
+    client.post(f"/api/sessions/{sid}/end", headers=auth)
+    report = build(client, auth, sid).get_json()["report"]
+    assert [q["text"] for q in report["unanswered"]] == [
+        "How would you design a rate limiter?",
+        "How do you index a slow query?",
+    ]
+    assert report["unanswered"][0]["asked"] is True  # asked, then ended
+    assert report["unanswered"][1]["asked"] is False
