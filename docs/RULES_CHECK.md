@@ -75,3 +75,19 @@ Three live interviews (sessions 25–27: mixed loop with a friendly interviewer;
 
 Live check (sessions 1–28 backfilled + one weak-spot interview, ~$0.013): stories grounded in the candidate's words with gaps left empty, the same ETL experience merged across three interviews, the practiced questions rescheduled in the queue.
 Other areas unchanged since the previous check (✅). **Open from this check:** none.
+
+---
+
+## Check after Phase 8 (2026-10-10) — decoder, debrief, reverse, pressure
+
+| Area | Status | Evidence / gap |
+|---|---|---|
+| Interview modes | ✅ | Reverse, pressure and debrief follow their own rules and are offered only where built; peer practice stays unoffered (optional stage). |
+| Interviewer personalities / pressure | ✅ | Pressure levels 1–5 add skepticism, pushback, announced time limits and curveballs between answers, always with an explicit respect rule; the scorer never sees the pressure, so standards are unchanged; the candidate can ease off or stop any time; composure is reported against their normal interviews. |
+| Scoring | ✅ | Debriefs use the same scorer and grounded rewrites (generic rubric, or the job's); reverse mode scores the user's questioning and judgment with evidence from the transcript and labels it practice feedback. |
+| Safety and privacy | ✅ | Debrief is recall-only: no upload control exists, spoken recall is transcribed and discarded, and a visible notice explains why. The decoder labels its output as interpretation, keeps only flags that quote the posting, and doesn't store the posting. Reverse mode flags unfair interviewer questions (age, family…) and the AI candidate declines them; the hidden profile never reaches the browser before the decision. Signed-out decoder use is capped per visitor and overall, and counted in the monthly budget. Still planned: purge expired documents (Phase 10). |
+| Final report | ✅ | Debrief reports add likely next-round questions and "Practice the next round"; pressure reports add composure. |
+| Story bank and progress | ✅ | Debriefs feed the story bank and practice queue (real-interview evidence) but aren't counted as mock interviews; reverse sessions aren't either. |
+
+Live check (~$0.019): decoder quotes verified and "stakeholders" ×4 counted exactly; pressure level 3 announced 60 s limits and pushed back on a vague answer, easing to 1 removed the clock, composure 111%; debrief scored, predicted five next-round questions and built a practice interview; reverse candidate kept its profile hidden, backed down when probed, declined an illegal question, and the verdict flagged it.
+Other areas unchanged (✅). **Open from this check:** none.

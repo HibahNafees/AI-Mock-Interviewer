@@ -128,7 +128,7 @@ Flexible LLM output is stored in JSON columns. No table stores audio/video. Docu
 11. Optional: real-time voice with LiveKit (interruptions, peer practice)
 12. Optional: Hume EVI experiment
 
-**Current phase:** 7 done and live-checked (progress and story bank): `app/services/stories.py` (one Fire call per session after its report; STAR parts grounded in the user's answers; merging; coverage; JD suggestions), `app/services/practice.py` (question bank with spaced repetition; weak-spot interviews with no Fire planning call), weekly goal and skill change in `/api/stats`; Stories page, setup suggestions and dashboard practice/goal cards. Earlier: Phase 6 voice (browser by default, Fire speech pending T-27), interview controls, rules gaps fixed. Next: Phase 8 (signature modes: decoder, debrief, reverse, pressure).
+**Current phase:** 8 done and live-checked (signature modes): JD decoder (`services/decoder.py`, public `/decode`, cached by hash, anonymous spend in `anon_spend`), pressure mode (`services/pressure.py`, levels 1–5, time limits, composure), debrief (`services/debriefs.py`, recall-only, scored by the normal report, next-round prediction + practice), reverse mode (`services/reverse.py`, hidden candidate profile, judged decision). Earlier: Phase 7 story bank and question bank; Phase 6 voice (browser by default, Fire speech pending T-27). Next: Phase 9 (extras: coding, whiteboard, panel, body language, gap analysis, company research, negotiation, cheat sheet, thank-you email).
 
 ## Running locally
 

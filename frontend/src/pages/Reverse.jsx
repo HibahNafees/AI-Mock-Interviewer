@@ -202,8 +202,8 @@ function Reveal({ v }) {
           )}
           {result.unfair_questions?.length > 0 && (
             <p className="rounded-xl bg-brand-50 p-3 text-sm text-brand-800 ring-1 ring-brand-200">
-              <span className="font-bold">Avoid in real interviews:</span> {result.unfair_questions.join(' · ')}. Questions
-              about personal matters aren't job-related and can be unlawful.
+              <span className="font-bold">Avoid in real interviews:</span> “{result.unfair_questions.join('” · “')}”
+              Questions about personal matters aren't job-related and can be unlawful.
             </p>
           )}
         </div>
