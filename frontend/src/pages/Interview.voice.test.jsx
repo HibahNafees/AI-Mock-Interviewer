@@ -202,6 +202,45 @@ describe('interviewer voice', () => {
     expect(screen.queryByText('Interviewer is speaking…')).not.toBeInTheDocument()
   })
 
+  it('speaks each panel reply, not the intro again (T-60)', async () => {
+    const spoken = fakeSpeech()
+    const panel = [
+      { key: 'hm', name: 'Priya', title: 'the hiring manager' },
+      { key: 'peer', name: 'Marcus', title: 'a senior colleague on the team' },
+    ]
+    const intro = { ...FIRST, segments: [{ who: 'interviewer', panelist: 'hm', text: 'Hello Ada, I am Priya.' }] }
+    const planned = { ...ACTIVE, status: 'planned', mode: 'panel', panel, plan: { sections: [], reserve: [] }, transcript: [] }
+    const reply = {
+      action: 'next_question',
+      message: 'Hi, Marcus here. Design a cache.',
+      segments: [{ who: 'interviewer', panelist: 'peer', text: 'Hi, Marcus here. Design a cache.' }],
+    }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: planned }],
+      'POST /api/sessions/7/start': [200, { session: { ...planned, status: 'active', transcript: [intro] } }],
+      'POST /api/sessions/7/transcribe': [200, { text: 'I led the billing API.' }],
+      // A fresh panel array every response, like the real API.
+      'POST /api/sessions/7/turns': () => [
+        200,
+        {
+          turn: reply,
+          session: { ...planned, status: 'active', panel: panel.map((p) => ({ ...p })), transcript: [ANSWERED, NEXT] },
+          speech: null,
+        },
+      ],
+    })
+    renderInterview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Start interview' }))
+    await screen.findByText('Hello Ada, I am Priya.')
+    spoken.at(-1).onend()
+    await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
+    await screen.findByText('What was your part?')
+    const said = spoken.map((u) => u.text)
+    expect(said.filter((t) => t === 'Hello Ada, I am Priya.')).toHaveLength(1)
+    expect(said.at(-1)).toBe('Design a cache.')
+  })
+
   it('can be turned off, and stays off', async () => {
     const spoken = fakeSpeech()
     routes()

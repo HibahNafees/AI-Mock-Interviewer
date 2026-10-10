@@ -134,6 +134,19 @@ RETRY_RULE = (
 # Fewer words than this (all answers to the question together) can't be scored:
 # the scorer filled the gap from the résumé (T-33: "so" scored 3.27).
 MIN_SCORABLE_WORDS = 8
+# Greetings and pleasantries: an answer made only of these didn't answer (T-61).
+SMALL_TALK = frozenset(
+    """hi hello hey hiya morning afternoon evening nice meet meeting meeting good
+    great fine well okay ok doing thanks thank you guys everyone all how are i'm im
+    am m s re ve today day going pleasure glad happy be here too and yourself yours what about
+    hope also not bad pretty really so much lovely""".split()
+)
+NOT_ANSWERED = (
+    "This didn't answer the question{what}, so it scores 1. Answer the question "
+    "itself next time; small talk is fine at the start, before the first question."
+)
+# Share of the scorer's evidence quote that must really be in the answer.
+QUOTE_MATCH = 0.6
 TOO_SHORT = (
     "This answer was too short to score ({n} words). Answer with one specific "
     "example: the situation, what you did, and the result."
@@ -190,6 +203,9 @@ class ScoreOut(BaseModel):
     tips: list[str] = Field(default_factory=list, max_length=3)
     # What the candidate did well, each tied to something they said.
     strengths: list[str] = Field(default_factory=list, max_length=3)
+    # Does the answer attempt the question at all, and where (verified, T-61)?
+    answers_question: bool = True
+    answer_quote: str | None = Field(default=None, max_length=600)
     # How sure the AI is of this judgment, and why (e.g. a garbled transcript).
     confidence: Literal["high", "medium", "low"] = "medium"
     confidence_note: str = Field(default="", max_length=300)
@@ -562,6 +578,21 @@ def section_module(session: Session, section: str) -> str:
     return section_plan(session, section).get("module", modules.DEFAULT)
 
 
+def small_talk(answers: list[str]) -> bool:
+    """Only greetings and pleasantries ("Hi, nice to meet you, how are you?")."""
+    words = WORD_RE.findall(" ".join(answers).lower().replace("’", "'"))
+    return bool(words) and all(w in SMALL_TALK or w in STOPWORDS for w in words)
+
+
+def quote_found(quote: str, answers: list[str]) -> bool:
+    """Most of the scorer's quote is really in the answers (wording may differ)."""
+    said = {_stem(w) for w in _content_words(" ".join(answers))}
+    quoted = [_stem(w) for w in _content_words(quote)]
+    if not quoted:
+        return False
+    return sum(w in said for w in quoted) / len(quoted) >= QUOTE_MATCH
+
+
 def _too_short(
     session: Session,
     answer_id: int,
@@ -572,6 +603,9 @@ def _too_short(
     budget_sec: int | None,
     resume_text: str,
     question: str,
+    summary: str | None = None,
+    comment: str = "The answer was too short to show this.",
+    module: str | None = None,
 ) -> Evaluation:
     """A near-empty answer scores 1 on every criterion, without a Fire call."""
     wanted = {_norm(n) for n in criteria} if criteria else None
@@ -581,7 +615,7 @@ def _too_short(
             "kind": c.get("kind", "role"),
             "weight": c.get("weight", 0),
             "score": 1,
-            "comment": "The answer was too short to show this.",
+            "comment": comment,
         }
         for c in rubric.get("criteria", [])
         if wanted is None or _norm(c["name"]) in wanted
@@ -591,11 +625,12 @@ def _too_short(
         score=1.0,
         rubric_scores_json={"criteria": rows},
         missing_points_json=[],
-        stronger_version=resume_fallback(question, resume_text),
+        stronger_version=SOLVE_FALLBACK.get(module)
+        or resume_fallback(question, resume_text),
         changes_json=[],
         delivery_json=delivery(clips, budget_sec),
         feedback_json={
-            "summary": TOO_SHORT.format(n=said),
+            "summary": summary or TOO_SHORT.format(n=said),
             "weak_moments": [],
             "star": None,
             "tips": [],
@@ -647,6 +682,23 @@ def evaluate(
             resume_text,
             question or exchange[0]["interviewer"],
         )
+    module = section_module(session, section)
+    if not scenario and small_talk([e["candidate"] for e in exchange]):
+        # Greetings only: nothing to score, and no Fire call (T-61).
+        return _too_short(
+            session,
+            answer_id,
+            rubric,
+            criteria,
+            said,
+            clips,
+            budget_sec,
+            resume_text,
+            question or exchange[0]["interviewer"],
+            summary=NOT_ANSWERED.format(what=" (it was small talk)"),
+            comment="The answer didn't address the question.",
+            module=module,
+        )
     if criteria:
         wanted = {_norm(n) for n in criteria}
         rubric = {
@@ -659,10 +711,7 @@ def evaluate(
         "score",
         role=(session.plan_json or {}).get("role_title") or "the role",
         difficulty=session.difficulty or "mid",
-        module=modules.MODULES.get(
-            module := section_module(session, section),
-            modules.MODULES[modules.DEFAULT],
-        ).label,
+        module=modules.MODULES.get(module, modules.MODULES[modules.DEFAULT]).label,
         module_guidance=modules.guidance(module, "score"),
         scenario=scenario or "none",
         rubric=[
@@ -688,8 +737,29 @@ def evaluate(
         temperature=0,
         context={"required": criteria or []},
     )
-    score, rows = weighted_score(out.criteria, rubric)
     answers = [e["candidate"] for e in exchange]
+    if not scenario and (
+        not out.answers_question
+        or (out.answer_quote is not None and not quote_found(out.answer_quote, answers))
+    ):
+        # The scorer says it wasn't an answer, or "quoted" words the candidate never
+        # said (T-61: a greeting scored 3.56 with invented content). Score it 1.
+        log.info("Answer %s didn't address the question; scoring 1", answer_id)
+        return _too_short(
+            session,
+            answer_id,
+            rubric,
+            criteria,
+            said,
+            clips,
+            budget_sec,
+            resume_text,
+            question or exchange[0]["interviewer"],
+            summary=NOT_ANSWERED.format(what=""),
+            comment="The answer didn't address the question.",
+            module=module,
+        )
+    score, rows = weighted_score(out.criteria, rubric)
     relevance = next(
         (r["score"] for r in rows if _norm(r["name"]) == "relevance"), None
     )

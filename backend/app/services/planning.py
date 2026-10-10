@@ -3,7 +3,13 @@
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from .. import modules
 from ..extensions import db
@@ -142,6 +148,23 @@ class PlanOut(BaseModel):
     sections: list[PlanSectionOut] = Field(min_length=1, max_length=6)
     reserve: list[BonusOut] = Field(default_factory=list, max_length=6)
 
+    @model_validator(mode="after")
+    def hands_on_as_asked(self, info: ValidationInfo) -> "PlanOut":
+        """The coding problems and design question the candidate asked for (T-65)."""
+        ctx = info.context or {}
+        for module, wanted in (
+            ("coding", ctx.get("coding")),
+            ("system_design", ctx.get("system_design")),
+        ):
+            if wanted is None:
+                continue
+            got = sum(len(s.questions) for s in self.sections if s.module == module)
+            if got != wanted:
+                raise ValueError(
+                    f'use exactly {wanted} question(s) in "{module}" sections (got {got})'
+                )
+        return self
+
 
 class Criterion(BaseModel):
     name: str = Field(min_length=1, max_length=120)
@@ -199,10 +222,32 @@ def analysis_summary(analysis: JdAnalysis) -> dict:
     }
 
 
+# Software roles always get the coding round and the whiteboard (T-62: the JD
+# analysis left them out for a "Software Developer" posting).
+SOFTWARE_RE = re.compile(
+    r"software|developer|programm|web|backend|back-end|frontend|front-end|full[- ]?stack"
+    r"|devops|cloud|data (?:engineer|scien)|machine learning|\bml\b|computer|mobile",
+    re.IGNORECASE,
+)
+
+
 def offered_modules(analysis: JdAnalysis) -> list[str]:
     """Modules that fit this job."""
-    fit = [f for f in analysis_summary(analysis)["formats"] if modules.known(f)]
+    summary = analysis_summary(analysis)
+    fit = [f for f in summary["formats"] if modules.known(f)]
+    if "technical" in fit and SOFTWARE_RE.search(
+        f"{summary['field']} {summary['role_title']}"
+    ):
+        fit += [m for m in ("coding", "system_design") if m not in fit]
     return fit or ["behavioral", "resume_deepdive"]
+
+
+MINUTES_PER_PROBLEM = 8
+
+
+def hands_on_limit(duration_min: int) -> int:
+    """How many coding problems fit (at least one, about 8 minutes each)."""
+    return max(1, min(3, duration_min // MINUTES_PER_PROBLEM))
 
 
 def build_plan(
@@ -212,9 +257,30 @@ def build_plan(
     duration_min: int,
     difficulty: str,
     focus: str = MIXED,
+    coding: int | None = None,
+    system_design: bool | None = None,
 ) -> PlanOut:
+    """`coding` / `system_design`: what the candidate asked for (None = plan decides)."""
     summary = analysis_summary(analysis)
     allowed = offered_modules(analysis) if focus == MIXED else [focus]
+    rules, ctx = [], {}
+    if coding is not None and "coding" in allowed:
+        coding = min(coding, hands_on_limit(duration_min))
+        ctx["coding"] = coding
+        rules.append(
+            f"Use exactly {coding} coding problem(s): each is one question in a section "
+            'with module "coding".'
+            if coding
+            else 'Don\'t use the "coding" module.'
+        )
+    if system_design is not None and "system_design" in allowed and focus == MIXED:
+        ctx["system_design"] = int(system_design)
+        rules.append(
+            "Include exactly one system design question, in a section with module "
+            '"system_design".'
+            if system_design
+            else 'Don\'t use the "system_design" module.'
+        )
     focus_rule = (
         "Mix the modules to fit the role: a full interview loop."
         if focus == MIXED
@@ -232,8 +298,9 @@ def build_plan(
         focus_rule=focus_rule,
         max_sections=str(section_limit(duration_min)),
         question_count=str(question_target(duration_min)),
+        hands_on="\n".join(rules) or "",
     )
-    plan = chat_json(user_id, prompt, PlanOut, SYSTEM, max_tokens=2000)
+    plan = chat_json(user_id, prompt, PlanOut, SYSTEM, max_tokens=2000, context=ctx)
     user = db.session.get(User, user_id)
     names = candidate_names(resume.raw_text, user.name if user else "")
     for section in plan.sections:

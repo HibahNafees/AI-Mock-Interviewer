@@ -13,7 +13,8 @@ from flask import current_app
 from pydantic import BaseModel, Field
 
 from ..extensions import db
-from ..models import JdDecode
+from ..models import JdDecode, SavedDecode
+from ..models.base import utcnow
 from . import limits
 from .llm import chat_json, render
 
@@ -182,3 +183,53 @@ def decode(jd: str, user_id: int | None, ip: str | None) -> JdDecode:
 
 def decode_dict(row: JdDecode) -> dict:
     return {"share_token": row.share_token, **row.result_json}
+
+
+def save_for(user_id: int, row: JdDecode, jd: str) -> SavedDecode:
+    """Add (or move to the top) this decode in the user's saved list (T-64)."""
+    saved = db.session.scalar(
+        db.select(SavedDecode).filter_by(user_id=user_id, decode_id=row.id)
+    )
+    if saved is None:
+        first_line = " ".join(jd.split())[:80]
+        saved = SavedDecode(
+            user_id=user_id,
+            decode_id=row.id,
+            title=(row.result_json.get("role_title") or first_line or "Job posting")[
+                :200
+            ],
+            saved_at=utcnow(),
+        )
+        db.session.add(saved)
+    else:
+        saved.saved_at = utcnow()
+    db.session.commit()
+    return saved
+
+
+def saved_dict(saved: SavedDecode, row: JdDecode) -> dict:
+    return {
+        "id": saved.id,
+        "title": saved.title,
+        "summary": row.result_json.get("summary", ""),
+        "share_token": row.share_token,
+        "saved_at": saved.saved_at.isoformat() + "Z",
+    }
+
+
+def delete_saved(saved: SavedDecode) -> None:
+    """Remove it from the list; the decode itself (and its share link) goes too
+    unless someone else still has it saved."""
+    decode_id = saved.decode_id
+    db.session.delete(saved)
+    db.session.flush()
+    others = db.session.scalar(
+        db.select(db.func.count())
+        .select_from(SavedDecode)
+        .filter_by(decode_id=decode_id)
+    )
+    if not others:
+        row = db.session.get(JdDecode, decode_id)
+        if row is not None:
+            db.session.delete(row)
+    db.session.commit()

@@ -46,6 +46,10 @@ class CreateBody(BaseModel):
     company_research_id: int | None = None
     # panel: 2–3 interviewers; negotiation: a recruiter role-play about an offer.
     format: Literal["standard", "panel", "negotiation"] = "standard"
+    # How many coding problems / whether to include a design question (None = the
+    # plan decides). Only used when the job offers those modules.
+    coding_problems: int | None = Field(default=None, ge=0, le=3)
+    system_design: bool | None = None
     negotiation: nego.NegotiationIn | None = None
 
 
@@ -218,7 +222,14 @@ def create():
         ):
             return jsonify(error="That interview type doesn't fit this job"), 400
         plan = planning.build_plan(
-            user_id, resume, analysis, body.duration_min, body.difficulty, body.focus
+            user_id,
+            resume,
+            analysis,
+            body.duration_min,
+            body.difficulty,
+            body.focus,
+            coding=body.coding_problems,
+            system_design=body.system_design,
         )
         rubric = planning.build_rubric(user_id, analysis, body.difficulty, body.focus)
         research = (

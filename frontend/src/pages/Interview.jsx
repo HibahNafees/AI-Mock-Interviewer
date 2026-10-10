@@ -193,6 +193,23 @@ function PlanStep({ session, setSession, onGreeting }) {
             Focus: {analysis.competencies.map((c) => c.name).join(', ')}
           </p>
         )}
+        {session.pressure && (
+          <p className="mt-3 inline-flex flex-wrap items-center gap-2 rounded-xl bg-gradient-to-r from-brand-50 to-accent-50 px-3 py-2 text-sm text-brand-800 ring-1 ring-brand-200">
+            <span className="font-bold">
+              <span aria-hidden="true">🔥 </span>Pressure level {session.pressure.level} · {session.pressure.label}
+            </span>
+            <span>
+              The interviewer gets tougher between answers
+              {session.pressure.time_limit_sec ? `, with ${session.pressure.time_limit_sec} s per answer` : ''}. You
+              can ease off or stop during the interview.
+            </span>
+          </p>
+        )}
+        {session.panel && (
+          <p className="mt-3 text-sm text-slate-600">
+            <span aria-hidden="true">👥 </span>Panel: {session.panel.map((p) => `${p.name} (${p.title.replace(/^(the|a|from the) /, '')})`).join(', ')}
+          </p>
+        )}
         {analysis.licensed_field && (
           <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">
             Feedback for licensed or specialized professions is for practice only, not a
@@ -259,6 +276,8 @@ function LiveStep({ session, setSession, greeting }) {
   const [voiceFailed, setVoiceFailed] = useState(false)
   const [closing, setClosing] = useState(null)
   const voice = useRef(null) // what's playing now: { cancel }
+  const panelRef = useRef(session.panel)
+  panelRef.current = session.panel
   const lastSaid = useRef(null) // { segments, clips } for "Repeat"
 
   const [text, setText] = useState('')
@@ -325,7 +344,7 @@ function LiveStep({ session, setSession, greeting }) {
       if (remember) lastSaid.current = message
       voice.current?.cancel()
       const turn = ++said.current
-      const handle = say({ ...message, persona, panel: session.panel })
+      const handle = say({ ...message, persona, panel: panelRef.current })
       voice.current = handle
       setSpeaking(true)
       handle.done.then((result) => {
@@ -338,7 +357,9 @@ function LiveStep({ session, setSession, greeting }) {
         else askedAt.current = Date.now()
       })
     },
-    [persona, session.panel],
+    // Not session.panel: it's a new array after every turn, and a new speak()
+    // re-ran the greeting effect below, replaying the intro over each reply (T-60).
+    [persona],
   )
 
   // Speak the first question, and stop talking when the page goes away. (No

@@ -80,3 +80,46 @@ def test_signed_in_runs_count_and_can_use_a_saved_jd(app, client, auth, docs, fi
 def test_too_short_is_explained(client):
     r = decode(client, "Backend engineer wanted.")
     assert r.status_code == 400 and "full job description" in r.get_json()["error"]
+
+
+# ---- saved decodes (T-64) -------------------------------------------------------
+
+
+def test_signed_in_decodes_are_saved_and_listed(client, auth, fire):
+    d = decode(client, headers=auth).get_json()["decode"]
+    assert d["saved_id"] is not None
+    decode(client, headers=auth)  # the same posting again: still one entry
+    r = client.get("/api/decoder/saved", headers=auth)
+    assert r.status_code == 200
+    [saved] = r.get_json()["saved"]
+    assert saved["id"] == d["saved_id"] and saved["share_token"] == d["share_token"]
+    assert saved["title"]
+    assert client.get("/api/decoder/saved").status_code == 401
+    # Signed out: nothing saved.
+    assert (
+        decode(client, text=POSTING + " Remote friendly.").get_json()["decode"][
+            "saved_id"
+        ]
+        is None
+    )
+
+
+def test_deleting_a_saved_decode(client, auth, signup, fire):
+    d = decode(client, headers=auth).get_json()["decode"]
+    token = signup("bo@example.com", "correct-horse", "Bo").get_json()["access_token"]
+    other = {"Authorization": f"Bearer {token}"}
+    assert (
+        client.delete(f"/api/decoder/saved/{d['saved_id']}", headers=other).status_code
+        == 404
+    )
+
+    # Bo decodes the same posting (cached, no Fire call) and keeps it.
+    bo = decode(client, headers=other).get_json()["decode"]
+    r = client.delete(f"/api/decoder/saved/{d['saved_id']}", headers=auth)
+    assert r.status_code == 204
+    assert client.get("/api/decoder/saved", headers=auth).get_json()["saved"] == []
+    assert client.get(f"/api/decoder/{d['share_token']}").status_code == 200  # Bo's
+
+    client.delete(f"/api/decoder/saved/{bo['saved_id']}", headers=other)
+    assert db.session.scalar(db.select(db.func.count()).select_from(JdDecode)) == 0
+    assert client.get(f"/api/decoder/{d['share_token']}").status_code == 404

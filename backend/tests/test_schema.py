@@ -1,6 +1,7 @@
 from app.extensions import db
 
 EXPECTED_TABLES = {
+    "saved_decodes",
     "users",
     "documents",
     "jd_analyses",

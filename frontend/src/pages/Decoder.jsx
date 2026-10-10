@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { IconTile, Mascot } from '../components/Art'
 import { Logo } from '../components/Layout'
@@ -157,6 +157,41 @@ export function DecodeResult({ d, signedIn }) {
   )
 }
 
+// A signed-in user's decodes, to come back to or delete (T-64).
+function SavedDecodes({ items, onDelete, base }) {
+  if (!items.length) return null
+  return (
+    <section className="card p-6">
+      <h2 className="text-lg font-bold">Your saved decodes</h2>
+      <ul className="mt-3 divide-y divide-[#f3ebe1]">
+        {items.map((s) => (
+          <li key={s.id} className="flex flex-wrap items-center gap-3 py-3">
+            <div className="min-w-0 flex-1">
+              <Link to={`${base}/${s.share_token}`} className="font-semibold text-ink hover:text-brand-700">
+                {s.title}
+              </Link>
+              <p className="truncate text-sm text-slate-500">
+                {new Date(s.saved_at).toLocaleDateString()} · {s.summary}
+              </p>
+            </div>
+            <Link to={`${base}/${s.share_token}`} className="btn-secondary px-3 py-1 text-sm">
+              Open
+            </Link>
+            <button
+              type="button"
+              onClick={() => onDelete(s)}
+              aria-label={`Delete ${s.title}`}
+              className="btn-link text-sm hover:text-red-600"
+            >
+              Delete
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 export default function Decoder({ standalone = false }) {
   const { user } = useAuth()
   const { token } = useParams()
@@ -165,9 +200,34 @@ export default function Decoder({ standalone = false }) {
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState([])
+  const base = standalone ? '/decode' : '/decoder'
+
+  const loadSaved = useCallback(() => {
+    if (!user) return
+    api('/decoder/saved')
+      .then((data) => setSaved(data.saved))
+      .catch(() => {})
+  }, [user])
+  useEffect(loadSaved, [loadSaved])
+
+  async function remove(s) {
+    if (!window.confirm(`Delete the saved decode for "${s.title}"? Its share link stops working too.`)) return
+    setError('')
+    try {
+      await api(`/decoder/saved/${s.id}`, { method: 'DELETE' })
+      setSaved((list) => list.filter((x) => x.id !== s.id))
+      if (token === s.share_token) navigate(base, { replace: true })
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   useEffect(() => {
-    if (!token) return
+    if (!token) {
+      setResult(null)
+      return
+    }
     api(`/decoder/${token}`)
       .then((data) => setResult(data.decode))
       .catch((err) => setError(err.message))
@@ -180,6 +240,7 @@ export default function Decoder({ standalone = false }) {
     try {
       const data = await api('/decoder', { method: 'POST', body: { text } })
       setResult(data.decode)
+      loadSaved()
       if (standalone) navigate(`/decode/${data.decode.share_token}`, { replace: true })
     } catch (err) {
       setError(err.message)
@@ -222,8 +283,9 @@ export default function Decoder({ standalone = false }) {
               {busy ? 'Decoding…' : 'Decode this job'}
             </button>
             <span className="text-xs text-slate-500">
-              {user ? 'Up to 5 a day.' : 'Free, no account needed (3 a day).'} The posting itself
-              isn't saved.
+              {user
+                ? "Up to 5 a day. The results are saved to your list below; the posting itself isn't."
+                : "Free, no account needed (3 a day). The posting itself isn't saved."}
             </span>
           </div>
         </form>
@@ -240,10 +302,11 @@ export default function Decoder({ standalone = false }) {
       )}
       {result && <DecodeResult d={result} signedIn={Boolean(user)} />}
       {token && (
-        <Link to={standalone ? '/decode' : '/decoder'} className="btn-link">
+        <Link to={base} className="btn-link">
           Decode another job
         </Link>
       )}
+      {user && <SavedDecodes items={saved} onDelete={remove} base={base} />}
     </section>
   )
 

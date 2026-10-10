@@ -87,6 +87,30 @@ describe('job description decoder', () => {
     expect(await screen.findByRole('link', { name: 'Practice for this job' })).toHaveAttribute('href', '/setup')
   })
 
+  it('lists saved decodes to reopen or delete', async () => {
+    localStorage.setItem('mi_token', 'tok')
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const saved = [
+      { id: 4, title: 'Backend Engineer', summary: 'Stakeholder-heavy role.', share_token: 'abc123', saved_at: '2026-10-10T06:00:00Z' },
+      { id: 5, title: 'Data Analyst', summary: 'SQL all day.', share_token: 'def456', saved_at: '2026-10-09T06:00:00Z' },
+    ]
+    const calls = respond({
+      'GET /api/auth/me': [200, { user: { id: 1, name: 'Ada', email: 'ada@example.com' } }],
+      'GET /api/decoder/saved': [200, { saved }],
+      'GET /api/decoder/abc123': [200, { decode: DECODE }],
+      'DELETE /api/decoder/saved/5': [204, {}],
+    })
+    renderAt('/decoder')
+    expect(await screen.findByText('Your saved decodes')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Delete Data Analyst' }))
+    expect(screen.queryByText('Data Analyst')).not.toBeInTheDocument()
+    expect(calls.some((c) => c.key === 'DELETE /api/decoder/saved/5')).toBe(true)
+    await userEvent.click(screen.getAllByRole('link', { name: 'Open' })[0])
+    expect(await screen.findByText('Interpretation, not fact.')).toBeInTheDocument()
+    expect(screen.getByText('Keeping stakeholders aligned')).toBeInTheDocument()
+    window.confirm.mockRestore()
+  })
+
   it('shows the daily-cap message', async () => {
     respond({ 'POST /api/decoder': [429, { error: "That's today's free decodes. Sign up (free) to decode more job descriptions." }] })
     renderAt('/decode')

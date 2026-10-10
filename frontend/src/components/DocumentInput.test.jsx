@@ -46,3 +46,33 @@ describe('document upload', () => {
     expect(sent[0].get('file').name).toBe('job.txt')
   })
 })
+
+describe('saved documents', () => {
+  it('deletes the chosen saved job posting and picks the next one', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const deleted = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url, opts = {}) => {
+        if (opts.method === 'DELETE') {
+          deleted.push(url)
+          return { ok: true, status: 204, json: async () => ({}) }
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ documents: [{ id: 1, title: 'Acme backend' }, { id: 2, title: 'Data role' }] }),
+        }
+      }),
+    )
+    const onChange = vi.fn()
+    const { rerender } = render(<DocumentInput kind="job_description" value={null} onChange={onChange} />)
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(1))
+    rerender(<DocumentInput kind="job_description" value={1} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this saved job posting' }))
+    await vi.waitFor(() => expect(onChange).toHaveBeenLastCalledWith(2))
+    expect(deleted).toEqual(['/api/documents/1'])
+    expect(screen.queryByRole('option', { name: 'Acme backend' })).not.toBeInTheDocument()
+    window.confirm.mockRestore()
+  })
+})

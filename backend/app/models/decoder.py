@@ -2,7 +2,15 @@ from datetime import date as date_type
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Date, DateTime, Integer, Numeric, String
+from sqlalchemy import (
+    JSON,
+    Date,
+    DateTime,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..extensions import db
@@ -24,6 +32,21 @@ class JdDecode(db.Model):
     user_id: Mapped[int | None] = fk("users.id", nullable=True, ondelete="SET NULL")
     # Salted hash of the requester's IP, for the anonymous daily cap only.
     ip_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = created_at_column()
+
+
+class SavedDecode(db.Model):
+    """A decode in a signed-in user's list, to come back to (or delete)."""
+
+    __tablename__ = "saved_decodes"
+    __table_args__ = (UniqueConstraint("user_id", "decode_id", name="uq_saved_decode"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = fk("users.id")
+    decode_id: Mapped[int] = fk("jd_decodes.id")
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Last time the user decoded (or re-decoded) this posting.
+    saved_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     created_at: Mapped[datetime] = created_at_column()
 
 

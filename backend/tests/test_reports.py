@@ -913,3 +913,61 @@ def test_off_topic_answer_gets_the_resume_outline_not_a_story(
     assert "critical outage" not in e["stronger_version"]
     assert "[" in e["stronger_version"]  # an outline with placeholders to fill in
     assert not any('Fix a "stronger version"' in c["prompt"] for c in fire.calls)
+
+
+def _report_for(client, auth, sid, text):
+    started(client, auth, sid)
+    answer(client, auth, sid, text)
+    client.post(f"/api/sessions/{sid}/end", headers=auth)
+    return build(client, auth, sid).get_json()["report"]["questions"][0]["evaluation"]
+
+
+def test_small_talk_answer_scores_1_without_a_fire_call(client, auth, planned, fire):
+    # User report (T-61): "Hi, nice meeting you guys. I'm doing good. How are you
+    # guys doing?" to a project question scored 3.56 with invented content.
+    e = _report_for(
+        client,
+        auth,
+        planned["id"],
+        "Hi, nice meeting you guys. I'm doing good. How are you guys doing?",
+    )
+    assert e["score"] == 1
+    assert "didn't answer the question" in e["summary"]
+    assert all(c["score"] == 1 for c in e["criteria"])
+    assert not any("Score one question" in c["prompt"] for c in fire.calls)
+
+
+def test_scorer_flagged_non_answer_scores_1(client, auth, planned, fire):
+    fire.scores = [{**SCORE, "answers_question": False, "answer_quote": None}]
+    e = _report_for(
+        client, auth, planned["id"], "I really enjoy hiking on weekends with my dog."
+    )
+    assert e["score"] == 1 and e["strengths"] == []
+    prompt = next(
+        c["prompt"] for c in fire.calls if "Score one question" in c["prompt"]
+    )
+    assert '"answers_question"' in prompt
+
+
+def test_invented_evidence_quote_scores_1(client, auth, planned, fire):
+    fire.scores = [
+        {
+            **SCORE,
+            "answers_question": True,
+            "answer_quote": "I implemented real-time facial emotion detection with OpenCV",
+        }
+    ]
+    e = _report_for(
+        client, auth, planned["id"], "My answer is about the billing API at Acme work."
+    )
+    assert e["score"] == 1
+
+
+def test_real_evidence_quote_keeps_the_score(client, auth, planned, fire):
+    fire.scores = [
+        {**SCORE, "answers_question": True, "answer_quote": "the billing API at Acme"}
+    ]
+    e = _report_for(
+        client, auth, planned["id"], "My answer is about the billing API at Acme work."
+    )
+    assert e["score"] > 1

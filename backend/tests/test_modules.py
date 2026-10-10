@@ -84,6 +84,7 @@ def test_analysis_offers_only_modules_that_fit_and_exist(client, auth, docs, fir
         "resume_deepdive",
         "technical",
         "coding",
+        "system_design",  # a software role always gets both (T-62)
     ]
     assert body["modules"][2]["label"] == "Technical Q&A"
     # Cached per document: setup can ask again for free.

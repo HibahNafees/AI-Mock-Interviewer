@@ -161,3 +161,52 @@ describe('formats', () => {
     expect(screen.getByText('Marcus · senior colleague on the team')).toBeInTheDocument()
   })
 })
+
+describe('setup choices for hands-on rounds and pressure', () => {
+  it('asks how many coding problems and keeps pressure one-to-one', async () => {
+    let created
+    let nextDoc = 10
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/documents?kind=resume': [200, { documents: [] }],
+      'GET /api/documents?kind=job_description': [200, { documents: [] }],
+      'POST /api/documents': (opts) => [201, { document: { id: nextDoc++, kind: JSON.parse(opts.body).kind, title: 'x' } }],
+      'POST /api/documents/11/analysis': [
+        200,
+        {
+          analysis: { role_title: 'Software Developer', field: 'software engineering', competencies: [] },
+          modules: [
+            { name: 'technical', label: 'Technical Q&A', blurb: '' },
+            { name: 'coding', label: 'Coding', blurb: '' },
+            { name: 'system_design', label: 'System design', blurb: '' },
+          ],
+        },
+      ],
+      'GET /api/stories/suggest?jd_id=11': [200, { stories: [] }],
+      'POST /api/sessions': (opts) => {
+        created = JSON.parse(opts.body)
+        return [400, { error: 'stop here' }]
+      },
+    })
+    renderAt('/setup')
+    const long = 'x'.repeat(60)
+    await userEvent.type(await screen.findByLabelText('Paste your résumé'), long)
+    await userEvent.click(screen.getAllByRole('button', { name: 'Use this text' })[0])
+    await userEvent.type(screen.getByLabelText('Paste job description'), long)
+    await userEvent.click(screen.getByRole('button', { name: 'Use this text' }))
+    const coding = await screen.findByRole('radiogroup', { name: 'Coding problems' })
+    // 10 minutes fits one problem; 30 fits three.
+    expect(screen.queryByRole('radio', { name: '2' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('radio', { name: '30 min' }))
+    await userEvent.click(screen.getByRole('radio', { name: '2' }))
+    expect(coding).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('radio', { name: 'Skip it' }))
+    // Pressure stays visible with a panel, and picking a level goes back to one interviewer.
+    await userEvent.click(screen.getByRole('radio', { name: '👥 Panel' }))
+    await userEvent.click(screen.getByRole('radio', { name: '2 · Pushback' }))
+    expect(screen.getByRole('radio', { name: 'One interviewer' })).toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Build my interview plan' }))
+    await screen.findByText('stop here')
+    expect(created).toMatchObject({ format: 'standard', pressure_level: 2, coding_problems: 2, system_design: false, duration_min: 30 })
+  })
+})

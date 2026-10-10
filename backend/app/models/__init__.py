@@ -1,4 +1,4 @@
-from .decoder import AnonSpend, JdDecode
+from .decoder import AnonSpend, JdDecode, SavedDecode
 from .documents import Document, JdAnalysis
 from .extras import CompanyResearch, GapAnalysis
 from .interview import Answer, Evaluation, Question, Report, Session
@@ -20,6 +20,7 @@ __all__ = [
     "Question",
     "QuestionBankItem",
     "Report",
+    "SavedDecode",
     "Session",
     "Story",
     "UsageLimit",

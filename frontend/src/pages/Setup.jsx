@@ -81,6 +81,8 @@ export default function Setup() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [format, setFormat] = useState('standard')
+  const [codingProblems, setCodingProblems] = useState('auto')
+  const [design, setDesign] = useState('auto')
   const [terms, setTerms] = useState({ offer: '', target: '', company: '' })
   const [company, setCompany] = useState(null)
   const [whyUs, setWhyUs] = useState(true)
@@ -109,6 +111,18 @@ export default function Setup() {
   const length = negotiating ? Math.min(duration, 20) : duration
   const startNowFor = startNow || negotiating
 
+  // Hands-on rounds the candidate can ask for (T-65), when the job fits them.
+  const offersCoding = offered.some((m) => m.name === 'coding') && ['mixed', 'coding'].includes(chosen)
+  const offersDesign = offered.some((m) => m.name === 'system_design') && chosen === 'mixed'
+  const maxProblems = Math.max(1, Math.min(3, Math.floor(length / 8)))
+  const problems = codingProblems === 'auto' ? 'auto' : Math.min(codingProblems, maxProblems)
+
+  function choosePressure(level) {
+    setPressure(level)
+    // Pressure is for a one-to-one interview.
+    if (level && format !== 'standard') setFormat('standard')
+  }
+
   function chooseFormat(f) {
     setFormat(f)
     if (f !== 'standard') setPressure(0)
@@ -135,6 +149,8 @@ export default function Setup() {
           pressure_level: pressure,
           format,
           ...(negotiating ? { negotiation: terms } : {}),
+          ...(offersCoding && !negotiating && problems !== 'auto' ? { coding_problems: problems } : {}),
+          ...(offersDesign && !negotiating && design !== 'auto' ? { system_design: design === 'yes' } : {}),
           ...(company && whyUs && !negotiating ? { company_research_id: company.id } : {}),
         },
       })
@@ -272,6 +288,49 @@ export default function Setup() {
         </section>
       )}
 
+      {job.status === 'ready' && !negotiating && (offersCoding || offersDesign) && (
+        <section className="card space-y-4 p-5">
+          <h2 className="font-semibold text-slate-900">
+            <span aria-hidden="true">⌨️ </span>Hands-on rounds
+          </h2>
+          {offersCoding && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-ink">Coding problems (in a code editor)</p>
+              <Choice
+                name="Coding problems"
+                options={[
+                  ['auto', 'Let the plan decide'],
+                  [0, 'None'],
+                  ...[1, 2, 3].filter((n) => n <= maxProblems).map((n) => [n, `${n}`]),
+                ]}
+                value={problems}
+                onChange={setCodingProblems}
+              />
+              {maxProblems < 3 && (
+                <p className="text-xs text-slate-500">
+                  Each problem needs about 8 minutes; choose a longer interview for more.
+                </p>
+              )}
+            </div>
+          )}
+          {offersDesign && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-ink">System design question (on a whiteboard)</p>
+              <Choice
+                name="System design"
+                options={[
+                  ['auto', 'Let the plan decide'],
+                  ['yes', 'Include one'],
+                  ['no', 'Skip it'],
+                ]}
+                value={design}
+                onChange={setDesign}
+              />
+            </div>
+          )}
+        </section>
+      )}
+
       <div className="card grid gap-6 p-5 md:grid-cols-3">
         <section className="space-y-3">
           <h2 className="font-semibold text-slate-900">Length</h2>
@@ -332,7 +391,7 @@ export default function Setup() {
         </section>
       </div>
 
-      {format === 'standard' && (
+      {!negotiating && (
         <section className="card space-y-3 p-5">
           <h2 className="font-semibold text-slate-900">
             <span aria-hidden="true">🔥 </span>Pressure
@@ -348,12 +407,14 @@ export default function Setup() {
               [5, '5 · 30 s, demanding'],
             ]}
             value={pressure}
-            onChange={setPressure}
+            onChange={choosePressure}
           />
           <p className="text-sm text-slate-500">
-            {pressure === 0
-              ? 'A normal interview.'
-              : 'Practice staying composed: the interviewer gets tougher between answers (always respectful), and higher levels add answer time limits and curveballs. Scoring stays the same, and you can ease off or stop at any time. Your report shows a composure score.'}
+            {format === 'panel'
+              ? 'Pressure works with one interviewer: choosing a level switches the format back to One interviewer.'
+              : pressure === 0
+                ? 'A normal interview.'
+                : 'Practice staying composed: the interviewer gets tougher between answers (always respectful), and higher levels add answer time limits and curveballs. Scoring stays the same, and you can ease off or stop at any time. Your report shows a composure score.'}
           </p>
         </section>
       )}

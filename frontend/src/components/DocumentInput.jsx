@@ -66,6 +66,26 @@ export default function DocumentInput({ kind, value, onChange }) {
     if (!busy) send(e.dataTransfer.files?.[0])
   }
 
+  async function remove() {
+    const doc = docs.find((d) => d.id === value)
+    if (!doc) return
+    const what = kind === 'resume' ? 'résumé' : 'job posting'
+    if (!window.confirm(`Delete the saved ${what} "${doc.title}"? Past interview reports stay.`)) return
+    setError('')
+    setBusy(true)
+    try {
+      await api(`/documents/${doc.id}`, { method: 'DELETE' })
+      const rest = docs.filter((d) => d.id !== doc.id)
+      setDocs(rest)
+      onChange(rest[0]?.id ?? null)
+      if (!rest.length) setMode('paste')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const tabs = [
     ...(docs.length ? [['saved', 'Saved']] : []),
     ['paste', 'Paste'],
@@ -97,18 +117,29 @@ export default function DocumentInput({ kind, value, onChange }) {
       </div>
 
       {mode === 'saved' && (
-        <select
-          aria-label={`Saved ${LABELS[kind].toLowerCase()}`}
-          value={value ?? ''}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="field"
-        >
-          {docs.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.title}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            aria-label={`Saved ${LABELS[kind].toLowerCase()}`}
+            value={value ?? ''}
+            onChange={(e) => onChange(Number(e.target.value))}
+            className="field min-w-0 flex-1"
+          >
+            {docs.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.title}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={remove}
+            disabled={busy || !value}
+            aria-label={`Delete this saved ${kind === 'resume' ? 'résumé' : 'job posting'}`}
+            className="btn-link shrink-0 text-sm hover:text-red-600"
+          >
+            Delete
+          </button>
+        </div>
       )}
 
       {mode === 'paste' && (

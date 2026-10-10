@@ -209,3 +209,100 @@ def test_off_topic_code_answer_gets_how_to_solve_not_a_story(
     report = client.post(f"/api/sessions/{sid}/report", headers=auth).get_json()
     stronger = report["report"]["questions"][0]["evaluation"]["stronger_version"]
     assert "complexity" in stronger and "specific time" not in stronger
+
+
+# ---- hands-on choices (T-62, T-65) ---------------------------------------------
+
+
+def test_software_roles_always_offer_coding_and_design(client, auth, docs, fire):
+    fire.analysis = {
+        **fire.analysis,
+        "role_title": "Software Developer",
+        "field": "software engineering",
+        "formats": ["behavioral", "resume_deepdive", "technical"],
+    }
+    r = client.post(f"/api/documents/{docs['jd_id']}/analysis", headers=auth)
+    names = [m["name"] for m in r.get_json()["modules"]]
+    assert "coding" in names and "system_design" in names
+
+
+def test_non_software_technical_roles_dont_get_coding(client, auth, docs, fire):
+    fire.analysis = {
+        **fire.analysis,
+        "role_title": "Accountant",
+        "field": "accounting",
+        "formats": ["behavioral", "technical"],
+    }
+    r = client.post(f"/api/documents/{docs['jd_id']}/analysis", headers=auth)
+    assert "coding" not in [m["name"] for m in r.get_json()["modules"]]
+
+
+def two_problem_plan():
+    return {
+        "sections": [
+            {
+                "name": "Coding",
+                "module": "coding",
+                "minutes": 16,
+                "questions": ["Reverse a list.", "Find duplicates."],
+            },
+            {
+                "name": "Background",
+                "module": "resume_deepdive",
+                "minutes": 4,
+                "questions": ["Walk me through Acme."],
+            },
+        ],
+        "reserve": [],
+    }
+
+
+def test_asked_number_of_coding_problems_is_enforced(client, auth, docs, fire):
+    # First reply has one problem; the retry has the two the candidate asked for.
+    one = two_problem_plan()
+    one["sections"][0]["questions"] = ["Reverse a list."]
+    replies = [one, two_problem_plan()]
+    plans = []
+
+    real_chat = fire.chat
+
+    def chat(messages, **kw):
+        if "question plan" in messages[0]["content"]:
+            plans.append(messages)
+            fire.plan = replies[len(plans) - 1]
+        return real_chat(messages, **kw)
+
+    fire.chat = chat
+    r = client.post(
+        "/api/sessions",
+        json={**docs, "duration_min": 20, "coding_problems": 2, "system_design": False},
+        headers=auth,
+    )
+    assert r.status_code == 201, r.get_json()
+    prompt = plans[0][0]["content"]
+    assert "Use exactly 2 coding problem(s)" in prompt
+    assert 'Don\'t use the "system_design" module.' in prompt
+    assert len(plans) == 2 and "exactly 2 question(s)" in plans[1][-1]["content"]
+    coding = [
+        s
+        for s in r.get_json()["session"]["plan"]["sections"]
+        if s["module"] == "coding"
+    ]
+    assert len(coding[0]["questions"]) == 2
+
+
+def test_coding_count_is_capped_by_the_length(client, auth, docs, fire):
+    fire.plan = {
+        "sections": [
+            {"name": "Coding", "module": "coding", "minutes": 10, "questions": ["A."]}
+        ],
+        "reserve": [],
+    }
+    r = client.post(
+        "/api/sessions",
+        json={**docs, "duration_min": 10, "coding_problems": 3},
+        headers=auth,
+    )
+    assert r.status_code == 201, r.get_json()
+    prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
+    assert "Use exactly 1 coding problem(s)" in prompt
