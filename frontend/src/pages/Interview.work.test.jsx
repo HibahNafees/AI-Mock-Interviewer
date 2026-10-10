@@ -67,7 +67,11 @@ it('sends the code, then the sketch as text, with the answers', async () => {
   const sent = []
   const first = ask(1, 'Coding', 'Rate-limit each user.')
   const second = ask(2, 'Design', 'Design it for many servers.')
+  const followUp = { ...ask(4, 'Coding', 'What about an empty list?'), is_follow_up: true }
+  const bonus = ask(5, 'Coding', 'How would you test it?')
   const replies = [
+    session([{ ...first, answer: 'x' }, followUp], 'Coding'),
+    session([{ ...first, answer: 'x' }, { ...followUp, answer: 'y' }, bonus], 'Coding'),
     session([{ ...first, answer: 'x' }, second], 'Design'),
     session([{ ...first, answer: 'x' }, { ...second, answer: 'y' }, ask(3, 'Design', 'Where do counters live?')], 'Design'),
   ]
@@ -105,12 +109,24 @@ it('sends the code, then the sketch as text, with the answers', async () => {
     work: { kind: 'code', language: 'go', content: 'def allow(u): pass' },
   })
 
+  // A follow-up keeps the code; the next main question starts with an empty editor.
+  await screen.findByText('What about an empty list?')
+  expect(screen.getByLabelText('Monaco')).toHaveValue('def allow(u): pass')
+  await userEvent.type(screen.getByLabelText('Your answer'), 'It returns None.')
+  await userEvent.click(screen.getByRole('button', { name: 'Send answer' }))
+  expect(sent[1].work.content).toBe('def allow(u): pass')
+  await screen.findByText('How would you test it?')
+  expect(screen.getByLabelText('Monaco')).toHaveValue('')
+  await userEvent.type(screen.getByLabelText('Your answer'), 'With pytest.')
+  await userEvent.click(screen.getByRole('button', { name: 'Send answer' }))
+  expect(sent[2].work).toBeUndefined()
+
   // The next section is system design: a whiteboard instead of the editor.
   await userEvent.click(await screen.findByRole('button', { name: 'Draw' }))
   expect(screen.queryByLabelText('Monaco')).not.toBeInTheDocument()
   await userEvent.type(screen.getByLabelText('Your answer'), 'Redis holds the counters.')
   await userEvent.click(screen.getByRole('button', { name: 'Send answer' }))
-  expect(sent[1]).toMatchObject({
+  expect(sent[3]).toMatchObject({
     text: 'Redis holds the counters.',
     work: { kind: 'whiteboard', content: 'Components: API, Redis\nConnections: API → Redis' },
   })

@@ -103,6 +103,19 @@ PAST_VERB_RE = re.compile(
 FALLBACK_STEPS = (
     "[Describe one specific time: the situation, what you did, and the result.]"
 )
+# Off-topic answers to a problem (not a story): how to answer it, no résumé story.
+SOLVE_FALLBACK = {
+    "coding": "[Restate the problem and one example in a sentence.] [Explain your approach "
+    "and its time and space complexity.] [Write the code in the editor and walk through it "
+    "on the example.] [Say which edge cases you'd test.]",
+    "system_design": "[Clarify the requirements and the scale.] [Name the main components "
+    "and how data flows between them, and sketch them on the whiteboard.] [Explain one "
+    "trade-off you made and how the design handles load or a failure.]",
+    "technical": "[Answer the question directly in one sentence.] [Explain how it works "
+    "or why.] [Give a trade-off or an example from your own work.]",
+    "case": "[Restate the problem and your goal.] [Lay out the 2–3 parts you'd break it "
+    "into.] [Work through the most important part with numbers.] [Give a recommendation.]",
+}
 FALLBACK_REWRITE = (
     "[Answer the question with one specific example from your experience: "
     "the situation, what you did, and the result.]"
@@ -685,9 +698,11 @@ def evaluate(
     )
     if off_topic and not scenario:
         # The answer missed the question: the AI would have to stitch résumé facts
-        # into a story that never happened (T-48). Point at the résumé instead.
+        # into a story that never happened (T-48). Point at the résumé instead, or,
+        # for a problem to solve, at how to answer it (T-56).
         stronger, changes = (
-            resume_fallback(question or exchange[0]["interviewer"], resume_text),
+            SOLVE_FALLBACK.get(module)
+            or resume_fallback(question or exchange[0]["interviewer"], resume_text),
             [],
         )
     else:

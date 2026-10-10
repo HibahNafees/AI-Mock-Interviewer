@@ -154,6 +154,7 @@ def test_negotiation_is_one_long_call_with_the_recruiter(app, client, auth, docs
         assert data["turn"]["action"] == "follow_up"
     prompt = fire.calls[-1]["prompt"]
     assert "only partway" in prompt  # the recruiter's private instructions
+    assert "Your first reply never improves the offer" in prompt  # T-58
 
     fire.turns = [
         {"goal_reached": True, "action": "follow_up", "message": "Deal at $88,000!"}
@@ -162,6 +163,13 @@ def test_negotiation_is_one_long_call_with_the_recruiter(app, client, auth, docs
     # No "any questions for me?" after a negotiation.
     assert data["turn"]["action"] == "wrap_up"
     assert data["session"]["status"] == "completed"
+    # The recruiter said goodbye; the app closes the practice, not an interview
+    # ("you'll hear back by email", T-57).
+    last = data["turn"]["segments"][-1]["text"]
+    assert last.endswith(
+        "That's the end of the negotiation practice, Ada. Your report shows how you did on anchoring, justifying your number and staying calm."
+    )
+    assert "email" not in data["turn"]["message"]
 
 
 def test_negotiation_report_speaks_about_the_negotiation(app, client, auth, docs, fire):

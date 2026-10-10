@@ -96,6 +96,10 @@ TOUGH_CLOSING = (
     "email."
 )
 OUT_OF_TIME = "Looks like we're out of time."
+NEGOTIATION_CLOSING = (
+    "That's the end of the negotiation practice, {name}. Your report shows how you did "
+    "on anchoring, justifying your number and staying calm."
+)
 
 # The candidate's turn to ask (not scored): asked instead of signing off.
 QA_SECTION = "Your questions"
@@ -111,7 +115,10 @@ def closing(session: Session, out_of_time: bool = False) -> str:
     """A natural sign-off, the same one for the whole session."""
     user = db.session.get(User, session.user_id)
     name = (user.name if user else "").split(" ")[0] or "there"
-    if session.persona == "tough":
+    if session.mode == "negotiation":
+        # The recruiter already said goodbye in character (T-57).
+        text = NEGOTIATION_CLOSING.format(name=name)
+    elif session.persona == "tough":
         text = TOUGH_CLOSING.format(name=name)
     else:
         text = random.Random(session.id).choice(CLOSINGS).format(name=name)

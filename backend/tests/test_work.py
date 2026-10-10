@@ -182,3 +182,30 @@ def test_body_language_is_optional_and_validated(client, auth, planned, fire):
     assert bad.status_code == 400
     answer(client, auth, sid)
     assert db.session.scalar(db.select(Answer)).body_json is None
+
+
+def test_off_topic_code_answer_gets_how_to_solve_not_a_story(
+    app, client, auth, docs, fire
+):
+    # Live check (T-56): an off-topic coding answer got "[Describe one specific
+    # time: the situation…]", a behavioral placeholder.
+    from tests.fakes import SCORE
+
+    app.config["REPORTS_INLINE"] = True
+    _, sid = coding_session(client, auth, docs, fire)
+    fire.turns = [{"action": "next_question", "message": "Now, the design."}]
+    send(client, auth, sid, "I like working with databases a lot, honestly.", CODE)
+    client.post(f"/api/sessions/{sid}/end", headers=auth)
+    off = {
+        **SCORE,
+        "criteria": [
+            {"name": "API design", "score": 1},
+            {"name": "Structure", "score": 2},
+            {"name": "Clarity", "score": 2},
+            {"name": "Relevance", "score": 1},
+        ],
+    }
+    fire.scores = [off]
+    report = client.post(f"/api/sessions/{sid}/report", headers=auth).get_json()
+    stronger = report["report"]["questions"][0]["evaluation"]["stronger_version"]
+    assert "complexity" in stronger and "specific time" not in stronger

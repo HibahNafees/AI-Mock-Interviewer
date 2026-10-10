@@ -104,7 +104,13 @@ Other areas unchanged (✅). **Open from this check:** none.
 | Answer coaching | ✅ | Questions-for-them coach rates the candidate's own questions with a better version; thank-you email uses placeholders for anything unknown; cheat sheet uses only the user's own stories, numbers and weak spots. |
 | Final report | ✅ | Shows code and sketches under the answers, a negotiation header with offer and target, and body language only after 8+ camera samples, labeled as a rough guide and not part of the score. |
 | Safety and privacy | ✅ | Camera is off by default; MediaPipe runs in the browser and only percentages per answer are saved; whiteboard drawings never leave the browser (text description only). Company research blocks private, loopback and link-local addresses, non-standard ports, credentials in URLs and unchecked redirects (SSRF), and caps size and time. Recruiter keeps its room to move private. Still planned: purge expired documents (Phase 10). |
-| Live behavior with Fire | ⏳ | Built and tested with Fire mocked, plus a real-browser check without Fire (panel labels, Monaco, Excalidraw, camera + MediaPipe, code and sketch sent with answers). Not yet checked live: panel handovers, recruiter behavior in a negotiation, coding/design follow-ups and scoring, company research on a real site. |
+| Live behavior with Fire | ✅ | See the live check below. |
 
 Browser check found and fixed T-51 (Monaco's CDN loader broke the whiteboard) and T-52 (body-language sampling could freeze slow devices).
-Other areas unchanged (✅). **Open from this check:** the live check above, pending approval for Fire spend.
+Other areas unchanged (✅).
+
+### Live check against the real Fire API (2026-10-10, ~$0.046)
+
+Panel (15 min, with company research): stripe.com/about summarized faithfully (no invented facts) and its two "Why us?" questions became a section; Priya opened and introduced the panel, then handed to Elena (behavioral), Marcus (technical, design) and back to Elena, each with a natural handover; Priya took the candidate's questions and signed off. Coding (10 min): a role-fit problem with an example; follow-ups on edge cases, complexity and trade-offs; the scorer read the code and caught that it solved a different problem. Design (10 min): follow-ups came from the sketch text (cache invalidation, load when the cache fails). Negotiation (5 min): the recruiter held, then moved in small steps after a justified number and agreed a bonus and review; scored on anchoring, justification, composure and clarity.
+
+Found and fixed: T-55 (editor code went out with unrelated later questions; now it resets per main question), T-56 (off-topic coding/design answers got a behavioral placeholder rewrite), T-57 (negotiation closed with the interview's "you'll hear back by email"), T-58 (the recruiter once conceded almost the whole gap on the first ask). **Open from this check:** none.

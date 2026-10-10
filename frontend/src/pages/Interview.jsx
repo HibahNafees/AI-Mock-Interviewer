@@ -282,19 +282,21 @@ function LiveStep({ session, setSession, greeting }) {
       ? session.pressure.time_limit_sec
       : null
   const current = session.transcript.at(-1)
-  // Coding round: a code editor; system design: a whiteboard. Both stay for the
-  // whole section (follow-ups included) and reset in the next one.
+  // Coding round: a code editor; system design: a whiteboard. Both stay through a
+  // question's follow-ups and start fresh with each new question, so earlier work
+  // never goes out with an unrelated one (T-55).
   const tool = active ? { coding: 'code', system_design: 'whiteboard' }[moduleOf(session.plan, current?.section)] : null
+  const workFor = session.transcript.findLast((t) => !t.is_follow_up)?.question_id ?? null
   const [code, setCode] = useState(NEW_CODE)
-  const [codeSection, setCodeSection] = useState(null)
-  if (tool && codeSection !== current?.section) {
-    setCodeSection(current?.section)
+  const [codeFor, setCodeFor] = useState(null)
+  if (tool && codeFor !== workFor) {
+    setCodeFor(workFor)
     setCode(NEW_CODE)
   }
   const board = useRef([])
   useEffect(() => {
     board.current = []
-  }, [current?.section])
+  }, [workFor])
   const hintUsed = Boolean(current?.hint)
   // Small talk and "any questions for me?" get no hints.
   const noHints = !current || ['Ice-breaker', 'Your questions'].includes(current.section)
@@ -624,7 +626,7 @@ function LiveStep({ session, setSession, greeting }) {
               {tool === 'code' ? (
                 <CodePad code={code} onChange={setCode} />
               ) : (
-                <Whiteboard key={current?.section} onChange={(elements) => (board.current = elements)} />
+                <Whiteboard key={workFor} onChange={(elements) => (board.current = elements)} />
               )}
             </Suspense>
           )}
