@@ -18,6 +18,7 @@ from ..services import (
 from ..services.transcription import TranscriptionError, transcribe
 from ..services.timer import is_paused, timer_state
 from ..services import negotiation as nego
+from ..services.body import BodyIn
 from ..services.work import WorkIn
 from .common import current_user_id, first_error
 from .documents import owned_document
@@ -81,6 +82,8 @@ class TurnBody(BaseModel):
     speak: bool = False
     # Code from the editor or the whiteboard sketch (coding / system design).
     work: WorkIn | None = None
+    # Opt-in camera feedback: percentages only, never video.
+    body: BodyIn | None = None
 
     @field_validator("text")
     @classmethod
@@ -402,6 +405,7 @@ def turn(session_id: int):
         body.duration_ms,
         body.input_mode,
         body.work.model_dump() if body.work else None,
+        body.body.model_dump() if body.body else None,
     )
     speech = (
         voice.synthesize(user_id, session, result["segments"]) if body.speak else None

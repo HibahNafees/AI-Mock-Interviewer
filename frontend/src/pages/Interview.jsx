@@ -4,9 +4,11 @@ import PlanEditor from '../components/PlanEditor'
 import Recorder from '../components/Recorder'
 import { Mascot } from '../components/Art'
 import Timer from '../components/Timer'
+import BodyLanguage from '../components/BodyLanguage'
 import WorkView from '../components/WorkView'
 import { api } from '../lib/api'
 import { characterName, moduleOf, scenarioFor } from '../lib/modules'
+import { useBodyLanguage } from '../lib/useBodyLanguage'
 import { describeScene } from '../lib/whiteboard'
 import { answerModePref, canRecord, MAX_ANSWER_MS, setAnswerModePref } from '../lib/recording'
 import { canSpeak, FILLERS, say, setVoicePref, voicePref, warmUpVoices } from '../lib/voice'
@@ -260,6 +262,8 @@ function LiveStep({ session, setSession, greeting }) {
   const lastSaid = useRef(null) // { segments, clips } for "Repeat"
 
   const [text, setText] = useState('')
+  const body = useBodyLanguage()
+  const resetBody = body.reset
   const [phase, setPhase] = useState('idle') // idle | transcribing | thinking
   const [error, setError] = useState('')
   const askedAt = useRef(0)
@@ -309,8 +313,9 @@ function LiveStep({ session, setSession, greeting }) {
   // The question is out (spoken, skipped, or voice is off): in speak mode, record.
   const questionReady = useCallback(() => {
     askedAt.current = Date.now()
+    resetBody() // body language is measured per answer
     if (modeRef.current === 'voice') setRecordKey((k) => k + 1)
-  }, [])
+  }, [resetBody])
 
   const speak = useCallback(
     (message, { remember = true, onDone } = {}) => {
@@ -425,6 +430,7 @@ function LiveStep({ session, setSession, greeting }) {
   async function sendTurn(answer, meta) {
     setPhase('thinking')
     const work = currentWork()
+    const posture = body.take()
     try {
       const data = await api(`/sessions/${session.id}/turns`, {
         method: 'POST',
@@ -433,6 +439,7 @@ function LiveStep({ session, setSession, greeting }) {
           text: answer.trim() || SEE_WORK[work?.kind] || answer,
           ...meta,
           ...(work ? { work } : {}),
+          ...(posture ? { body: posture } : {}),
           ...(fireVoice && voiceOn ? { speak: true } : {}),
         },
       })
@@ -590,6 +597,7 @@ function LiveStep({ session, setSession, greeting }) {
         </p>
       )}
       <div ref={bottom} />
+      {active && <BodyLanguage body={body} />}
 
       {active && paused ? (
         <div className="card flex flex-col items-center gap-4 p-8 text-center">

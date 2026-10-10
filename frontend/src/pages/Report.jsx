@@ -638,6 +638,47 @@ function NextRound({ debrief }) {
   )
 }
 
+// Opt-in camera feedback, measured in the browser; never part of the score.
+function BodyLanguageCard({ b }) {
+  const rows = [
+    ['Eye contact', b.eye_contact_pct, 'of the time looking at the camera'],
+    ['Posture', b.upright_pct, 'of the time sitting upright'],
+    ['Fidgeting', b.fidget_pct, 'of the time moving a lot', true],
+  ].filter(([, v]) => v != null)
+  return (
+    <div className="card space-y-3 p-6">
+      <div>
+        <p className="eyebrow">
+          <span aria-hidden="true">📷 </span>Body language
+        </p>
+        <p className="text-sm text-slate-600">
+          From your camera on {b.answers} answer{b.answers === 1 ? '' : 's'}, measured on your device. It isn't
+          part of your score.
+        </p>
+      </div>
+      <ul className="grid gap-3 sm:grid-cols-3">
+        {rows.map(([label, value, what, lowIsGood]) => {
+          const good = lowIsGood ? value <= 25 : value >= 60
+          return (
+            <li key={label} className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <p className="text-sm font-semibold text-ink">{label}</p>
+              <p className={`text-2xl font-extrabold ${good ? 'text-emerald-700' : 'text-brand-700'}`}>{value}%</p>
+              <p className="text-xs text-slate-500">{what}</p>
+            </li>
+          )
+        })}
+      </ul>
+      {b.tips.length > 0 && (
+        <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
+          {b.tips.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function Summary({ report }) {
   const a = report.analytics
   const verdicts = report.mode === 'negotiation' ? NEGOTIATION_VERDICT : VERDICT
@@ -693,6 +734,8 @@ function Summary({ report }) {
           </div>
         </div>
       )}
+
+      {report.body_language && <BodyLanguageCard b={report.body_language} />}
 
       {report.their_questions && (
         <div className="card p-6">

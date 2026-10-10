@@ -512,6 +512,7 @@ def take_turn(
     duration_ms: int | None,
     input_mode: str = "text",
     work: dict | None = None,
+    body: dict | None = None,
 ) -> dict:
     """Save the answer to the current question and produce the interviewer's reply."""
     asked = asked_questions(session)
@@ -692,7 +693,7 @@ def take_turn(
     segments = _segments(parts)
     out.message = " ".join(s["text"] for s in segments)
 
-    now = _save_answer(session, current, text, duration_ms, input_mode, work)
+    now = _save_answer(session, current, text, duration_ms, input_mode, work, body)
 
     if out.action == "follow_up":
         root_id = current.follow_up_of_id or current.id
@@ -733,6 +734,7 @@ def _save_answer(
     duration_ms: int | None,
     input_mode: str,
     work: dict | None = None,
+    body: dict | None = None,
 ):
     now = utcnow()
     ended_ms = int((now - session.started_at).total_seconds() * 1000)
@@ -747,6 +749,7 @@ def _save_answer(
             attempt_no=1,
             input_mode=input_mode,
             work_json=work,
+            body_json=body,
         )
     )
     return now

@@ -115,6 +115,8 @@ class Answer(db.Model):
     # Code from the editor or a whiteboard sketch as text (services/work.py):
     # {"kind": "code" | "whiteboard", "language", "content"}. Never an image.
     work_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # Opt-in body language percentages measured in the browser (services/body.py).
+    body_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = created_at_column()
 
 

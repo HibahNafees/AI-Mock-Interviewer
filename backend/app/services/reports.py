@@ -29,6 +29,7 @@ from . import (
     stories,
 )
 from .analytics import Clip, delivery, session_summary
+from . import body as body_language
 from .work import with_work
 from .fire import FireError
 from .limits import LimitReached, check_budget
@@ -541,6 +542,14 @@ def report_dict(session: Session, report: Report) -> dict:
             else None
         ),
         "analytics": report.analytics_json,
+        "body_language": body_language.summary(
+            [
+                t.answers[q.id].body_json
+                for t in items
+                for q in t.asked
+                if q.id in t.answers
+            ]
+        ),
         "progress": {
             "scored": sum(1 for t in items if t.main_answer.id in evals),
             "total": len(items),

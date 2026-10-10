@@ -93,6 +93,9 @@ it('sends the code, then the sketch as text, with the answers', async () => {
       </AuthProvider>
     </MemoryRouter>,
   )
+  // Body language stays off unless turned on.
+  expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument()
+  expect(screen.getByLabelText('Your camera')).toHaveClass('hidden')
   await userEvent.type(await screen.findByLabelText('Monaco'), 'def allow(u): pass')
   await userEvent.selectOptions(screen.getByRole('combobox'), 'go')
   // Code alone is enough to send.
@@ -111,4 +114,5 @@ it('sends the code, then the sketch as text, with the answers', async () => {
     text: 'Redis holds the counters.',
     work: { kind: 'whiteboard', content: 'Components: API, Redis\nConnections: API → Redis' },
   })
+  expect(sent.every((b) => !('body' in b))).toBe(true)
 })

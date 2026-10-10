@@ -126,3 +126,59 @@ def test_plain_answers_have_no_work(client, auth, planned, fire):
     answer(client, auth, planned["id"])
     assert db.session.scalar(db.select(Answer)).work_json is None
     assert PLAN["sections"][0]["module"] == "resume_deepdive"
+
+
+# ---- body language ------------------------------------------------------------
+
+STEADY = {
+    "samples": 40,
+    "face_pct": 95,
+    "eye_contact_pct": 80,
+    "upright_pct": 90,
+    "fidget_pct": 10,
+}
+
+
+def test_body_language_numbers_are_saved_never_sent_to_fire(
+    app, client, auth, planned, fire
+):
+    app.config["REPORTS_INLINE"] = True
+    sid = planned["id"]
+    started(client, auth, sid)
+    looked_away = {**STEADY, "samples": 20, "eye_contact_pct": 20, "fidget_pct": 70}
+    for body in (STEADY, looked_away):
+        r = client.post(
+            f"/api/sessions/{sid}/turns",
+            json={
+                "text": "I built the billing API.",
+                "duration_ms": 30_000,
+                "body": body,
+            },
+            headers=auth,
+        )
+        assert r.status_code == 200, r.get_json()
+    saved = db.session.scalars(db.select(Answer).order_by(Answer.id)).all()
+    assert saved[0].body_json == STEADY
+    assert all("eye_contact" not in c["prompt"] for c in fire.calls)
+
+    client.post(f"/api/sessions/{sid}/end", headers=auth)
+    report = client.post(f"/api/sessions/{sid}/report", headers=auth).get_json()
+    body = report["report"]["body_language"]
+    # Weighted by how long the camera watched each answer.
+    assert body["eye_contact_pct"] == 60 and body["fidget_pct"] == 30
+    assert body["answers"] == 2
+    assert any("hands" in t for t in body["tips"])
+    assert all("eye_contact" not in c["prompt"] for c in fire.calls)
+
+
+def test_body_language_is_optional_and_validated(client, auth, planned, fire):
+    sid = planned["id"]
+    started(client, auth, sid)
+    bad = client.post(
+        f"/api/sessions/{sid}/turns",
+        json={"text": "Hi.", "body": {**STEADY, "eye_contact_pct": 140}},
+        headers=auth,
+    )
+    assert bad.status_code == 400
+    answer(client, auth, sid)
+    assert db.session.scalar(db.select(Answer)).body_json is None

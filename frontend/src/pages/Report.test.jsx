@@ -213,6 +213,39 @@ describe('report', () => {
     expect(screen.getByText(/Started at level 3, eased to level 1/)).toBeInTheDocument()
   })
 
+  it('shows body language and the code behind an answer', async () => {
+    const code = { kind: 'code', language: 'python', content: 'def allow(u): ...' }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7/report': [
+        200,
+        {
+          report: {
+            ...READY,
+            mode: 'negotiation',
+            negotiation: { offer: '$80,000', target: '$92,000', company: '' },
+            questions: [{ ...QUESTION, exchange: [{ ...QUESTION.exchange[0], work: code }] }],
+            body_language: {
+              eye_contact_pct: 45,
+              upright_pct: 90,
+              fidget_pct: 10,
+              face_pct: 95,
+              answers: 2,
+              tips: ['Look at the camera when you make your key points.'],
+            },
+          },
+        },
+      ],
+    })
+    renderAt('/report/7')
+    expect(await screen.findByText('Negotiation report')).toBeInTheDocument()
+    expect(screen.getByText('Offer $80,000 · your target $92,000')).toBeInTheDocument()
+    expect(screen.getByText('45%')).toBeInTheDocument()
+    expect(screen.getByText('Look at the camera when you make your key points.')).toBeInTheDocument()
+    expect(screen.getByText('Your code (python)')).toBeInTheDocument()
+    expect(screen.getByText('def allow(u): ...')).toBeInTheDocument()
+  })
+
   it('rates the questions you asked them', async () => {
     respond({
       'GET /api/auth/me': [200, { user: ADA }],
