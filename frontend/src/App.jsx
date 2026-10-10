@@ -1,8 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import ComingSoon from './components/ComingSoon'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/Dashboard'
+import Debrief from './pages/Debrief'
 import Decoder from './pages/Decoder'
 import Interview from './pages/Interview'
 import Login from './pages/Login'
@@ -33,7 +33,7 @@ export default function App() {
         <Route path="stories" element={<Stories />} />
         <Route path="decoder" element={<Decoder />} />
         <Route path="decoder/:token" element={<Decoder />} />
-        <Route path="debrief" element={<ComingSoon title="Debrief" phase={8} />} />
+        <Route path="debrief" element={<Debrief />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

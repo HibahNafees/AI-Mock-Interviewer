@@ -52,6 +52,8 @@ class Debrief(db.Model):
     round: Mapped[str | None] = mapped_column(String(120))
     recalled_qa_json: Mapped[list[Any] | None] = mapped_column(JSON)
     analysis_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # The completed "debrief" session that scores the recalled answers.
+    session_id: Mapped[int | None] = fk("sessions.id", nullable=True)
     created_at: Mapped[datetime] = created_at_column()
 
 

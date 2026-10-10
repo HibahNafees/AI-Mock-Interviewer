@@ -29,8 +29,12 @@ def _avg(values: list[float]) -> float | None:
 
 
 def user_stats(user_id: int) -> dict:
+    # Mock interviews only: a debrief is a real interview recalled afterwards.
     sessions = db.session.scalars(
-        db.select(Session).filter_by(user_id=user_id).order_by(Session.created_at)
+        db.select(Session)
+        .filter_by(user_id=user_id)
+        .where(Session.mode != "debrief")
+        .order_by(Session.created_at)
     ).all()
     ids = [s.id for s in sessions]
     started = [s for s in sessions if s.started_at]

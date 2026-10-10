@@ -21,6 +21,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     from . import models  # noqa: F401  (register tables with SQLAlchemy)
     from .routes.auth import bp as auth_bp
     from .routes.common import register_error_handlers
+    from .routes.debriefs import bp as debriefs_bp
     from .routes.decoder import bp as decoder_bp
     from .routes.documents import bp as documents_bp
     from .routes.health import bp as health_bp
@@ -32,6 +33,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.register_blueprint(health_bp, url_prefix="/api")
     app.register_blueprint(stats_bp, url_prefix="/api")
     app.register_blueprint(decoder_bp, url_prefix="/api/decoder")
+    app.register_blueprint(debriefs_bp, url_prefix="/api/debriefs")
     app.register_blueprint(stories_bp, url_prefix="/api/stories")
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(documents_bp, url_prefix="/api/documents")

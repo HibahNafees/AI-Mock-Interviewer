@@ -15,9 +15,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
 from ..extensions import db
-from ..models import Answer, Evaluation, Question, Report, Session
+from ..models import Answer, Debrief, Evaluation, Question, Report, Session
 from ..models.base import utcnow
-from . import interviewer, practice, pressure, scoring, stories
+from . import debriefs, interviewer, practice, pressure, scoring, stories
 from .analytics import Clip, delivery, session_summary
 from .fire import FireError
 from .limits import LimitReached, check_budget
@@ -221,7 +221,22 @@ def generate(report_id: int, user_id: int) -> None:
         )
     report.status = "ready"
     db.session.commit()
+    _predict_next_round(user_id, session, items, done)
     _update_story_bank(user_id, session, report, items, done)
+
+
+def _predict_next_round(user_id, session, items, done) -> None:
+    """Debriefs: likely next-round questions (retried when the debrief is opened)."""
+    if session.mode != "debrief":
+        return
+    debrief = db.session.scalar(db.select(Debrief).filter_by(session_id=session.id))
+    if debrief is None:
+        return
+    try:
+        debriefs.predict(user_id, debrief, items, done)
+    except (FireError, LimitReached) as err:
+        log.warning("Next-round prediction for debrief %s failed: %s", debrief.id, err)
+        db.session.rollback()
 
 
 def _update_story_bank(user_id, session, report, items, done) -> None:
@@ -415,6 +430,13 @@ def unanswered(session: Session, items: list["Thread"]) -> list[dict]:
     ]
 
 
+def _debrief_info(session: Session) -> dict | None:
+    if session.mode != "debrief":
+        return None
+    d = db.session.scalar(db.select(Debrief).filter_by(session_id=session.id))
+    return debriefs.debrief_dict(d) if d else None
+
+
 def report_dict(session: Session, report: Report) -> dict:
     items = threads(session)
     answer_ids = [t.main_answer.id for t in items] + [
@@ -478,6 +500,7 @@ def report_dict(session: Session, report: Report) -> dict:
             [evals[t.main_answer.id] for t in items if t.main_answer.id in evals]
         ),
         "unanswered": unanswered(session, items),
+        "debrief": _debrief_info(session),
         "pressure": (
             {**pressure.info(session), "composure": pressure.composure(session, report)}
             if session.mode == "pressure"

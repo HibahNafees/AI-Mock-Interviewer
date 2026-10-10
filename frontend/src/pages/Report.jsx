@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import Recorder from '../components/Recorder'
+import { NoRecordingsNotice } from './Debrief'
 import { api } from '../lib/api'
 import { canRecord, MAX_ANSWER_MS } from '../lib/recording'
 
@@ -495,6 +496,71 @@ function QuestionCard({ q, index, sessionId, onAttempt, failed }) {
   )
 }
 
+function NextRound({ debrief }) {
+  const navigate = useNavigate()
+  const [next, setNext] = useState(debrief.next_round)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function run(action) {
+    setError('')
+    setBusy(true)
+    try {
+      if (action === 'predict') {
+        setNext((await api(`/debriefs/${debrief.id}/predict`, { method: 'POST' })).debrief.next_round)
+      } else {
+        const { session } = await api(`/debriefs/${debrief.id}/practice`, { method: 'POST', body: { duration_min: 10 } })
+        navigate(`/interview/${session.id}`)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card space-y-4 p-6">
+      <div>
+        <p className="eyebrow">Next round</p>
+        <h2 className="text-lg font-bold">Questions the next round will likely ask</h2>
+        <p className="text-sm text-slate-500">A prediction from this interview, not a promise.</p>
+      </div>
+      {next.length ? (
+        <ol className="space-y-2">
+          {next.map((q, i) => (
+            <li key={q.question} className="flex gap-3 text-sm">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-navy-800 text-xs font-bold text-white">
+                {i + 1}
+              </span>
+              <span>
+                <span className="font-medium text-ink">{q.question}</span>
+                {q.why && <span className="block text-slate-500">{q.why}</span>}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-slate-500">The prediction isn't ready yet.</p>
+      )}
+      {next.length ? (
+        <button type="button" onClick={() => run('practice')} disabled={busy} className="btn-primary">
+          {busy ? 'Building your practice…' : 'Practice the next round'}
+        </button>
+      ) : (
+        <button type="button" onClick={() => run('predict')} disabled={busy} className="btn-secondary">
+          {busy ? 'Predicting…' : 'Predict the next round'}
+        </button>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-red-600">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function Summary({ report }) {
   const a = report.analytics
   const [label, color] = VERDICT[report.verdict] ?? ['–', 'bg-slate-100 text-slate-600']
@@ -695,8 +761,12 @@ export default function Report() {
     <section className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="eyebrow">Interview report</p>
-          <h1 className="mt-1 text-3xl font-extrabold text-slate-900">Your report</h1>
+          <p className="eyebrow">{report.debrief ? 'Debrief of a real interview' : 'Interview report'}</p>
+          <h1 className="mt-1 text-3xl font-extrabold text-slate-900">
+            {report.debrief
+              ? `${report.debrief.role}${report.debrief.company ? ` at ${report.debrief.company}` : ''}`
+              : 'Your report'}
+          </h1>
           <p className="mt-1 text-slate-600">
             {report.role_title} · {report.duration_min} minutes · {report.difficulty}
           </p>
@@ -737,7 +807,9 @@ export default function Report() {
       )}
       {total === 0 && !generating && <p className="text-slate-600">You didn't answer any questions, so there's nothing to score.</p>}
 
+      {report.debrief && <NoRecordingsNotice />}
       {report.status === 'ready' && total > 0 && <Summary report={report} />}
+      {report.debrief && report.status === 'ready' && <NextRound debrief={report.debrief} />}
 
       <div className="space-y-4">
         {report.questions.map((q, i) => (

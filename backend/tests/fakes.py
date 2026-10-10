@@ -164,6 +164,25 @@ class FakeFire:
         self.speech_error: Exception | None = None
         self.small_talk_error: Exception | None = None
         self.decode: dict = DECODE
+        self.next_round: dict | Exception = {
+            "questions": [
+                {
+                    "question": "Walk me through a schema you designed.",
+                    "why": "MySQL",
+                    "module": "technical",
+                },
+                {
+                    "question": "Tell me about a time you disagreed with a teammate.",
+                    "why": "teamwork",
+                    "module": "behavioral",
+                },
+                {
+                    "question": "What would you ask the CEO?",
+                    "why": "culture",
+                    "module": "juggling",
+                },
+            ]
+        }
         # Story-extraction replies (default: no stories).
         self.stories: list[dict | Exception] = []
         # Replies to "Do you have any questions for me?" turns.
@@ -201,6 +220,10 @@ class FakeFire:
                 if self.candidate_replies
                 else {"has_question": False, "answer": "No problem at all."}
             )
+            if isinstance(body, Exception):
+                raise body
+        elif "Predict what the next round will likely ask" in prompt:
+            body = self.next_round
             if isinstance(body, Exception):
                 raise body
         elif "Read between the lines of a job description" in prompt:
