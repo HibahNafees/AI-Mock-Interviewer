@@ -8,13 +8,14 @@ from ..extensions import db
 from ..models import Answer, Session, User
 from ..services import interviewer, limits, planning, voice
 from ..services.transcription import TranscriptionError, transcribe
-from ..services.timer import timer_state
+from ..services.timer import is_paused, timer_state
 from .common import current_user_id, first_error
 from .documents import owned_document
 
 bp = Blueprint("sessions", __name__)
 
 MAX_ANSWER_CHARS = 8000
+PAUSED = "The interview is paused; resume it to continue"
 MAX_ANSWER_MS = 5 * 60 * 1000
 # The browser stops recording at 5 minutes; allow a little slack for timing.
 DURATION_SLACK_MS = 10 * 1000
@@ -95,6 +96,7 @@ def _transcript(session: Session) -> list[dict]:
                 "interviewer": q.asked_text or q.text,
                 "segments": q.asked_segments
                 or [{"who": "interviewer", "text": q.asked_text or q.text}],
+                "hint": q.hint_text,
                 "is_follow_up": q.follow_up_of_id is not None,
                 "is_bonus": q.is_bonus,
                 "answer": a.transcript if a else None,
@@ -274,6 +276,8 @@ def turn(session_id: int):
         return jsonify(error="Interview not found"), 404
     if session.status != "active":
         return jsonify(error="This interview is not in progress"), 409
+    if is_paused(session):
+        return jsonify(error=PAUSED), 409
     try:
         body = TurnBody.model_validate(request.get_json(silent=True) or {})
     except ValidationError as err:
@@ -306,6 +310,8 @@ def transcribe_answer(session_id: int):
         limits.check_can_retry(current_user_id())
     elif session.status != "active":
         return jsonify(error="This interview is not in progress"), 409
+    elif is_paused(session):
+        return jsonify(error=PAUSED), 409
     clip = request.files.get("audio")
     if clip is None:
         return jsonify(error="audio is required"), 400
@@ -323,6 +329,63 @@ def transcribe_answer(session_id: int):
     except TranscriptionError as err:
         return jsonify(error=err.message), err.status
     return jsonify(text=text)
+
+
+def _live(session_id: int, allow_paused: bool = False):
+    """(session, None) for an active interview, else (None, error response)."""
+    session = owned_session(session_id)
+    if session is None:
+        return None, (jsonify(error="Interview not found"), 404)
+    if session.status != "active":
+        return None, (jsonify(error="This interview is not in progress"), 409)
+    if is_paused(session) and not allow_paused:
+        return None, (jsonify(error=PAUSED), 409)
+    return session, None
+
+
+@bp.post("/<int:session_id>/hint")
+@jwt_required()
+def hint(session_id: int):
+    """One hint for the current question (one small Fire call, then cached)."""
+    session, err = _live(session_id)
+    if err:
+        return err
+    try:
+        text = interviewer.hint(session, current_user_id())
+    except ValueError as e:
+        return jsonify(error=str(e)), 409
+    return jsonify(hint=text, session=session_dict(session, detail=True))
+
+
+@bp.post("/<int:session_id>/skip")
+@jwt_required()
+def skip(session_id: int):
+    """Skip the current question (no Fire call); it's listed as unanswered."""
+    session, err = _live(session_id)
+    if err:
+        return err
+    result = interviewer.skip(session)
+    return jsonify(turn=result, session=session_dict(session, detail=True), speech=None)
+
+
+@bp.post("/<int:session_id>/pause")
+@jwt_required()
+def pause(session_id: int):
+    session, err = _live(session_id, allow_paused=True)
+    if err:
+        return err
+    interviewer.pause(session)
+    return jsonify(session=session_dict(session, detail=True))
+
+
+@bp.post("/<int:session_id>/resume")
+@jwt_required()
+def resume(session_id: int):
+    session, err = _live(session_id, allow_paused=True)
+    if err:
+        return err
+    interviewer.resume(session)
+    return jsonify(session=session_dict(session, detail=True))
 
 
 @bp.post("/<int:session_id>/end")

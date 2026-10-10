@@ -49,6 +49,8 @@ class Session(db.Model):
     persona: Mapped[str | None] = mapped_column(String(60))
     pressure_level: Mapped[int | None] = mapped_column(Integer)
     plan_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # [[paused_at, resumed_at | null], ...] as ISO strings; the clock skips them.
+    pauses_json: Mapped[list[Any] | None] = mapped_column(JSON)
     rubric_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(
         Enum(*SESSION_STATUSES, name="session_status"),
@@ -86,6 +88,8 @@ class Question(db.Model):
     # When and how the interviewer actually asked it (null = not asked yet).
     asked_at: Mapped[datetime | None] = mapped_column(DateTime)
     asked_text: Mapped[str | None] = mapped_column(Text)
+    # The hint the candidate asked for (one per question; noted when scoring).
+    hint_text: Mapped[str | None] = mapped_column(Text)
     # asked_text split by speaker for the interviewer's voice:
     # [{"who": "interviewer" | "character", "text": ...}].
     asked_segments: Mapped[list[Any] | None] = mapped_column(JSON)

@@ -19,7 +19,7 @@ from ..models.base import utcnow
 from .fire import FireError
 from .limits import LimitReached
 from .llm import chat_json, render
-from .timer import SECTION_NUDGE_SEC, WRAP_UP_SEC, TimerState, timer_state
+from .timer import SECTION_NUDGE_SEC, WRAP_UP_SEC, TimerState, is_paused, timer_state
 
 log = logging.getLogger(__name__)
 
@@ -743,6 +743,121 @@ def _after_candidate_question(
     db.session.commit()
     message = " ".join(s["text"] for s in segments)
     return {"action": "wrap_up", "message": message, "segments": segments}
+
+
+class HintOut(BaseModel):
+    hint: str = Field(min_length=1, max_length=400)
+
+
+def hint(session: Session, user_id: int) -> str:
+    """One short nudge for the current question (an angle, never the answer)."""
+    current = asked_questions(session)[-1]
+    if current.is_icebreaker or current.is_candidate_qa:
+        raise ValueError("There's no hint for this one; just answer naturally.")
+    if current.hint_text:
+        return current.hint_text  # one hint per question, no second Fire call
+    module = section_info(session, current.section).get("module", modules.DEFAULT)
+    out = chat_json(
+        user_id,
+        render(
+            "hint",
+            role=(session.plan_json or {}).get("role_title") or "the role",
+            difficulty=session.difficulty or "mid",
+            question=current.asked_text or current.text,
+            module_guidance=modules.guidance(module, "interview"),
+            scenario=scenario_of(session, current.section) or "none",
+        ),
+        HintOut,
+        max_tokens=150,
+        temperature=0.4,
+    )
+    current.hint_text = out.hint.strip()
+    db.session.commit()
+    return current.hint_text
+
+
+SKIP_ACK = "No problem, let's move on."
+
+
+def skip(session: Session) -> dict:
+    """Move past the current question without an answer (no Fire call)."""
+    asked = asked_questions(session)
+    current = asked[-1]
+    first = db.session.scalar(
+        db.select(Question)
+        .filter_by(
+            session_id=session.id,
+            is_bonus=False,
+            is_icebreaker=False,
+            follow_up_of_id=None,
+        )
+        .where(Question.is_candidate_qa.is_(False))
+        .order_by(Question.order_no)
+    )
+    if current.is_candidate_qa:
+        return _finish(
+            session, [(INTERVIEWER, "No problem."), (INTERVIEWER, closing(session))]
+        )
+    if current.is_icebreaker:
+        nxt = first
+        opts = {"next_question": first}
+    else:
+        opts = options(session, asked, timer_state(session, asked))
+        opts.pop("follow_up", None)
+        nxt = opts.get("next_question") or opts.get("bonus")
+    scenario = scenario_of(session, current.section)
+    parts = [(INTERVIEWER, SKIP_ACK)]
+    if scenario is not None and (nxt is None or nxt.section != current.section):
+        parts.append((INTERVIEWER, ROLEPLAY_EXIT))
+    if nxt is not None:
+        parts += [
+            (INTERVIEWER, _entering(session, nxt, current)),
+            (_speaker_of(session, nxt), nxt.text),
+        ]
+        segments = _segments(parts)
+        _ask(nxt, segments)
+        db.session.commit()
+        action = "bonus" if nxt is opts.get("bonus") else "next_question"
+        return _reply(action, segments)
+    if current_app.config.get("CANDIDATE_QUESTIONS", True):
+        segments = _segments(parts + [(INTERVIEWER, INVITE)])
+        _ask(_qa_question(session, current, INVITE), segments)
+        db.session.commit()
+        return _reply("your_questions", segments)
+    return _finish(session, parts + [(INTERVIEWER, closing(session))])
+
+
+def _reply(action: str, segments: list[dict]) -> dict:
+    return {
+        "action": action,
+        "message": " ".join(s["text"] for s in segments),
+        "segments": segments,
+    }
+
+
+def _finish(session: Session, parts: list[tuple[str, str]]) -> dict:
+    segments = _segments(parts)
+    session.status = "completed"
+    session.ended_at = utcnow()
+    db.session.commit()
+    return _reply("wrap_up", segments)
+
+
+def pause(session: Session) -> None:
+    if not is_paused(session):
+        session.pauses_json = [
+            *(session.pauses_json or []),
+            [utcnow().isoformat(), None],
+        ]
+        db.session.commit()
+
+
+def resume(session: Session) -> None:
+    if is_paused(session):
+        spans = [list(p) for p in session.pauses_json]
+        spans[-1][1] = utcnow().isoformat()
+        session.pauses_json = spans
+        db.session.commit()
 
 
 def _fallback(opts: dict, sign_off: str) -> TurnOut:

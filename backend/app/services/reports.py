@@ -53,6 +53,7 @@ class Thread:
                 "interviewer": (q.asked_text or q.text)[:1000],
                 "candidate": self.answers[q.id].transcript,
                 "spoken": self.answers[q.id].input_mode == "voice",
+                **({"hint": q.hint_text} if q.hint_text else {}),
             }
             for q in self.asked
             if q.id in self.answers

@@ -166,6 +166,8 @@ class FakeFire:
             )
             if isinstance(body, Exception):
                 raise body
+        elif "asked for a hint" in prompt:
+            body = {"hint": "Think about where the requests are counted."}
         elif "moment of small talk" in prompt:
             if self.small_talk_error:
                 raise self.small_talk_error

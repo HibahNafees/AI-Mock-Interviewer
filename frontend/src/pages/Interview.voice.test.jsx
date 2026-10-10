@@ -354,3 +354,57 @@ describe('your questions', () => {
     expect(await screen.findByText('Your turn to ask.')).toBeInTheDocument()
   })
 })
+
+describe('interview controls', () => {
+  // docs/INTERVIEWER_RULES.md, During the Interview (T-40).
+  afterEach(() => vi.restoreAllMocks())
+  it('gives one hint for the question', async () => {
+    const hinted = { ...ACTIVE, transcript: [{ ...FIRST, hint: 'Think about your own part.' }] }
+    const calls = respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: ACTIVE }],
+      'POST /api/sessions/7/hint': [200, { hint: 'Think about your own part.', session: hinted }],
+    })
+    renderInterview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Get a hint' }))
+    expect(await screen.findByText('Think about your own part.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hint shown' })).toBeDisabled()
+    expect(calls.filter((c) => c.key === 'POST /api/sessions/7/hint')).toHaveLength(1)
+  })
+
+  it('skips a question after confirming', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const next = { question_id: 2, interviewer: 'Design a rate limiter.', segments: [{ who: 'interviewer', text: 'Design a rate limiter.' }], answer: null }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: ACTIVE }],
+      'POST /api/sessions/7/skip': [
+        200,
+        {
+          turn: { action: 'next_question', message: "No problem, let's move on. Design a rate limiter.", segments: next.segments },
+          session: { ...ACTIVE, transcript: [FIRST, next] },
+        },
+      ],
+    })
+    renderInterview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Skip question' }))
+    expect(await screen.findByText('Design a rate limiter.')).toBeInTheDocument()
+    expect(window.confirm).toHaveBeenCalled()
+  })
+
+  it('pauses and resumes, hiding the answer controls while paused', async () => {
+    const paused = { ...ACTIVE, timer: { ...ACTIVE.timer, paused: true } }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: ACTIVE }],
+      'POST /api/sessions/7/pause': [200, { session: paused }],
+      'POST /api/sessions/7/resume': [200, { session: ACTIVE }],
+    })
+    renderInterview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Pause' }))
+    expect(await screen.findByText('Interview paused')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Record answer' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Resume' }))
+    expect(await screen.findByRole('button', { name: 'Record answer' })).toBeInTheDocument()
+  })
+})

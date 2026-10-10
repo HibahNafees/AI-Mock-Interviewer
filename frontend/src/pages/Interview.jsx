@@ -83,6 +83,12 @@ function Transcript({ items, plan }) {
                 {p.text}
               </Bubble>
             ))}
+            {t.hint && (
+              <Bubble label="Hint">
+                <span aria-hidden="true">💡 </span>
+                {t.hint}
+              </Bubble>
+            )}
             {t.answer && (
               <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md bg-navy-800 p-4 text-white shadow-md shadow-navy-800/20">
                 <p className="mb-1 text-xs font-semibold tracking-wide text-white/85 uppercase">
@@ -203,6 +209,11 @@ function LiveStep({ session, setSession, greeting }) {
   const busy = phase !== 'idle'
   const turns = session.transcript.length
   const roleplay = active ? scenarioFor(session.plan, session.timer?.section) : null
+  const paused = Boolean(session.timer?.paused)
+  const current = session.transcript.at(-1)
+  const hintUsed = Boolean(current?.hint)
+  // Small talk and "any questions for me?" get no hints.
+  const noHints = !current || ['Ice-breaker', 'Your questions'].includes(current.section)
 
   useEffect(() => {
     askedAt.current = Date.now()
@@ -267,6 +278,46 @@ function LiveStep({ session, setSession, greeting }) {
     })
   }
 
+  // The interviewer's next message (after an answer or a skip).
+  function handleReply(data) {
+    const reply = { segments: data.turn.segments, clips: data.speech }
+    const next = data.session.status === 'active' ? questionReady : undefined
+    if (data.turn.action === 'wrap_up') setClosing(data.turn.message)
+    setSession(data.session)
+    if (voiceOn) speak(reply, { onDone: next })
+    else {
+      lastSaid.current = reply
+      next?.()
+    }
+  }
+
+  async function control(action) {
+    setError('')
+    stopSpeaking()
+    try {
+      const data = await api(`/sessions/${session.id}/${action}`, { method: 'POST' })
+      if (action === 'skip') handleReply(data)
+      else setSession(data.session)
+      if (action === 'hint' && voiceOn) {
+        speak({ segments: [{ who: 'interviewer', text: data.hint }] }, { remember: false, onDone: questionReady })
+      } else if (action === 'hint' || action === 'resume') {
+        questionReady()
+      }
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function skip() {
+    if (!window.confirm('Skip this question? It will be listed as unanswered in your report.')) return
+    setPhase('thinking')
+    try {
+      await control('skip')
+    } finally {
+      setPhase('idle')
+    }
+  }
+
   async function sendTurn(answer, meta) {
     setPhase('thinking')
     try {
@@ -277,15 +328,7 @@ function LiveStep({ session, setSession, greeting }) {
       })
       setText('')
       spoken.current = null
-      const reply = { segments: data.turn.segments, clips: data.speech }
-      const next = data.session.status === 'active' ? questionReady : undefined
-      if (data.turn.action === 'wrap_up') setClosing(data.turn.message)
-      setSession(data.session)
-      if (voiceOn) speak(reply, { onDone: next })
-      else {
-        lastSaid.current = reply
-        next?.()
-      }
+      handleReply(data)
     } catch (err) {
       // Keep the answer (typed or transcribed) so it can be resent without re-recording.
       setError(err.message)
@@ -345,7 +388,7 @@ function LiveStep({ session, setSession, greeting }) {
       <header className="card flex flex-wrap items-center justify-between gap-3 px-5 py-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900">{session.role_title || 'Interview'}</h1>
-          {active && <Timer timer={session.timer} running={!busy && !speaking} />}
+          {active && <Timer timer={session.timer} running={!busy && !speaking && !paused} />}
         </div>
         {active && (
           <div className="flex flex-wrap items-center gap-4">
@@ -411,7 +454,25 @@ function LiveStep({ session, setSession, greeting }) {
       )}
       <div ref={bottom} />
 
-      {active ? (
+      {active && paused ? (
+        <div className="card flex flex-col items-center gap-4 p-8 text-center">
+          <Mascot className="h-20 w-20" mood="wow" />
+          <div>
+            <p className="text-xl font-bold text-ink">Interview paused</p>
+            <p className="mt-1 text-sm text-slate-600">
+              The clock is stopped. Take a breath; resume when you're ready.
+            </p>
+          </div>
+          <button type="button" onClick={() => control('resume')} className="btn-primary">
+            <span aria-hidden="true">▶</span>Resume
+          </button>
+          {error && (
+            <p role="alert" className="text-sm text-red-600">
+              {error}
+            </p>
+          )}
+        </div>
+      ) : active ? (
         <div className="card space-y-4 p-5">
           {mode === 'voice' ? (
             <div className="space-y-2">
@@ -454,6 +515,26 @@ function LiveStep({ session, setSession, greeting }) {
             </p>
           )}
           <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
+            {!noHints && (
+              <button type="button" disabled={busy || hintUsed} onClick={() => control('hint')} className="btn-link">
+                <span aria-hidden="true">💡 </span>
+                {hintUsed ? 'Hint shown' : 'Get a hint'}
+              </button>
+            )}
+            <button type="button" disabled={busy} onClick={skip} className="btn-link">
+              <span aria-hidden="true">⏭ </span>Skip question
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                stopSpeaking()
+                control('pause')
+              }}
+              className="btn-link"
+            >
+              <span aria-hidden="true">⏸ </span>Pause
+            </button>
           {hasVoice && (
             <button type="button" disabled={busy} onClick={repeat} className="btn-link">
               <span aria-hidden="true">↻ </span>Repeat the question

@@ -34,7 +34,8 @@ Return JSON with exactly this shape:
 Scoring:
 - List every rubric criterion, using the names exactly as written. Score it from 1 (missing or poor) to 5 (excellent for the $difficulty level) only if this question gives the candidate a fair chance to show it; otherwise use null. Example: a question about mentoring doesn't test SQL, so SQL is null — never 1 just because the answer didn't mention it.
 - Always score Structure, Clarity and Relevance (or whatever general communication criteria the rubric has).
-$criteria_rule- Judge only what the candidate said. An off-topic, empty or very short answer scores 1–2.
+$criteria_rule- An exchange item with a "hint" means the candidate asked for that hint before answering: say so in the summary and judge what they did with it, without other penalty for asking.
+- Judge only what the candidate said. An off-topic, empty or very short answer scores 1–2.
 - Base every score on evidence in the answer and say what that evidence is in the comment. Evaluate relevance, accuracy, reasoning, specificity, structure, ownership, impact and role alignment where they apply.
 - Missing evidence is not lack of knowledge: if the candidate simply didn't mention something, say it wasn't shown rather than that they don't know it, and never assume a skill is missing because the résumé doesn't list it.
 - Don't reward confidence alone, and don't penalize a concise answer that is correct and complete.

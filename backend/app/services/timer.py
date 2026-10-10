@@ -19,13 +19,36 @@ class TimerState:
     section_budget_sec: int
     section_elapsed_sec: int
     section_remaining_sec: int
+    paused: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-def _secs(later: datetime, earlier: datetime | None) -> int:
-    return max(0, int((later - earlier).total_seconds())) if earlier else 0
+def pauses(session: Session, now: datetime) -> list[tuple[datetime, datetime]]:
+    """Pause spans; an open pause runs until now."""
+    out = []
+    for start, end in session.pauses_json or []:
+        a = datetime.fromisoformat(start)
+        b = datetime.fromisoformat(end) if end else now
+        out.append((a, b))
+    return out
+
+
+def is_paused(session: Session) -> bool:
+    return bool(session.pauses_json) and session.pauses_json[-1][1] is None
+
+
+def _active_secs(
+    later: datetime, earlier: datetime | None, spans: list[tuple[datetime, datetime]]
+) -> int:
+    """Seconds between the two, minus any time spent paused."""
+    if earlier is None:
+        return 0
+    paused = sum(
+        max(0.0, (min(b, later) - max(a, earlier)).total_seconds()) for a, b in spans
+    )
+    return max(0, int((later - earlier).total_seconds() - paused))
 
 
 def timer_state(
@@ -35,7 +58,8 @@ def timer_state(
     now = now or utcnow()
     total = session.duration_min * 60
     end = session.ended_at or now
-    elapsed = min(total, _secs(end, session.started_at))
+    spans = pauses(session, end)
+    elapsed = min(total, _active_secs(end, session.started_at, spans))
     # The ice-breaker isn't part of any section of the plan.
     asked = [q for q in asked if not (q.is_icebreaker or q.is_candidate_qa)]
     section = asked[-1].section if asked else None
@@ -44,7 +68,7 @@ def timer_state(
     }
     budget = minutes.get(section, 0) * 60 if section else 0
     first_in_section = next((q.asked_at for q in asked if q.section == section), None)
-    section_elapsed = _secs(end, first_in_section)
+    section_elapsed = _active_secs(end, first_in_section, spans)
     return TimerState(
         total_sec=total,
         elapsed_sec=elapsed,
@@ -53,4 +77,5 @@ def timer_state(
         section_budget_sec=budget,
         section_elapsed_sec=section_elapsed,
         section_remaining_sec=budget - section_elapsed,
+        paused=is_paused(session),
     )
