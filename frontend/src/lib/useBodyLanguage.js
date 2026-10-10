@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { canUseCamera, createTracker, summarize } from './bodyLanguage'
 
 const SAMPLE_MS = 250 // 4 frames a second is plenty for posture and eye contact
+// Detection runs on the main thread: on a slow device, wait longer between
+// frames so it never takes more than about a third of the time.
+const BUSY_FACTOR = 2
 
 // Camera + MediaPipe for one interview. Off until the candidate turns it on.
 // reset() when a question is asked; take() when the answer is sent.
@@ -15,7 +18,8 @@ export function useBodyLanguage() {
   const frames = useRef([])
 
   const stop = useCallback(() => {
-    clearInterval(timer.current)
+    clearTimeout(timer.current)
+    timer.current = null
     stream.current?.getTracks().forEach((t) => t.stop())
     tracker.current?.close()
     stream.current = tracker.current = null
@@ -38,14 +42,21 @@ export function useBodyLanguage() {
       video.srcObject = stream.current
       await video.play()
       tracker.current = await createTracker()
-      timer.current = setInterval(() => {
-        if (video.readyState < 2 || !tracker.current) return
-        try {
-          frames.current.push(tracker.current.detect(video, performance.now()))
-        } catch {
-          // A dropped frame doesn't matter.
+      const sample = () => {
+        if (!tracker.current) return
+        let took = 0
+        if (video.readyState >= 2) {
+          const started = performance.now()
+          try {
+            frames.current.push(tracker.current.detect(video, started))
+          } catch {
+            // A dropped frame doesn't matter.
+          }
+          took = performance.now() - started
         }
-      }, SAMPLE_MS)
+        timer.current = setTimeout(sample, Math.max(SAMPLE_MS, took * BUSY_FACTOR))
+      }
+      timer.current = setTimeout(sample, SAMPLE_MS)
       setStatus('on')
     } catch (err) {
       stop()

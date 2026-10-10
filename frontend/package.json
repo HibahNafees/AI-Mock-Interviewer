@@ -14,6 +14,7 @@
     "@excalidraw/excalidraw": "^0.18.1",
     "@mediapipe/tasks-vision": "^1.1.0",
     "@monaco-editor/react": "^4.7.0",
+    "monaco-editor": "0.57.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.18.4"

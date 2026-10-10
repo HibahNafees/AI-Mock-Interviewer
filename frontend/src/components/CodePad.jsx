@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 
-// Monaco loads on first use (from the jsDelivr CDN), so other pages stay small.
-const Editor = lazy(() => import('@monaco-editor/react'))
+// Monaco loads on first use, so other pages stay small.
+const Editor = lazy(() => import('../lib/monaco'))
 
 const LANGUAGES = [
   ['python', 'Python'],

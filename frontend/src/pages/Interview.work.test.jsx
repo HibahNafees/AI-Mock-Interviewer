@@ -6,7 +6,7 @@ import App from '../App'
 import { AuthProvider } from '../lib/auth'
 
 // Monaco and Excalidraw need a real browser: stand-ins with the same props.
-vi.mock('@monaco-editor/react', () => ({
+vi.mock('../lib/monaco', () => ({
   default: ({ value, onChange }) => (
     <textarea aria-label="Monaco" value={value} onChange={(e) => onChange(e.target.value)} />
   ),
