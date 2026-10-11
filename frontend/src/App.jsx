@@ -1,13 +1,14 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
+import Account from './pages/Account'
 import CheatSheet from './pages/CheatSheet'
 import Dashboard from './pages/Dashboard'
 import Debrief from './pages/Debrief'
 import Decoder from './pages/Decoder'
 import Interview from './pages/Interview'
 import Login from './pages/Login'
-import Report from './pages/Report'
+import Report, { SharedReport } from './pages/Report'
 import Reverse, { ReverseSetup } from './pages/Reverse'
 import Setup from './pages/Setup'
 import Signup from './pages/Signup'
@@ -21,6 +22,7 @@ export default function App() {
       {/* Public: the decoder works without an account and its results are shareable. */}
       <Route path="/decode" element={<Decoder standalone />} />
       <Route path="/decode/:token" element={<Decoder standalone />} />
+      <Route path="/shared/:token" element={<SharedReport />} />
       <Route
         element={
           <ProtectedRoute>
@@ -30,6 +32,7 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="setup" element={<Setup />} />
+        <Route path="account" element={<Account />} />
         <Route path="interview/:id" element={<Interview />} />
         <Route path="report/:id" element={<Report />} />
         <Route path="report/:id/cheatsheet" element={<CheatSheet />} />

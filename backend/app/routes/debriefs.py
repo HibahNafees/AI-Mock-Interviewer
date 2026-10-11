@@ -156,6 +156,7 @@ def delete(debrief_id: int):
         return jsonify(error="Debrief not found"), 404
     session = db.session.get(Session, d.session_id) if d.session_id else None
     db.session.delete(d)
+    db.session.flush()  # before the session, whose delete would cascade to it
     if session is not None:
         db.session.delete(session)
     db.session.commit()

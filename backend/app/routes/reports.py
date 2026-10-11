@@ -3,12 +3,13 @@ from flask_jwt_extended import jwt_required
 from pydantic import ValidationError
 
 from ..extensions import db
-from ..models import Answer, Question
-from ..services import afterwards, limits, reports, scoring
+from ..models import Answer, Question, Session
+from ..services import afterwards, limits, privacy, reports, scoring
 from .common import current_user_id, first_error
 from .sessions import TurnBody, owned_session
 
 bp = Blueprint("reports", __name__)
+shared_bp = Blueprint("shared", __name__)
 
 
 @bp.get("/<int:session_id>/report")
@@ -36,6 +37,39 @@ def create_report(session_id: int):
         return jsonify(error="Finish the interview to get your report"), 409
     report = reports.request_report(session)
     return jsonify(report=reports.report_dict(session, report)), 202
+
+
+@bp.post("/<int:session_id>/report/share")
+@jwt_required()
+def share_report(session_id: int):
+    """A read-only link to the report (for a mentor or friend); revocable."""
+    session = owned_session(session_id)
+    report = reports.get_report(session) if session else None
+    if report is None or report.status != "ready":
+        return jsonify(error="Share the report once it's ready"), 409
+    return jsonify(share_token=privacy.share_report(report))
+
+
+@bp.delete("/<int:session_id>/report/share")
+@jwt_required()
+def revoke_share(session_id: int):
+    session = owned_session(session_id)
+    report = reports.get_report(session) if session else None
+    if report is None:
+        return jsonify(error="No report yet"), 404
+    privacy.revoke_share(report)
+    return jsonify(ok=True)
+
+
+@shared_bp.get("/reports/<token>")
+def shared_report(token: str):
+    """The public, read-only view of a shared report (no login)."""
+    report = privacy.shared_report(token)
+    if report is None:
+        return jsonify(error="This link was turned off or never existed"), 404
+    data = reports.report_dict(db.session.get(Session, report.session_id), report)
+    data.pop("share_token", None)
+    return jsonify(report={**data, "shared": True})
 
 
 @bp.post("/<int:session_id>/questions/<int:question_id>/retry")

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import PublicShell from '../components/PublicShell'
 import Recorder from '../components/Recorder'
 import WorkView from '../components/WorkView'
 import { NoRecordingsNotice } from './Debrief'
@@ -500,7 +501,7 @@ function TryAgain({ sessionId, question, beforeScore, onAttempt }) {
   )
 }
 
-function QuestionCard({ q, index, sessionId, onAttempt, failed }) {
+function QuestionCard({ q, index, sessionId, onAttempt, failed, shared }) {
   const e = q.evaluation
   return (
     <article className="card space-y-5 p-6 break-inside-avoid">
@@ -538,7 +539,7 @@ function QuestionCard({ q, index, sessionId, onAttempt, failed }) {
           ))}
         </div>
       )}
-      {e && <TryAgain sessionId={sessionId} question={q} beforeScore={e.score} onAttempt={onAttempt} />}
+      {e && !shared && <TryAgain sessionId={sessionId} question={q} beforeScore={e.score} onAttempt={onAttempt} />}
     </article>
   )
 }
@@ -871,6 +872,93 @@ function Summary({ report }) {
   )
 }
 
+// A read-only link for a mentor or friend; turning it off makes the old link stop working.
+function ShareReport({ sessionId, token: initial }) {
+  const [token, setToken] = useState(initial || null)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
+  const link = token ? `${window.location.origin}/shared/${token}` : ''
+
+  async function run(method) {
+    setBusy(true)
+    setNote('')
+    try {
+      const data = await api(`/sessions/${sessionId}/report/share`, { method })
+      setToken(method === 'POST' ? data.share_token : null)
+      setNote(method === 'POST' ? 'Anyone with this link can read the report.' : 'The link is turned off.')
+    } catch (err) {
+      setNote(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link)
+      setNote('Link copied.')
+    } catch {
+      window.prompt('Copy this link', link)
+    }
+  }
+
+  return (
+    <div className="card space-y-2 p-4 text-sm print:hidden">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="font-semibold text-slate-800">Share this report</span>
+        {token ? (
+          <>
+            <input
+              readOnly
+              value={link}
+              aria-label="Share link"
+              onFocus={(e) => e.target.select()}
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-600"
+            />
+            <button type="button" onClick={copy} className="btn-secondary px-3 py-1">
+              Copy link
+            </button>
+            <button type="button" onClick={() => run('DELETE')} disabled={busy} className="btn-link">
+              Turn off link
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={() => run('POST')} disabled={busy} className="btn-secondary px-3 py-1">
+            Create a read-only link
+          </button>
+        )}
+      </div>
+      <p className="text-slate-500">
+        {note || 'The link shows your answers and scores, read-only. You can turn it off any time.'}
+      </p>
+    </div>
+  )
+}
+
+export function SharedReport() {
+  const { token } = useParams()
+  const [report, setReport] = useState(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    api(`/shared/reports/${token}`)
+      .then((data) => setReport(data.report))
+      .catch((err) => setError(err.message))
+  }, [token])
+  return (
+    <PublicShell>
+      {report ? (
+        <ReportView report={report} shared />
+      ) : error ? (
+        <p role="alert" className="text-red-600">
+          {error}
+        </p>
+      ) : (
+        <p className="animate-pulse text-slate-500">Loading the report…</p>
+      )}
+    </PublicShell>
+  )
+}
+
 export default function Report() {
   const { id } = useParams()
   const [report, setReport] = useState(null)
@@ -938,7 +1026,12 @@ export default function Report() {
     )
   }
 
+  return <ReportView report={report} id={id} onAttempt={onAttempt} build={build} busy={busy} error={error} />
+}
+
+function ReportView({ report, id, onAttempt, build, busy, error, shared = false }) {
   const { scored, total } = report.progress
+  const generating = report.status === 'generating'
   return (
     <section className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -955,7 +1048,9 @@ export default function Report() {
           <h1 className="mt-1 text-3xl font-extrabold text-slate-900">
             {report.debrief
               ? `${report.debrief.role}${report.debrief.company ? ` at ${report.debrief.company}` : ''}`
-              : 'Your report'}
+              : shared
+                ? 'Shared interview report'
+                : 'Your report'}
           </h1>
           <p className="mt-1 text-slate-600">
             {report.role_title} · {report.duration_min} minutes · {report.difficulty}
@@ -967,10 +1062,12 @@ export default function Report() {
           )}
         </div>
         <div className="flex gap-3 text-sm print:hidden">
-          <Link to={`/interview/${id}`} className="btn-secondary">
-            Transcript
-          </Link>
-          {report.status === 'ready' && (
+          {!shared && (
+            <Link to={`/interview/${id}`} className="btn-secondary">
+              Transcript
+            </Link>
+          )}
+          {report.status === 'ready' && !shared && (
             <Link to={`/report/${id}/cheatsheet`} className="btn-secondary">
               <span aria-hidden="true">📄</span>Cheat sheet
             </Link>
@@ -992,7 +1089,10 @@ export default function Report() {
           Scoring your answers… {scored} of {total} questions done.
         </p>
       )}
-      {report.status === 'failed' && (
+      {report.status === 'ready' && total > 0 && !shared && (
+        <ShareReport sessionId={report.session_id} token={report.share_token} />
+      )}
+      {report.status === 'failed' && !shared && (
         <div role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">
           Part of the report couldn't be generated ({scored} of {total} questions scored).{' '}
           <button type="button" onClick={build} disabled={busy} className="font-medium underline">
@@ -1008,9 +1108,9 @@ export default function Report() {
       {total === 0 && !generating && <p className="text-slate-600">You didn't answer any questions, so there's nothing to score.</p>}
 
       {report.debrief && <NoRecordingsNotice />}
-      {report.status === 'ready' && total > 0 && <ThankYou sessionId={report.session_id} />}
+      {report.status === 'ready' && total > 0 && !shared && <ThankYou sessionId={report.session_id} />}
       {report.status === 'ready' && total > 0 && <Summary report={report} />}
-      {report.debrief && report.status === 'ready' && <NextRound debrief={report.debrief} />}
+      {report.debrief && report.status === 'ready' && !shared && <NextRound debrief={report.debrief} />}
 
       <div className="space-y-4">
         {report.questions.map((q, i) => (
@@ -1021,6 +1121,7 @@ export default function Report() {
             sessionId={report.session_id}
             onAttempt={onAttempt}
             failed={report.status === 'failed'}
+            shared={shared}
           />
         ))}
       </div>

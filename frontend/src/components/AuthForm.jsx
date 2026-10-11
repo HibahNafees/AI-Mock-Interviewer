@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { HeroScene, Mascot } from './Art'
 import { Logo } from './Layout'
 
-export default function AuthForm({ title, fields, submitLabel, onSubmit, footer }) {
+export default function AuthForm({ title, fields, submitLabel, onSubmit, footer, notice }) {
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.name, ''])))
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -43,6 +43,11 @@ export default function AuthForm({ title, fields, submitLabel, onSubmit, footer 
         </div>
       <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-8">
         <h1 className="text-3xl font-extrabold">{title}</h1>
+        {notice && (
+          <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-800">
+            {notice}
+          </p>
+        )}
         {fields.map((f) => (
           <label key={f.name} className="block text-sm">
             <span className="font-medium text-slate-700">{f.label}</span>

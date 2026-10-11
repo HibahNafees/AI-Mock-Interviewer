@@ -2,10 +2,11 @@ import re
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..extensions import db
 from ..models import User
+from ..services import privacy
 from .common import first_error
 
 bp = Blueprint("auth", __name__)
@@ -84,6 +85,27 @@ def login():
     if user is None or not user.check_password(body.password):
         return jsonify(error="Incorrect email or password"), 401
     return _token_response(user)
+
+
+class DeleteBody(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
+
+@bp.delete("/me")
+@jwt_required()
+def delete_me():
+    """ "Delete my data": the account and everything saved for it, in one step."""
+    try:
+        body = DeleteBody.model_validate(request.get_json(silent=True) or {})
+    except ValidationError:
+        return jsonify(error="Enter your password to confirm"), 400
+    user = db.session.get(User, int(get_jwt_identity()))
+    if user is None:
+        return jsonify(error="Account not found"), 404
+    if not user.check_password(body.password):
+        return jsonify(error="Incorrect password"), 403
+    privacy.delete_user(user.id)
+    return jsonify(ok=True)
 
 
 @bp.get("/me")

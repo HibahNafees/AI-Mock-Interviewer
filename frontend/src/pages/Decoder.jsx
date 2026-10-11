@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { IconTile, Mascot } from '../components/Art'
-import { Logo } from '../components/Layout'
+import PublicShell from '../components/PublicShell'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
@@ -311,32 +311,5 @@ export default function Decoder({ standalone = false }) {
   )
 
   if (!standalone) return page
-  return (
-    <div className="min-h-screen">
-      <header className="border-b border-[#f1e6da] bg-cream/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
-          <Link to="/">
-            <Logo />
-          </Link>
-          <nav className="ml-auto flex items-center gap-3 text-sm">
-            {user ? (
-              <Link to="/" className="btn-secondary">
-                Go to my dashboard
-              </Link>
-            ) : (
-              <>
-                <Link to="/login" className="btn-link">
-                  Log in
-                </Link>
-                <Link to="/signup" className="btn-primary px-4 py-2 text-sm">
-                  Sign up free
-                </Link>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:py-10">{page}</main>
-    </div>
-  )
+  return <PublicShell>{page}</PublicShell>
 }

@@ -371,4 +371,51 @@ describe('report', () => {
       work: { kind: 'code', language: 'go', content: 'func allow() {} // fixed' },
     })
   })
+
+  it('creates, copies and turns off a read-only share link', async () => {
+    const user = userEvent.setup()
+    const fetch = respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7/report': [200, { report: READY }],
+      'POST /api/sessions/7/report/share': [200, { share_token: 'abc123' }],
+      'DELETE /api/sessions/7/report/share': [200, { ok: true }],
+    })
+    renderAt('/report/7')
+    await user.click(await screen.findByRole('button', { name: 'Create a read-only link' }))
+    expect(await screen.findByLabelText('Share link')).toHaveValue(`${window.location.origin}/shared/abc123`)
+    await user.click(screen.getByRole('button', { name: 'Turn off link' }))
+    expect(await screen.findByText('The link is turned off.')).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith('/api/sessions/7/report/share', expect.objectContaining({ method: 'DELETE' }))
+  })
+
+  it('shows a shared report read-only without logging in', async () => {
+    localStorage.removeItem('mi_token')
+    respond({ 'GET /api/shared/reports/abc123': [200, { report: { ...READY, shared: true } }] })
+    render(
+      <MemoryRouter initialEntries={['/shared/abc123']}>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('Shared interview report')).toBeInTheDocument()
+    expect(screen.getByText('Top 3 takeaways')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Try again/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('Transcript')).not.toBeInTheDocument()
+    expect(screen.queryByText('Share this report')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sign up free' })).toBeInTheDocument()
+  })
+
+  it('says when a shared link was turned off', async () => {
+    localStorage.removeItem('mi_token')
+    respond({ 'GET /api/shared/reports/gone': [404, { error: 'This link was turned off or never existed' }] })
+    render(
+      <MemoryRouter initialEntries={['/shared/gone']}>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent('turned off')
+  })
 })

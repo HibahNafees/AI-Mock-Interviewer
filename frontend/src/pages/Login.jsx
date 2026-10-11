@@ -3,7 +3,7 @@ import AuthForm from '../components/AuthForm'
 import { useAuth } from '../lib/auth'
 
 export default function Login() {
-  const { user, login } = useAuth()
+  const { user, login, notice } = useAuth()
   const navigate = useNavigate()
   const from = useLocation().state?.from || '/'
   if (user) return <Navigate to={from} replace />
@@ -11,6 +11,7 @@ export default function Login() {
   return (
     <AuthForm
       title="Log in"
+      notice={notice}
       submitLabel="Log in"
       fields={[
         { name: 'email', label: 'Email', type: 'email', autoComplete: 'email' },

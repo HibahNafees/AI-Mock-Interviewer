@@ -542,6 +542,7 @@ def report_dict(session: Session, report: Report) -> dict:
             else None
         ),
         "analytics": report.analytics_json,
+        "share_token": report.share_token,
         "body_language": body_language.summary(
             [
                 t.answers[q.id].body_json

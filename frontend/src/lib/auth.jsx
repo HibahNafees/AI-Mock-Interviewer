@@ -5,6 +5,8 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
+  // A one-line message for the login page (e.g. after deleting the account).
+  const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(() => Boolean(getToken()))
 
   useEffect(() => {
@@ -18,6 +20,7 @@ export function AuthProvider({ children }) {
   const handleAuth = useCallback((data) => {
     setToken(data.access_token)
     setUser(data.user)
+    setNotice('')
   }, [])
 
   const login = useCallback(
@@ -34,13 +37,14 @@ export function AuthProvider({ children }) {
     [handleAuth],
   )
 
-  const logout = useCallback(() => {
+  const logout = useCallback((message = '') => {
     setToken(null)
     setUser(null)
+    setNotice(typeof message === 'string' ? message : '')
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, logout, notice }}>
       {children}
     </AuthContext.Provider>
   )

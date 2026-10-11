@@ -5,6 +5,18 @@ from .config import Config
 from .extensions import db, jwt, migrate
 
 
+def _sqlite_foreign_keys(app: Flask) -> None:
+    """Tests run on SQLite: enforce foreign keys (and ON DELETE) like MySQL does."""
+    from sqlalchemy import event
+
+    with app.app_context():
+        event.listen(
+            db.engine,
+            "connect",
+            lambda conn, _record: conn.execute("PRAGMA foreign_keys=ON"),
+        )
+
+
 def create_app(config_class: type[Config] = Config) -> Flask:
     app = Flask(__name__)
     app.config.from_object(config_class)
@@ -14,6 +26,8 @@ def create_app(config_class: type[Config] = Config) -> Flask:
             raise RuntimeError(f"{key} is not set; copy .env.example to .env")
 
     db.init_app(app)
+    if app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"):
+        _sqlite_foreign_keys(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
     CORS(app, origins=app.config["CORS_ORIGINS"])
@@ -27,6 +41,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     from .routes.documents import bp as documents_bp
     from .routes.health import bp as health_bp
     from .routes.reports import bp as reports_bp
+    from .routes.reports import shared_bp
     from .routes.reverse import bp as reverse_bp
     from .routes.sessions import bp as sessions_bp
     from .routes.stats import bp as stats_bp
@@ -43,7 +58,15 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.register_blueprint(documents_bp, url_prefix="/api/documents")
     app.register_blueprint(sessions_bp, url_prefix="/api/sessions")
     app.register_blueprint(reports_bp, url_prefix="/api/sessions")
+    app.register_blueprint(shared_bp, url_prefix="/api/shared")
     register_error_handlers(app)
+
+    @app.cli.command("purge-expired")
+    def purge_expired():
+        """Delete documents past their 30-day retention (run daily)."""
+        from .services.privacy import purge_expired_documents
+
+        print(f"Deleted {purge_expired_documents()} expired documents")
 
     @jwt.unauthorized_loader
     def missing_token(reason: str):

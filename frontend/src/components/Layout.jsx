@@ -51,7 +51,7 @@ export default function Layout() {
           </nav>
           {user && (
             <div className="ml-auto flex items-center gap-3 text-sm">
-              <span className="flex items-center gap-2 text-slate-700">
+              <Link to="/account" className="flex items-center gap-2 text-slate-700 hover:text-slate-900" title="Account and privacy">
                 <span
                   aria-hidden="true"
                   className="grid h-8 w-8 place-items-center rounded-full bg-navy-800 text-xs font-bold text-white"
@@ -59,8 +59,8 @@ export default function Layout() {
                   {user.name?.[0]?.toUpperCase()}
                 </span>
                 {user.name}
-              </span>
-              <button onClick={logout} className="btn-link">
+              </Link>
+              <button onClick={() => logout()} className="btn-link">
                 Log out
               </button>
             </div>
