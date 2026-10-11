@@ -3,6 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Theme before first paint (same logic as src/lib/theme.js).
+      try {
+        var t = localStorage.getItem('mi_theme')
+        if (t !== 'light' && t !== 'dark')
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        document.documentElement.dataset.theme = t
+      } catch (e) {
+        document.documentElement.dataset.theme = 'light'
+      }
+    </script>
+    <meta name="color-scheme" content="light dark" />
     <title>InterVox — AI voice practice interviews for any job</title>
     <meta name="description" content="InterVox: AI voice practice interviews for any job. Answer out loud and get a scored report with stronger versions of your answers." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

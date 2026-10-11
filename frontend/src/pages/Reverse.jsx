@@ -36,7 +36,7 @@ function Pills({ name, options, value, onChange }) {
           className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
             value === key
               ? 'border-transparent bg-gradient-to-r from-brand-600 to-accent-500 text-white shadow-md'
-              : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300'
+              : 'border-slate-200 bg-surface text-slate-700 hover:border-brand-300'
           }`}
         >
           {label}
@@ -382,7 +382,7 @@ export default function Reverse() {
       </div>
 
       {asked === 0 && open && (
-        <div className="flex items-center gap-4 rounded-2xl bg-[#faf5ef] p-4 text-sm text-slate-700">
+        <div className="flex items-center gap-4 rounded-2xl bg-sand p-4 text-sm text-slate-700">
           <Mascot className="h-12 w-12 shrink-0" />
           <p>
             Start with an opener, then probe: ask what they <em>personally</em> did, for numbers,
@@ -394,7 +394,7 @@ export default function Reverse() {
       <ol className="space-y-4">
         {v.transcript.map((t, i) => (
           <li key={i} className="space-y-3">
-            <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md bg-navy-800 p-4 text-white">
+            <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md bg-night p-4 text-white">
               <p className="mb-1 text-xs font-semibold tracking-wide text-white/80 uppercase">You (interviewer)</p>
               <p>{t.question}</p>
             </div>

@@ -24,7 +24,7 @@ export default function BodyLanguage({ body }) {
         muted
         playsInline
         aria-label="Your camera"
-        className={`${on ? 'block' : 'hidden'} h-36 w-48 -scale-x-100 rounded-xl bg-slate-900 object-cover`}
+        className={`${on ? 'block' : 'hidden'} h-36 w-48 -scale-x-100 rounded-xl bg-night object-cover`}
       />
       {status === 'loading' && (
         <p role="status" className="animate-pulse text-sm text-slate-500">

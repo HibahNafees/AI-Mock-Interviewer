@@ -241,7 +241,7 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
           className="relative inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-red-500 px-6 py-3 font-semibold text-white shadow-md shadow-rose-500/30 transition hover:from-rose-600 hover:to-red-600"
         >
           <span aria-hidden="true" className="absolute inset-0 animate-ping rounded-full bg-rose-400/30" />
-          <span aria-hidden="true" className="h-3 w-3 rounded-sm bg-white" />
+          <span aria-hidden="true" className="h-3 w-3 rounded-sm bg-surface" />
           Done
         </button>
         <button type="button" onClick={() => finish(false)} className="btn-secondary">

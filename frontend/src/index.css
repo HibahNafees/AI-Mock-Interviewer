@@ -39,6 +39,126 @@
 
   --color-cream: #fffaf4;
   --color-ink: #101319;
+
+  /* Semantic colours that flip in dark mode (see [data-theme="dark"] below). */
+  --color-surface: #ffffff;
+  --color-body: #1d2230;
+  --color-line: #f1e6da;
+  --color-line-soft: #f3ebe1;
+  --color-field-line: #efe4d8;
+  --color-sand: #faf5ef;
+  --color-blush: #f6dccf;
+  /* Stay dark in both themes: panels and tooltips with white text. */
+  --color-night: #023350;
+  --color-tooltip: #101319;
+  --color-brand-edge: #cb4e3c;
+}
+
+/* Used only from inline styles, so it lives outside @theme. */
+:root {
+  --color-ring-track: #ede9fe;
+}
+
+/* Dark theme. Tailwind reads every colour from these variables, so the
+   whole UI flips here: light tints (50–200) become dark tinted surfaces, dark
+   text shades (700–900) become light, slate is inverted, and the 300–600
+   mids (buttons, gradients with white text) stay as they are. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-cream: #0d121b;
+  --color-ink: #f1f4f9;
+  --color-surface: #161d2a;
+  --color-body: #dfe4ec;
+  --color-line: #2a3345;
+  --color-line-soft: #252e3f;
+  --color-field-line: #313b4f;
+  --color-sand: #1c2433;
+  --color-blush: #3a2a2c;
+  --color-night: #0a2a42;
+  --color-tooltip: #2c3648;
+  --color-ring-track: #2c2a44;
+
+  --color-slate-50: #1b2331;
+  --color-slate-100: #232c3b;
+  --color-slate-200: #2f394b;
+  --color-slate-300: #45506a;
+  --color-slate-400: #7d879c;
+  --color-slate-500: #9aa4b8;
+  --color-slate-600: #b3bccc;
+  --color-slate-700: #ccd3df;
+  --color-slate-800: #dfe4ec;
+  --color-slate-900: #eef1f6;
+  --color-slate-950: #f8fafc;
+
+  --color-brand-50: #2a1a1c;
+  --color-brand-100: #3a2022;
+  --color-brand-200: #5a2c27;
+  --color-brand-700: #ffa798;
+  --color-brand-800: #ffcac1;
+  --color-brand-900: #ffe5e0;
+
+  --color-accent-50: #2a2216;
+  --color-accent-100: #3a2d17;
+  --color-accent-200: #574119;
+  --color-accent-700: #ffd48b;
+  --color-accent-800: #ffe3b4;
+  --color-accent-900: #ffeed3;
+
+  --color-navy-50: #142130;
+  --color-navy-100: #1a2c40;
+  --color-navy-200: #24405a;
+  --color-navy-700: #a2c6e2;
+  --color-navy-800: #c3dcf0;
+  --color-navy-900: #e0eef9;
+
+  --color-red-50: #2d1517;
+  --color-red-100: #3d1a1d;
+  --color-red-200: #5c2228;
+  --color-red-700: #fca5a5;
+  --color-red-800: #fecaca;
+  --color-red-900: #fee2e2;
+
+  --color-rose-50: #2d1520;
+  --color-rose-100: #3d1a28;
+  --color-rose-200: #5c2238;
+  --color-rose-700: #fda4af;
+  --color-rose-800: #fecdd3;
+  --color-rose-900: #ffe4e6;
+
+  --color-emerald-50: #102620;
+  --color-emerald-100: #12332a;
+  --color-emerald-200: #17493b;
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+  --color-emerald-900: #d1fae5;
+
+  --color-green-50: #11261a;
+  --color-green-100: #143320;
+  --color-green-200: #1b4a2d;
+  --color-green-700: #86efac;
+  --color-green-800: #bbf7d0;
+  --color-green-900: #dcfce7;
+
+  --color-amber-50: #2b2112;
+  --color-amber-100: #3b2c13;
+  --color-amber-200: #5a4115;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+  --color-amber-900: #fef3c7;
+
+  --color-orange-50: #2d1c12;
+  --color-orange-100: #3d2414;
+  --color-orange-200: #5c3317;
+  --color-orange-700: #fdba74;
+  --color-orange-800: #fed7aa;
+  --color-orange-900: #ffedd5;
+
+  --color-teal-50: #0f2626;
+  --color-teal-100: #123333;
+  --color-teal-200: #164848;
+  --color-teal-700: #5eead4;
+  --color-teal-800: #99f6e4;
+  --color-teal-900: #ccfbf1;
 }
 
 @layer base {
@@ -48,7 +168,12 @@
       radial-gradient(55rem 28rem at 0% -10%, rgb(255 202 193 / 0.45), transparent 60%),
       radial-gradient(45rem 26rem at 100% 0%, rgb(255 227 180 / 0.5), transparent 60%);
     background-attachment: fixed;
-    color: #1d2230;
+    color: var(--color-body);
+  }
+  :root[data-theme="dark"] body {
+    background-image:
+      radial-gradient(55rem 28rem at 0% -10%, rgb(247 113 92 / 0.12), transparent 60%),
+      radial-gradient(45rem 26rem at 100% 0%, rgb(253 196 88 / 0.08), transparent 60%);
   }
   h1,
   h2,
@@ -60,23 +185,26 @@
   ::selection {
     background: rgb(255 202 193 / 0.7);
   }
+  :root[data-theme="dark"] ::selection {
+    background: rgb(247 113 92 / 0.45);
+  }
 }
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-brand-500 px-5 py-2.5 font-semibold text-white shadow-[0_4px_0_0_var(--color-brand-700)] transition hover:-translate-y-px hover:bg-brand-600 active:translate-y-0.5 active:shadow-[0_2px_0_0_var(--color-brand-700)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none;
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-brand-500 px-5 py-2.5 font-semibold text-white shadow-[0_4px_0_0_var(--color-brand-edge)] transition hover:-translate-y-px hover:bg-brand-600 active:translate-y-0.5 active:shadow-[0_2px_0_0_var(--color-brand-edge)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-ink/10 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-brand-300 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-ink/10 bg-surface px-4 py-2 text-sm font-semibold text-ink transition hover:border-brand-300 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-link {
     @apply text-sm font-semibold text-slate-500 underline-offset-4 transition hover:text-brand-700 hover:underline disabled:opacity-50;
   }
   .card {
-    @apply rounded-3xl border border-[#f1e6da] bg-white shadow-[0_1px_0_0_#f1e6da,0_12px_32px_-18px_rgb(16_19_25/0.18)];
+    @apply rounded-3xl border border-line bg-surface shadow-[0_1px_0_0_var(--color-line),0_12px_32px_-18px_rgb(16_19_25/0.18)];
   }
   .field {
-    @apply block w-full rounded-2xl border-2 border-[#efe4d8] bg-white px-4 py-2.5 text-slate-800 transition placeholder:text-slate-400 focus:border-brand-300 focus:ring-4 focus:ring-brand-100 focus:outline-none disabled:bg-slate-50;
+    @apply block w-full rounded-2xl border-2 border-field-line bg-surface px-4 py-2.5 text-slate-800 transition placeholder:text-slate-400 focus:border-brand-300 focus:ring-4 focus:ring-brand-100 focus:outline-none disabled:bg-slate-50;
   }
   .eyebrow {
     @apply text-xs font-bold tracking-wider text-brand-600 uppercase;

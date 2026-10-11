@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from 'react'
+import { useTheme } from '../lib/theme'
 
 // Monaco loads on first use, so other pages stay small.
 const Editor = lazy(() => import('../lib/monaco'))
@@ -33,6 +34,7 @@ function PlainBox({ value, onChange }) {
 
 // The coding round's editor; its contents are sent with each answer.
 export default function CodePad({ code, onChange }) {
+  const theme = useTheme()
   const [plain, setPlain] = useState(false)
   const set = (content) => onChange({ ...code, content: content ?? '' })
   return (
@@ -47,7 +49,7 @@ export default function CodePad({ code, onChange }) {
             <select
               value={code.language}
               onChange={(e) => onChange({ ...code, language: e.target.value })}
-              className="rounded-xl border-2 border-[#efe4d8] bg-white px-2 py-1"
+              className="rounded-xl border-2 border-field-line bg-surface px-2 py-1"
             >
               {LANGUAGES.map(([key, label]) => (
                 <option key={key} value={key}>
@@ -71,6 +73,7 @@ export default function CodePad({ code, onChange }) {
               language={code.language}
               value={code.content}
               onChange={set}
+              theme={theme === 'dark' ? 'vs-dark' : 'light'}
               loading={<p className="p-4 text-sm text-slate-500">Loading the editor…</p>}
               options={{ minimap: { enabled: false }, fontSize: 14, scrollBeyondLastLine: false, tabSize: 4 }}
             />

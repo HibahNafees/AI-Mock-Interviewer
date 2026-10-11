@@ -70,7 +70,7 @@ export default function GapAnalysis({ resumeId, jdId }) {
           ))}
         </ul>
       </div>
-      <ul className="divide-y divide-[#f3ebe1]">
+      <ul className="divide-y divide-line-soft">
         {gaps.requirements.map((r) => {
           const [icon, label, tone] = STATUS[r.status]
           return (

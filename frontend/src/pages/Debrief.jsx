@@ -216,7 +216,7 @@ export default function Debrief() {
       {past.length > 0 && (
         <div>
           <h2 className="text-xl font-bold">Past debriefs</h2>
-          <ul className="card mt-3 divide-y divide-[#f3ebe1] overflow-hidden">
+          <ul className="card mt-3 divide-y divide-line-soft overflow-hidden">
             {past.map((d) => (
               <li key={d.id}>
                 <Link to={`/report/${d.session_id}`} className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-brand-50/60">

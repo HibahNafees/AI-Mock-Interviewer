@@ -54,7 +54,7 @@ export default function ScoreChart({ history }) {
       >
         {[1, 2, 3, 4, 5].map((s) => (
           <g key={s}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={y(s)} y2={y(s)} stroke="#efe4d8" strokeDasharray={s === 1 ? '' : '3 4'} />
+            <line x1={PAD.left} x2={W - PAD.right} y1={y(s)} y2={y(s)} stroke="var(--color-field-line)" strokeDasharray={s === 1 ? '' : '3 4'} />
             <text x={PAD.left - 10} y={y(s) + 4} textAnchor="end" className="fill-slate-400 text-[11px]">
               {s}
             </text>
@@ -72,7 +72,7 @@ export default function ScoreChart({ history }) {
             )}
           </>
         )}
-        {a && <line x1={a.cx} x2={a.cx} y1={PAD.top} y2={H - PAD.bottom} stroke="#b7bdcb" strokeWidth="1" />}
+        {a && <line x1={a.cx} x2={a.cx} y1={PAD.top} y2={H - PAD.bottom} stroke="var(--color-slate-300)" strokeWidth="1" />}
         {n > 1 && <path d={path} fill="none" stroke={LINE} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />}
         {points.map((p, i) => (
           <circle
@@ -89,7 +89,7 @@ export default function ScoreChart({ history }) {
       {a && (
         <div
           role="status"
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-xl bg-ink px-3 py-2 text-xs text-white shadow-lg"
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-xl bg-tooltip px-3 py-2 text-xs text-white shadow-lg"
           style={{ left: `${(a.cx / W) * 100}%`, top: `${(a.cy / H) * 100}%`, marginTop: -10 }}
         >
           <p className="font-bold tabular-nums">{a.score.toFixed(1)} / 5</p>

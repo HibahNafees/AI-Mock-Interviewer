@@ -39,7 +39,7 @@ function Flags({ title, icon, tone, rows, empty }) {
 function Guess({ label, g }) {
   if (!g) return null
   return (
-    <div className="rounded-2xl bg-[#faf5ef] p-4">
+    <div className="rounded-2xl bg-sand p-4">
       <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">{label}</p>
       <p className="mt-1 font-bold text-ink">{g.guess}</p>
       {g.why && <p className="text-sm text-slate-600">{g.why}</p>}
@@ -119,7 +119,7 @@ export function DecodeResult({ d, signedIn }) {
         <ol className="mt-3 space-y-3">
           {d.likely_questions.map((q, i) => (
             <li key={q.question} className="flex gap-3 text-sm">
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-navy-800 text-xs font-bold text-white">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-night text-xs font-bold text-white">
                 {i + 1}
               </span>
               <span>
@@ -143,7 +143,7 @@ export function DecodeResult({ d, signedIn }) {
         )}
       </div>
 
-      <div className="flex flex-col items-start gap-3 rounded-3xl bg-navy-800 p-6 text-white sm:flex-row sm:items-center">
+      <div className="flex flex-col items-start gap-3 rounded-3xl bg-night p-6 text-white sm:flex-row sm:items-center">
         <Mascot className="h-16 w-16 shrink-0" />
         <div className="flex-1">
           <p className="text-lg font-semibold">Practice these questions out loud before the real thing.</p>
@@ -163,7 +163,7 @@ function SavedDecodes({ items, onDelete, base }) {
   return (
     <section className="card p-6">
       <h2 className="text-lg font-bold">Your saved decodes</h2>
-      <ul className="mt-3 divide-y divide-[#f3ebe1]">
+      <ul className="mt-3 divide-y divide-line-soft">
         {items.map((s) => (
           <li key={s.id} className="flex flex-wrap items-center gap-3 py-3">
             <div className="min-w-0 flex-1">

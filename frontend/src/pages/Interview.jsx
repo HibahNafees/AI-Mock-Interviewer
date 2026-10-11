@@ -23,7 +23,7 @@ function speaker(t, plan) {
 const BUBBLES = {
   interviewer: {
     avatar: 'from-brand-600 to-accent-500',
-    box: 'bg-white ring-[#f1e6da]',
+    box: 'bg-surface ring-line',
     label: 'text-brand-700',
   },
   character: {
@@ -34,8 +34,8 @@ const BUBBLES = {
 }
 // Each panel interviewer gets their own colour.
 const PANEL_BUBBLES = {
-  hm: { avatar: 'from-brand-500 to-brand-700', box: 'bg-white ring-brand-100', label: 'text-brand-700' },
-  peer: { avatar: 'from-navy-500 to-navy-700', box: 'bg-navy-50 ring-navy-100', label: 'text-navy-700' },
+  hm: { avatar: 'from-brand-500 to-brand-600', box: 'bg-surface ring-brand-100', label: 'text-brand-700' },
+  peer: { avatar: 'from-navy-500 to-navy-600', box: 'bg-navy-50 ring-navy-100', label: 'text-navy-700' },
   hr: { avatar: 'from-emerald-400 to-emerald-600', box: 'bg-emerald-50 ring-emerald-100', label: 'text-emerald-700' },
 }
 
@@ -110,7 +110,7 @@ function Transcript({ items, plan, panel }) {
               </Bubble>
             )}
             {t.answer && (
-              <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md bg-navy-800 p-4 text-white shadow-md shadow-navy-800/20">
+              <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md bg-night p-4 text-white shadow-md shadow-navy-800/20">
                 <p className="mb-1 text-xs font-semibold tracking-wide text-white/85 uppercase">
                   You{t.input_mode === 'voice' ? ' · transcribed' : ''}
                 </p>
@@ -563,7 +563,7 @@ function LiveStep({ session, setSession, greeting }) {
             {session.pressure.level ? `Pressure level ${session.pressure.level}` : 'Pressure stopped'}
           </span>
           {session.pressure.time_limit_sec && (
-            <span className="chip bg-white text-brand-700">{session.pressure.time_limit_sec} s per answer</span>
+            <span className="chip bg-surface text-brand-700">{session.pressure.time_limit_sec} s per answer</span>
           )}
           {session.pressure.level > 0 && (
             <span className="ml-auto flex gap-2">

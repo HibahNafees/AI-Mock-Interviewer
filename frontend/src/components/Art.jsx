@@ -47,7 +47,7 @@ export function Mascot({ className = 'h-24 w-24', mood = 'happy', title }) {
 export function HeroScene({ className = '' }) {
   return (
     <div className={`relative ${className}`} aria-hidden="true">
-      <div className="absolute top-2 right-0 w-56 rotate-3 rounded-3xl bg-white p-4 shadow-xl shadow-ink/10">
+      <div className="absolute top-2 right-0 w-56 rotate-3 rounded-3xl bg-surface p-4 shadow-xl shadow-ink/10">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold tracking-wider text-brand-600 uppercase">Answer score</span>
           <span className="chip bg-emerald-100 text-emerald-700">4.6 / 5</span>
@@ -64,7 +64,7 @@ export function HeroScene({ className = '' }) {
           <div className="h-full w-[92%] rounded-full bg-gradient-to-r from-brand-400 to-accent-400" />
         </div>
       </div>
-      <div className="absolute bottom-3 left-2 -rotate-6 rounded-2xl bg-navy-800 px-3 py-2 text-xs font-semibold text-white shadow-lg">
+      <div className="absolute bottom-3 left-2 -rotate-6 rounded-2xl bg-night px-3 py-2 text-xs font-semibold text-white shadow-lg">
         🎙️ Tell me about a time…
       </div>
       <Mascot className="absolute bottom-0 left-1/2 h-36 w-36 -translate-x-1/2 drop-shadow-xl" />

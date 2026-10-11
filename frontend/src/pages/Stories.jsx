@@ -38,7 +38,7 @@ function Coverage({ coverage }) {
             className={`chip ring-1 ${
               r.stories.length
                 ? 'bg-emerald-50 text-emerald-800 ring-emerald-200'
-                : 'border border-dashed border-slate-300 bg-white text-slate-500 ring-transparent'
+                : 'border border-dashed border-slate-300 bg-surface text-slate-500 ring-transparent'
             }`}
           >
             {r.stories.length ? <span aria-hidden="true">✓</span> : <span aria-hidden="true">○</span>}

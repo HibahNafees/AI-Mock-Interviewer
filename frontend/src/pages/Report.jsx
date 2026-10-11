@@ -62,9 +62,9 @@ function ScoreRing({ value }) {
       role="img"
       aria-label={`Overall ${fmtScore(value)} out of 5`}
       className="grid h-28 w-28 shrink-0 place-items-center rounded-full"
-      style={{ background: `conic-gradient(#8b5cf6, #d946ef ${pct}%, #ede9fe ${pct}%)` }}
+      style={{ background: `conic-gradient(#8b5cf6, #d946ef ${pct}%, var(--color-ring-track) ${pct}%)` }}
     >
-      <div className="grid h-[5.5rem] w-[5.5rem] place-items-center rounded-full bg-white">
+      <div className="grid h-[5.5rem] w-[5.5rem] place-items-center rounded-full bg-surface">
         <p className="text-center">
           <span className="block text-3xl font-extrabold tabular-nums text-slate-900">{fmtScore(value)}</span>
           <span className="text-xs font-medium text-slate-500">out of 5</span>
@@ -102,7 +102,7 @@ function Highlighted({ text, moments = [] }) {
   for (const s of spans) {
     if (s.start > pos) parts.push(text.slice(pos, s.start))
     parts.push(
-      <mark key={s.start} title={s.why} className="rounded bg-amber-200/70 px-0.5">
+      <mark key={s.start} title={s.why} className="rounded bg-amber-200/70 px-0.5 text-amber-900">
         {text.slice(s.start, s.end)}
       </mark>,
     )
@@ -247,7 +247,7 @@ function Evaluation({ e, said, roleplay }) {
           <ul className="mt-1 space-y-1 text-sm">
             {e.weak_moments.map((w) => (
               <li key={w.quote}>
-                <mark className="rounded bg-amber-200/70 px-0.5">“{w.quote}”</mark>{' '}
+                <mark className="rounded bg-amber-200/70 px-0.5 text-amber-900">“{w.quote}”</mark>{' '}
                 <span className="text-slate-600">— {w.why}</span>
               </li>
             ))}
@@ -646,7 +646,7 @@ function NextRound({ debrief }) {
         <ol className="space-y-2">
           {next.map((q, i) => (
             <li key={q.question} className="flex gap-3 text-sm">
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-navy-800 text-xs font-bold text-white">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-night text-xs font-bold text-white">
                 {i + 1}
               </span>
               <span>
@@ -913,7 +913,7 @@ function ShareReport({ sessionId, token: initial }) {
               value={link}
               aria-label="Share link"
               onFocus={(e) => e.target.select()}
-              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-600"
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-surface px-2 py-1 text-slate-600"
             />
             <button type="button" onClick={copy} className="btn-secondary px-3 py-1">
               Copy link
@@ -1078,7 +1078,7 @@ function ReportView({ report, id, onAttempt, build, busy, error, shared = false 
         </div>
       </header>
 
-      <p className="rounded-xl bg-white/70 p-3 text-sm text-slate-600 ring-1 ring-slate-200">
+      <p className="rounded-xl bg-surface/70 p-3 text-sm text-slate-600 ring-1 ring-slate-200">
         Scores are practice feedback from an AI coach, not a hiring assessment.
         {report.licensed_field &&
           ' For licensed or specialized professions, they are not a professional evaluation of your competence.'}

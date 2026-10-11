@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { moduleLabel } from '../lib/modules'
 
 const input =
-  'rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm transition focus:border-brand-400 focus:ring-4 focus:ring-brand-100 focus:outline-none'
+  'rounded-lg border border-slate-200 bg-surface px-2.5 py-1.5 text-sm transition focus:border-brand-400 focus:ring-4 focus:ring-brand-100 focus:outline-none'
 
 // Edit the question plan before the interview starts. onSave(plan) persists it.
 export default function PlanEditor({ plan, duration, onSave }) {

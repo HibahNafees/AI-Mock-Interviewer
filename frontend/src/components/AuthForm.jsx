@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { HeroScene } from './Art'
 import { Logo } from './Layout'
+import ThemeToggle from './ThemeToggle'
 
 export default function AuthForm({ title, fields, submitLabel, onSubmit, footer, notice }) {
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.name, ''])))
@@ -36,7 +37,8 @@ export default function AuthForm({ title, fields, submitLabel, onSubmit, footer,
         </div>
         <HeroScene className="h-64" />
       </aside>
-      <div className="flex flex-col items-center justify-center gap-6 px-4 py-10">
+      <div className="relative flex flex-col items-center justify-center gap-6 px-4 py-10">
+        <ThemeToggle className="absolute top-4 right-4" />
         <div className="flex justify-center lg:hidden">
           <Logo />
         </div>

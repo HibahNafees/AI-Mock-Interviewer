@@ -56,7 +56,7 @@ function Choice({ name, options, value, onChange }) {
           className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
             value === key
               ? 'border-transparent bg-gradient-to-r from-brand-600 to-accent-500 text-white shadow-md shadow-brand-500/25'
-              : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700'
+              : 'border-slate-200 bg-surface text-slate-700 hover:border-brand-300 hover:text-brand-700'
           }`}
         >
           {label}

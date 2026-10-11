@@ -77,7 +77,7 @@ function LevelCard({ s }) {
         {Array.from({ length: 10 }, (_, i) => (
           <span
             key={i}
-            className={`h-2.5 flex-1 rounded-full ${i < s.level ? 'bg-gradient-to-r from-brand-400 to-accent-400' : 'bg-[#f3ebe1]'}`}
+            className={`h-2.5 flex-1 rounded-full ${i < s.level ? 'bg-gradient-to-r from-brand-400 to-accent-400' : 'bg-line-soft'}`}
           />
         ))}
       </div>
@@ -86,7 +86,7 @@ function LevelCard({ s }) {
           ? 'Top level reached. Keep practicing to stay sharp!'
           : `${s.next_level_in} more interview${s.next_level_in === 1 ? '' : 's'} to reach level ${s.level + 1}.`}
       </p>
-      <dl className="grid grid-cols-2 gap-3 border-t border-[#f3ebe1] pt-4 text-sm">
+      <dl className="grid grid-cols-2 gap-3 border-t border-line-soft pt-4 text-sm">
         <div>
           <dt className="text-slate-500">Questions answered</dt>
           <dd className="font-bold text-ink tabular-nums">{s.questions_answered}</dd>
@@ -133,7 +133,7 @@ function PracticeCard({ practice }) {
           ['Coming up', practice.upcoming, 'text-ink'],
           ['Mastered', practice.mastered, 'text-emerald-700'],
         ].map(([label, n, tone]) => (
-          <div key={label} className="rounded-2xl bg-[#faf5ef] p-3">
+          <div key={label} className="rounded-2xl bg-sand p-3">
             <dt className="text-xs font-medium text-slate-500">{label}</dt>
             <dd className={`font-display text-2xl font-extrabold tabular-nums ${tone}`}>{n}</dd>
           </div>
@@ -175,7 +175,7 @@ function GoalCard({ goal, onChange }) {
         {goal.done_this_week}
         <span className="text-lg font-semibold text-slate-400"> / {goal.weekly}</span>
       </p>
-      <div className="h-3 overflow-hidden rounded-full bg-[#f3ebe1]" aria-hidden="true">
+      <div className="h-3 overflow-hidden rounded-full bg-line-soft" aria-hidden="true">
         <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: `${pct}%` }} />
       </div>
       <p className="text-sm text-slate-600">
@@ -215,7 +215,7 @@ export default function Dashboard() {
   const hasScores = s?.history?.length > 0
   return (
     <section className="space-y-8">
-      <div className="relative overflow-hidden rounded-[2rem] border border-[#f6dccf] bg-gradient-to-br from-brand-50 via-white to-accent-50 p-8 sm:p-10">
+      <div className="relative overflow-hidden rounded-[2rem] border border-blush bg-gradient-to-br from-brand-50 via-surface to-accent-50 p-8 sm:p-10">
         <div className="grid items-center gap-6 md:grid-cols-[1fr_18rem]">
           <div>
             <p className="eyebrow">AI voice practice interviews for any job</p>
@@ -231,7 +231,7 @@ export default function Dashboard() {
                 Start a practice interview <span aria-hidden="true">🚀</span>
               </Link>
               {s && s.interviews > 0 && (
-                <span className="chip bg-white text-slate-700 ring-1 ring-[#f1e6da]">
+                <span className="chip bg-surface text-slate-700 ring-1 ring-line">
                   Level {s.level} · {s.interviews} interview{s.interviews === 1 ? '' : 's'} done
                 </span>
               )}
@@ -327,7 +327,7 @@ export default function Dashboard() {
                           <span className="font-bold text-ink tabular-nums">{fmt(k.score)}</span>
                         </span>
                       </div>
-                      <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#f3ebe1]" aria-hidden="true">
+                      <div className="mt-1 h-2 overflow-hidden rounded-full bg-line-soft" aria-hidden="true">
                         <div
                           className="h-full rounded-full bg-gradient-to-r from-brand-400 to-accent-400"
                           style={{ width: `${(k.score / 5) * 100}%` }}
@@ -355,7 +355,7 @@ export default function Dashboard() {
         </ol>
       )}
 
-      <div className="flex items-center gap-4 rounded-3xl bg-navy-800 p-6 text-white">
+      <div className="flex items-center gap-4 rounded-3xl bg-night p-6 text-white">
         <Mascot className="h-20 w-20 shrink-0" />
         <div>
           <p className="text-xs font-bold tracking-wider text-accent-300 uppercase">Tip of the day</p>
@@ -366,7 +366,7 @@ export default function Dashboard() {
       {sessions.length > 0 && (
         <div>
           <h2 className="text-xl font-bold">Your interviews</h2>
-          <ul className="card mt-3 divide-y divide-[#f3ebe1] overflow-hidden">
+          <ul className="card mt-3 divide-y divide-line-soft overflow-hidden">
             {sessions.map((x) => {
               const [label, color] = MODE_LABEL[x.mode] ?? STATUS[x.status] ?? [x.status, 'bg-slate-100 text-slate-600']
               return (

@@ -108,7 +108,7 @@ export default function DocumentInput({ kind, value, onChange }) {
             aria-selected={mode === key}
             onClick={() => setMode(key)}
             className={`rounded-full px-3.5 py-1.5 font-medium transition ${
-              mode === key ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              mode === key ? 'bg-surface text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             {label}
