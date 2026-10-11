@@ -114,3 +114,17 @@ Other areas unchanged (✅).
 Panel (15 min, with company research): stripe.com/about summarized faithfully (no invented facts) and its two "Why us?" questions became a section; Priya opened and introduced the panel, then handed to Elena (behavioral), Marcus (technical, design) and back to Elena, each with a natural handover; Priya took the candidate's questions and signed off. Coding (10 min): a role-fit problem with an example; follow-ups on edge cases, complexity and trade-offs; the scorer read the code and caught that it solved a different problem. Design (10 min): follow-ups came from the sketch text (cache invalidation, load when the cache fails). Negotiation (5 min): the recruiter held, then moved in small steps after a justified number and agreed a bonus and review; scored on anchoring, justification, composure and clarity.
 
 Found and fixed: T-55 (editor code went out with unrelated later questions; now it resets per main question), T-56 (off-topic coding/design answers got a behavioral placeholder rewrite), T-57 (negotiation closed with the interview's "you'll hear back by email"), T-58 (the recruiter once conceded almost the whole gap on the first ask). **Open from this check:** none.
+
+## Check after Phase 10 (2026-10-11) — deploy and harden
+
+| Area | Status | Evidence / gap |
+|---|---|---|
+| Safety and privacy | ✅ | Retention is enforced: documents past 30 days are deleted daily (`flask purge-expired`, compose `purge` service), not just hidden. "Delete my data" (Account page, password + confirmation) removes the account and every user table by cascade; the spend moves to the not-tied-to-a-user tally so the monthly cap still counts it. Shared report links are read-only, revocable and hide the token and all actions. Fire key stays in the server `.env`; production refuses weak secrets, SQLite, a localhost CORS origin or a missing key. Login/signup/delete brute-force limits; the real client address comes through Caddy (spoofed `X-Forwarded-For` doesn't bypass it). Caddy and Vercel send security headers; the frontend allows only its own microphone/camera. |
+| Core behavior / during the interview | ✅ | Live eval (4 full interviews, simulated clock): every session finished within its 10 minutes, wrapped up and signed off; no disrespectful interviewer line (checked automatically on every message). |
+| Scoring | ⚠️ | Strong scored above weak and rambling (3.86 vs 3.66 / 3.67), but the weak candidate didn't behave weakly (used résumé numbers), so separation isn't measured yet: harness fixed (T-73), re-run pending (T-74). The run also adds examples to T-72 (a covered trade-off listed as a gap; an unrelated quote credited as a result; "seemed to resonate well" accepted as a measurable result). |
+| Final report | ✅ | Share view shows the same report read-only (no Try again, transcript, thank-you or debrief actions); the admin page shows daily usage, Fire spend and budget left. |
+| Interview preparation, adaptive difficulty, coaching, personalities, modes, story bank | ✅ | Unchanged in Phase 10. |
+
+Deploy stack smoke-tested locally with Docker (MySQL 8.4, gunicorn, Caddy): migrations, signup/login, upload, admin, share 404, rate limit and the body-size cap all behaved through Caddy. Real deploy waits for the Oracle, DuckDNS and Vercel accounts (docs/DEPLOY.md). Live eval spend: $0.0744 (month ≈ $0.452 of $1).
+
+**Open from this check:** T-72 (false gaps in missing points), T-74 (eval re-run with fixed personas).

@@ -72,7 +72,7 @@ Turn-based limits to design around: 1–3 s pause per turn (show a thinking indi
   /migrations
   .env             FIRE_API_KEY, DB creds (never committed)
   .env.example     same keys, empty values
-/evals             AI-candidate harness (strong / weak / rambling, across job fields)
+/evals             AI-candidate harness (strong / weak / rambling, across job fields): run.py, harness.py, fields.py
 docker-compose.yml
 Caddyfile
 .gitignore         must include .env
@@ -128,7 +128,7 @@ Flexible LLM output is stored in JSON columns. No table stores audio/video. Docu
 11. Optional: real-time voice with LiveKit (interruptions, peer practice)
 12. Optional: Hume EVI experiment
 
-**Current phase:** 9 done and live-checked (extras). Coding round (`modules` coding, Monaco bundled lean in `src/lib/monaco.js`), system design whiteboard (Excalidraw; only a text description of the sketch is sent, `src/lib/whiteboard.js`), both saved in `answers.work_json` (`services/work.py`); panel (`services/panel.py`, 2–3 interviewers, handovers, per-panelist voices); negotiation (`services/negotiation.py`, fixed plan and rubric, no Fire call to plan); body language (opt-in, MediaPipe in the browser, percentages in `answers.body_json`, `services/body.py`); gap analysis, company research (`services/company.py`, SSRF-safe fetch), questions-for-them coach, cheat sheet, thank-you email. Earlier: Phase 8 signature modes (decoder, pressure, debrief, reverse); Phase 7 story bank; Phase 6 voice (browser by default; Fire speech via `tts-kokoro` live-checked 2026-10-11, T-27). Next: Phase 10 (deploy and harden).
+**Current phase:** 10 built (deploy and harden); real deploy waits for the user's Oracle, DuckDNS and Vercel accounts (`docs/DEPLOY.md`). Privacy: daily purge of expired documents (`flask purge-expired`), Delete my data (`DELETE /api/auth/me`, spend kept in `anon_spend`), revocable read-only report links (`/shared/:token`), all in `services/privacy.py`. Admin usage page (`/admin`, `ADMIN_EMAILS`, `services/admin.py`). Hardening: login/signup/delete rate limits (`services/ratelimit.py`), `APP_ENV=production` refuses unsafe settings, `TRUST_PROXY` behind Caddy, gunicorn. Deploy: `docker-compose.yml` (MySQL 8.4, api, purge, Caddy) + `Caddyfile` + `deploy/env.example` + `deploy/backup.sh`; `frontend/vercel.json`. Eval harness: `evals/run.py --mock|--live` (AI candidates through the real API, simulated clock, budget guard, persona-drift checks; results in `evals/results/`, gitignored); a live run costs ~$0.02 per candidate. SQLite tests enforce foreign keys like MySQL. Open: T-72 (scorer false gaps), T-74 (eval re-run). Phases 1–9 done earlier (see docs/RULES_CHECK.md).
 
 ## Running locally
 
