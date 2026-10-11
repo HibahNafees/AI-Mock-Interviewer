@@ -2,7 +2,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services.planning import JdAnalysisOut, normalize_minutes
+from app.services.planning import (
+    JdAnalysisOut,
+    PlanSectionOut,
+    enforce_hands_on,
+    fit_hands_on,
+    hands_on_limit,
+    normalize_minutes,
+)
 
 
 def sections(*minutes):
@@ -34,3 +41,70 @@ def test_unknown_formats_are_dropped():
         formats=["juggling", "case", "case"],
     )
     assert out.formats == ["case"]
+
+
+LOOP = ["behavioral", "technical", "coding", "system_design"]
+
+
+@pytest.mark.parametrize(
+    "duration,kept",
+    [
+        (5, ["behavioral", "technical"]),  # T-81: a 5-minute plan got 2 min each
+        (10, ["behavioral", "technical", "coding"]),
+        (15, ["behavioral", "technical", "coding"]),
+        (20, LOOP),
+        (60, LOOP),
+    ],
+)
+def test_hands_on_rounds_only_when_they_fit(duration, kept):
+    assert fit_hands_on(LOOP, duration) == kept
+
+
+def test_design_alone_needs_twelve_minutes():
+    assert fit_hands_on(["behavioral", "system_design"], 11) == ["behavioral"]
+    assert fit_hands_on(["behavioral", "system_design"], 12) == [
+        "behavioral",
+        "system_design",
+    ]
+
+
+def test_coding_problem_limits():
+    assert hands_on_limit(5) == 0
+    assert hands_on_limit(10) == 1
+    assert hands_on_limit(30) == 3
+    assert hands_on_limit(5, only=True) == 1  # a coding-only interview
+
+
+def section(module, minutes, n=1):
+    return PlanSectionOut(
+        name=module,
+        module=module,
+        minutes=minutes,
+        questions=[f"q{i}" for i in range(n)],
+    )
+
+
+def test_hands_on_sections_get_their_minimum_from_the_others():
+    plan = [
+        section("behavioral", 10),
+        section("coding", 4),
+        section("system_design", 6),
+    ]
+    out = enforce_hands_on(plan, 20)
+    minutes = {s.module: s.minutes for s in out}
+    assert minutes == {"behavioral": 2, "coding": 8, "system_design": 10}
+    assert sum(minutes.values()) == 20
+
+
+def test_coding_problems_that_cannot_fit_are_dropped():
+    plan = [section("behavioral", 3), section("coding", 9, n=2)]
+    out = enforce_hands_on(plan, 12)
+    coding = next(s for s in out if s.module == "coding")
+    assert len(coding.questions) == 1 and coding.minutes >= 8
+    assert sum(s.minutes for s in out) == 12
+
+
+def test_hands_on_sections_can_share_spare_time():
+    # Only coding and design: design borrows coding's minutes above its 8.
+    out = enforce_hands_on([section("coding", 12), section("system_design", 8)], 20)
+    assert {s.module: s.minutes for s in out} == {"coding": 10, "system_design": 10}

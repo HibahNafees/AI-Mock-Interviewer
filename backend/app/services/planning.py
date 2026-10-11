@@ -243,11 +243,66 @@ def offered_modules(analysis: JdAnalysis) -> list[str]:
 
 
 MINUTES_PER_PROBLEM = 8
+# Least time a hands-on round needs: a coding problem, or one design question.
+HANDS_ON_MIN = {"coding": MINUTES_PER_PROBLEM, "system_design": 10}
+# Minutes a mixed loop keeps for its other sections.
+OTHER_MIN = 2
 
 
-def hands_on_limit(duration_min: int) -> int:
-    """How many coding problems fit (at least one, about 8 minutes each)."""
-    return max(1, min(3, duration_min // MINUTES_PER_PROBLEM))
+def hands_on_limit(duration_min: int, only: bool = False) -> int:
+    """How many coding problems fit (about 8 minutes each, at most 3). `only`: the
+    whole interview is coding, so it gets at least one whatever the length."""
+    spare = duration_min if only else duration_min - OTHER_MIN
+    return max(1 if only else 0, min(3, spare // MINUTES_PER_PROBLEM))
+
+
+def fit_hands_on(allowed: list[str], duration_min: int) -> list[str]:
+    """Drop the coding round and the whiteboard from a mixed loop when the
+    interview is too short for them (a 5-minute plan once gave each 2 minutes).
+    Coding is kept before system design."""
+    spare = duration_min - OTHER_MIN
+    out = []
+    for m in allowed:
+        need = HANDS_ON_MIN.get(m)
+        if need is None:
+            out.append(m)
+        elif spare >= need:
+            out.append(m)
+            spare -= need
+    return out or allowed
+
+
+def section_need(section) -> int:
+    """Least minutes a section needs (0 for ordinary sections)."""
+    need = HANDS_ON_MIN.get(section.module, 0)
+    return need * len(section.questions) if section.module == "coding" else need
+
+
+def enforce_hands_on(sections: list, duration_min: int) -> list:
+    """Give coding and design sections their minimum minutes, taken from the other
+    sections' spare time (each keeps at least 1, or its own minimum). Coding problems that still don't fit are
+    dropped; a hands-on section with nothing left is removed."""
+    for s in sections:
+        need = section_need(s)
+        while s.minutes < need:
+            donors = [
+                d
+                for d in sections
+                if d is not s and d.minutes > max(1, section_need(d))
+            ]
+            if donors:
+                donor = max(donors, key=lambda d: d.minutes)
+                donor.minutes -= 1
+                s.minutes += 1
+            elif s.module == "coding" and len(s.questions) > 1:
+                s.questions = s.questions[:-1]
+                need = section_need(s)
+            else:
+                break
+    kept = [s for s in sections if s.minutes >= section_need(s)]
+    if kept and len(kept) < len(sections):
+        return normalize_minutes(kept, duration_min)
+    return sections
 
 
 def build_plan(
@@ -263,9 +318,11 @@ def build_plan(
     """`coding` / `system_design`: what the candidate asked for (None = plan decides)."""
     summary = analysis_summary(analysis)
     allowed = offered_modules(analysis) if focus == MIXED else [focus]
+    if focus == MIXED:
+        allowed = fit_hands_on(allowed, duration_min)
     rules, ctx = [], {}
     if coding is not None and "coding" in allowed:
-        coding = min(coding, hands_on_limit(duration_min))
+        coding = min(coding, hands_on_limit(duration_min, only=focus != MIXED))
         ctx["coding"] = coding
         rules.append(
             f"Use exactly {coding} coding problem(s): each is one question in a section "
@@ -310,6 +367,8 @@ def build_plan(
                 section.module = modules.DEFAULT
         fix_reversed_opener(section, names)
     plan.sections = normalize_minutes(plan.sections, duration_min)
+    if focus == MIXED:
+        plan.sections = enforce_hands_on(plan.sections, duration_min)
     return plan
 
 
@@ -414,7 +473,15 @@ def add_why_us(plan: PlanOut, questions: list[str]) -> None:
     section so the total stays the same (company research)."""
     if not questions:
         return
-    longest = max(plan.sections, key=lambda s: s.minutes)
+    # Never from a coding or design section: they need their full time.
+    spare = [
+        s
+        for s in plan.sections
+        if s.minutes - WHY_US_MINUTES >= max(1, section_need(s))
+    ]
+    if not spare:
+        return
+    longest = max(spare, key=lambda s: s.minutes - section_need(s))
     if longest.minutes <= WHY_US_MINUTES:
         return  # too short an interview to spare the time
     longest.minutes -= WHY_US_MINUTES

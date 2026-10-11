@@ -14,7 +14,8 @@ const STYLES = {
 const CHARACTER_STYLE = { rate: 1.0, pitch: 1.0 }
 
 // Said while the answer is transcribed and the reply is written (hides the pause).
-export const FILLERS = ['Mm-hm.', 'Okay.', 'Mm-hm, okay.', 'Got it.']
+// Real words only: speech engines spell out sounds like "Mm-hm" letter by letter.
+export const FILLERS = ['Okay.', 'Got it.', 'Right.', 'I see.', 'Alright.']
 
 export function canSpeak() {
   return (

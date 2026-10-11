@@ -8,6 +8,12 @@ export default function WorkView({ work, dark = false }) {
         {code ? `Your code (${work.language})` : 'Your sketch, as the interviewer read it'}
       </summary>
       <pre className="overflow-x-auto px-3 pb-3 font-mono text-xs leading-relaxed whitespace-pre">{work.content}</pre>
+      {work.output && (
+        <>
+          <p className="px-3 text-xs font-semibold">Output when you ran it</p>
+          <pre className="overflow-x-auto px-3 pb-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">{work.output}</pre>
+        </>
+      )}
     </details>
   )
 }

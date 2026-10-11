@@ -415,7 +415,7 @@ def turn(session_id: int):
         body.text,
         body.duration_ms,
         body.input_mode,
-        body.work.model_dump() if body.work else None,
+        body.work.model_dump(exclude_none=True) if body.work else None,
         body.body.model_dump() if body.body else None,
     )
     speech = (

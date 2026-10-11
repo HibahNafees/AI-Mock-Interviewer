@@ -114,8 +114,15 @@ export default function Setup() {
   // Hands-on rounds the candidate can ask for (T-65), when the job fits them.
   const offersCoding = offered.some((m) => m.name === 'coding') && ['mixed', 'coding'].includes(chosen)
   const offersDesign = offered.some((m) => m.name === 'system_design') && chosen === 'mixed'
-  const maxProblems = Math.max(1, Math.min(3, Math.floor(length / 8)))
+  // Same limits as the planner (planning.fit_hands_on): about 8 minutes per coding
+  // problem and 10 for a design question, with 2 minutes left for the rest of a
+  // mixed interview. Rounds that don't fit aren't offered.
+  const spare = length - 2
+  const maxProblems =
+    chosen === 'coding' ? Math.max(1, Math.min(3, Math.floor(length / 8))) : Math.min(3, Math.floor(spare / 8))
   const problems = codingProblems === 'auto' ? 'auto' : Math.min(codingProblems, maxProblems)
+  const codingMinutes = !offersCoding ? 0 : problems === 'auto' ? (maxProblems > 0 ? 8 : 0) : problems * 8
+  const designFits = spare - codingMinutes >= 10
 
   function choosePressure(level) {
     setPressure(level)
@@ -149,8 +156,8 @@ export default function Setup() {
           pressure_level: pressure,
           format,
           ...(negotiating ? { negotiation: terms } : {}),
-          ...(offersCoding && !negotiating && problems !== 'auto' ? { coding_problems: problems } : {}),
-          ...(offersDesign && !negotiating && design !== 'auto' ? { system_design: design === 'yes' } : {}),
+          ...(offersCoding && maxProblems > 0 && !negotiating && problems !== 'auto' ? { coding_problems: problems } : {}),
+          ...(offersDesign && designFits && !negotiating && design !== 'auto' ? { system_design: design === 'yes' } : {}),
           ...(company && whyUs && !negotiating ? { company_research_id: company.id } : {}),
         },
       })
@@ -293,7 +300,12 @@ export default function Setup() {
           <h2 className="font-semibold text-slate-900">
             <span aria-hidden="true">⌨️ </span>Hands-on rounds
           </h2>
-          {offersCoding && (
+          {offersCoding && maxProblems === 0 && (
+            <p className="text-sm text-slate-600">
+              <span className="font-medium text-ink">Coding problems</span> need at least a 10-minute interview.
+            </p>
+          )}
+          {offersCoding && maxProblems > 0 && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-ink">Coding problems (in a code editor)</p>
               <Choice
@@ -313,7 +325,13 @@ export default function Setup() {
               )}
             </div>
           )}
-          {offersDesign && (
+          {offersDesign && !designFits && (
+            <p className="text-sm text-slate-600">
+              <span className="font-medium text-ink">A system design question</span> needs about 10 minutes of its
+              own. Choose a longer interview{codingMinutes ? ' or fewer coding problems' : ''} to add one.
+            </p>
+          )}
+          {offersDesign && designFits && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-ink">System design question (on a whiteboard)</p>
               <Choice

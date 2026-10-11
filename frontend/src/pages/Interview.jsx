@@ -442,7 +442,14 @@ function LiveStep({ session, setSession, greeting }) {
 
   // The code or sketch to send with this answer, or null.
   function currentWork() {
-    if (tool === 'code' && code.content.trim()) return { kind: 'code', language: code.language, content: code.content }
+    if (tool === 'code' && code.content.trim())
+      return {
+        kind: 'code',
+        language: code.language,
+        content: code.content,
+        // The last run's output, if the code hasn't changed since.
+        ...(code.output && code.ran === code.content ? { output: code.output } : {}),
+      }
     if (tool === 'whiteboard') {
       const content = describeScene(board.current)
       if (content) return { kind: 'whiteboard', content }
@@ -486,7 +493,7 @@ function LiveStep({ session, setSession, greeting }) {
     setError('')
     setPhase('transcribing')
     if (voiceOn && !fireVoice) {
-      // A quick "Mm-hm" covers the pause while the reply is written.
+      // A quick "Okay." covers the pause while the reply is written.
       const filler = FILLERS[Math.floor(Math.random() * FILLERS.length)]
       speak({ segments: [{ who: roleplay ? 'character' : 'interviewer', text: filler }] }, { remember: false })
     }

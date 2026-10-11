@@ -41,7 +41,7 @@ def coding_session(client, auth, docs, fire):
     }
     fire.plan = CODING_PLAN
     r = client.post(
-        "/api/sessions", json={**docs, "duration_min": 10}, headers=auth
+        "/api/sessions", json={**docs, "duration_min": 20}, headers=auth
     ).get_json()
     sid = r["session"]["id"]
     started(client, auth, sid)
@@ -306,3 +306,24 @@ def test_coding_count_is_capped_by_the_length(client, auth, docs, fire):
     assert r.status_code == 201, r.get_json()
     prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
     assert "Use exactly 1 coding problem(s)" in prompt
+
+
+def test_run_output_goes_with_the_code(client, auth, docs, fire):
+    _, sid = coding_session(client, auth, docs, fire)
+    fire.turns = [{"action": "follow_up", "message": "Why a list?"}]
+    work = {**CODE, "output": "[2, 4, 6]"}
+    r = send(client, auth, sid, "Here is my function and what it printed.", work)
+    assert r.status_code == 200, r.get_json()
+    prompt = fire.calls[-1]["prompt"]
+    assert "[Output when the candidate last ran it]\n[2, 4, 6]" in prompt
+    saved = db.session.scalar(db.select(Answer).order_by(Answer.id.desc()))
+    assert saved.work_json["output"] == "[2, 4, 6]"
+
+
+def test_code_without_a_run_saves_no_output_key(client, auth, docs, fire):
+    _, sid = coding_session(client, auth, docs, fire)
+    fire.turns = [{"action": "follow_up", "message": "Walk me through it."}]
+    send(client, auth, sid, "Here is my function.", CODE)
+    saved = db.session.scalar(db.select(Answer).order_by(Answer.id.desc()))
+    assert "output" not in saved.work_json
+    assert "[Output when" not in fire.calls[-1]["prompt"]

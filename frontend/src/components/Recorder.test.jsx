@@ -71,6 +71,22 @@ describe('Recorder', () => {
     expect(track.stop).toHaveBeenCalled() // microphone released
   })
 
+  it('hands the clip to the latest onRecorded, not the one from when recording began', async () => {
+    // The page re-renders while the candidate talks (typing code); the old
+    // callback would send the editor as it was at the start: empty.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const first = vi.fn()
+    const latest = vi.fn()
+    const { rerender } = render(<Recorder onRecorded={first} />)
+    await act(async () => screen.getByRole('button', { name: 'Record answer' }).click())
+    rerender(<Recorder onRecorded={latest} />)
+    await act(async () => vi.advanceTimersByTime(1500))
+    await act(async () => screen.getByRole('button', { name: 'Done' }).click())
+
+    expect(first).not.toHaveBeenCalled()
+    expect(latest).toHaveBeenCalledTimes(1)
+  })
+
   it('cancel discards the clip', async () => {
     const onRecorded = vi.fn()
     render(<Recorder onRecorded={onRecorded} />)

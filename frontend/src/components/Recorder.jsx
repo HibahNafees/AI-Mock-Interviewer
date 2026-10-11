@@ -31,6 +31,13 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
   const [level, setLevel] = useState(0)
   const [stopIn, setStopIn] = useState(null)
   const rec = useRef(null)
+  // The clip is handed over long after recording started (silence auto-stop,
+  // the undo window), so always call the latest onRecorded: an old one sees the
+  // page as it was when recording began, e.g. an empty code editor.
+  const onRecordedRef = useRef(onRecorded)
+  useEffect(() => {
+    onRecordedRef.current = onRecorded
+  })
 
   function cleanup() {
     const r = rec.current
@@ -70,7 +77,7 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
     const p = pending.current
     clearPending()
     setState('idle')
-    if (p) onRecorded(p.blob, p.duration)
+    if (p) onRecordedRef.current(p.blob, p.duration)
   }
 
   function discardPending() {
@@ -151,7 +158,7 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
       }
       const blob = new Blob(chunks, { type })
       if (auto) hold(blob, duration)
-      else onRecorded(blob, duration)
+      else onRecordedRef.current(blob, duration)
     }
 
     // Loudness meter + silence auto-stop.
