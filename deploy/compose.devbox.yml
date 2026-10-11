@@ -1,0 +1,12 @@
+# Devbox override: nginx (already on 80/443 with certbot) fronts the API
+# instead of Caddy. Use with:
+#   docker compose -f docker-compose.yml -f deploy/compose.devbox.yml up -d --build
+services:
+  api:
+    # Only reachable from the host (nginx), never from the internet.
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  caddy:
+    # Off on the devbox; nginx terminates TLS.
+    profiles: ["caddy"]

@@ -5,7 +5,7 @@ hostname for HTTPS), Vercel Hobby (the React app). The only paid service stays
 the Fire API, capped at $1/month by the app.
 
 ```
-browser ──https──> Vercel (React)          ──https──> yourname.duckdns.org
+browser ──https──> Vercel (React)          ──https──> intervox.duckdns.org
                                                        Caddy (TLS) ─> gunicorn/Flask ─> MySQL
                                                        (Oracle VM, docker compose)
 ```
@@ -16,8 +16,8 @@ browser ──https──> Vercel (React)          ──https──> yourname.d
    identity check; Always Free resources aren't charged. Right after signing up,
    create a **budget alert at $1** (Billing → Budgets) so any accidental paid
    resource emails you.
-2. **DuckDNS** — sign in at duckdns.org, create a subdomain (e.g.
-   `mockinterviewer`), keep the token page open.
+2. **DuckDNS** — sign in at duckdns.org, the subdomain is `intervox`
+   (intervox.duckdns.org); keep the token page open.
 3. **Vercel** — sign up with GitHub at vercel.com (Hobby plan).
 
 ## 2. The Oracle VM
@@ -53,12 +53,34 @@ browser ──https──> Vercel (React)          ──https──> yourname.d
    The API refuses to start with weak secrets, SQLite, a localhost CORS origin
    or a missing Fire key (`docker compose logs api` says which).
 
+## 2b. Alternative: the devbox (current host)
+
+Oracle refused the sign-up, so the API runs on the devbox, where nginx and
+certbot already own ports 80/443. Point the DuckDNS name at the devbox's
+public IP, then run the same stack with Caddy off:
+
+```bash
+sudo git clone https://github.com/HibahNafees/AI-Mock-Interviewer.git /srv/intervox
+sudo chown -R $USER: /srv/intervox && cd /srv/intervox
+cp deploy/env.example .env && chmod 600 .env      # fill it as in step 2.5
+docker compose -f docker-compose.yml -f deploy/compose.devbox.yml up -d --build
+sudo cp deploy/nginx-intervox.conf /etc/nginx/sites-available/intervox
+sudo ln -s /etc/nginx/sites-available/intervox /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d intervox.duckdns.org
+curl https://intervox.duckdns.org/api/health
+```
+
+The production database is its own MySQL container, separate from the dev
+database. Updates: `git pull` then the same `docker compose ... up -d --build`.
+If Oracle ever works out, move with a backup (section 4) and the same `.env`.
+
 ## 3. The frontend on Vercel
 
 1. Vercel → Add New → Project → import the GitHub repo.
 2. **Root Directory: `frontend`** (framework Vite is detected; `vercel.json`
    handles page routes and security headers).
-3. Environment variable: `VITE_API_URL` = `https://yourname.duckdns.org`
+3. Environment variable: `VITE_API_URL` = `https://intervox.duckdns.org`
    (no trailing slash, no `/api`).
 4. Deploy, then copy the production URL (e.g. `https://ai-mock-interviewer.vercel.app`).
 5. Back on the VM, set `CORS_ORIGINS` to that URL in `.env` and run

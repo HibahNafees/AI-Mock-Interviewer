@@ -1,5 +1,5 @@
 # HTTPS for the API (Let's Encrypt, automatic). API_DOMAIN is e.g.
-# mockinterviewer.duckdns.org; use ":80" for a plain-HTTP local test.
+# intervox.duckdns.org; use ":80" for a plain-HTTP local test.
 {$API_DOMAIN} {
 	encode gzip
 
