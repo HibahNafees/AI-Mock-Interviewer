@@ -121,8 +121,12 @@ class FireClient:
     def transcribe(self, audio_data_url: str) -> FireResult:
         return self._post("/v1/transcribe", {"audio": audio_data_url})
 
-    def speech(self, text: str, voice: str | None = None) -> FireResult:
+    def speech(
+        self, text: str, voice: str | None = None, model: str | None = None
+    ) -> FireResult:
         payload: dict[str, Any] = {"text": text}
+        if model:
+            payload["species_name"] = model
         if voice:
             payload["voice"] = voice
         return self._post("/v1/speech", payload)

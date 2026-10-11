@@ -30,8 +30,11 @@ class Config:
     # End with "Do you have any questions for me?" (answered, never scored).
     CANDIDATE_QUESTIONS = os.environ.get("CANDIDATE_QUESTIONS", "1") == "1"
     # Interviewer voice: "browser" (free Web Speech API in the browser) or "fire"
-    # (Fire /v1/speech, billed; no speech model was deployed on 2026-10-09, T-27).
+    # (Fire /v1/speech, billed per turn).
     VOICE_PROVIDER = os.environ.get("VOICE_PROVIDER", "browser")
+    # Pinned so a change to Fire's default speech model can't raise the cost;
+    # Kokoro is Fire's cheapest one.
+    FIRE_SPEECH_MODEL = os.environ.get("FIRE_SPEECH_MODEL", "tts-kokoro")
     # Fire voice ids by speaker: "friendly", "neutral", "tough", "character", and
     # the panel interviewers "panel_hm", "panel_peer", "panel_hr".
     # Unset ones use the speech model's default voice.

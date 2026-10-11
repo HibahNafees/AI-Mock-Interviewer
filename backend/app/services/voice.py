@@ -55,6 +55,7 @@ def synthesize(
         return None
     voices = current_app.config.get("FIRE_VOICES", {})
     persona = session.persona or "neutral"
+    model = current_app.config.get("FIRE_SPEECH_MODEL")
     clips = []
     for seg in segments:
         if seg["who"] == "character":
@@ -62,7 +63,7 @@ def synthesize(
         else:
             voice = voices.get(f"panel_{seg.get('panelist')}") or voices.get(persona)
         try:
-            result = get_fire().speech(seg["text"], voice)
+            result = get_fire().speech(seg["text"], voice, model)
         except FireError as err:
             log.warning("Fire speech failed (%s); the browser will speak", err.message)
             return None

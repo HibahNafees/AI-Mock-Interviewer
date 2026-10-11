@@ -73,6 +73,8 @@ def test_fire_voice_speaks_each_segment_with_its_voice_and_counts_spend(
     assert [c["who"] for c in speech] == ["interviewer", "character"]
     assert speech[0]["audio"] == "data:audio/mpeg;base64,QUJD"
     assert [v for _, v in fire.spoken] == ["v-interviewer", "v-dana"]
+    # The cheap speech model is pinned, not left to Fire's default.
+    assert fire.speech_models == ["tts-kokoro", "tts-kokoro"]
     assert db.session.scalar(db.select(UsageLimit.fire_spend_usd)) > 0
 
 
