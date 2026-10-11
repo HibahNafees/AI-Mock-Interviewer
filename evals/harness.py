@@ -43,9 +43,11 @@ PERSONAS = {
         "120 to 180 words, natural spoken style."
     ),
     "weak": (
-        "Underprepared. Vague and generic, says 'we' instead of 'I', hedges ('I "
-        "guess', 'kind of'), gives no concrete example or result, and sometimes "
-        "drifts slightly off the question. 30 to 60 words."
+        "Underprepared and vague. Speaks only in generalities ('we just tried to "
+        "do our best', 'it went fine'), says 'we' instead of 'I', hedges ('I "
+        "guess', 'kind of'). NEVER state any number, percentage, metric, duration "
+        "or outcome, never name a tool or a specific project, and don't use the "
+        "résumé's achievements. 25 to 50 words."
     ),
     "rambling": (
         "Knows the material but rambles: starts with long background and tangents, "
@@ -60,6 +62,12 @@ CANNED = {
     "rambling": "So, um, basically, there's a lot of background here, and before I "
     "get to it I should say the team changed a lot, and anyway we did some queue work.",
 }
+# What each persona's answers must look like, or the run measures the wrong thing.
+DRIFT = {
+    "weak": {"max_words": 70, "numbers": False},
+    "rambling": {"min_words": 140},
+}
+DIGIT_RE = re.compile(r"\d")
 WORDS_PER_SEC = 2.4  # typical speaking pace, to give typed answers a duration
 INTERVIEWER_SEC = 8  # time the interviewer takes to speak between answers
 MAX_TURNS = 18
@@ -99,6 +107,7 @@ class Run:
     star_result: list = field(default_factory=list)  # behavioral answers only
     possible_false_gaps: list = field(default_factory=list)
     unsafe_lines: list = field(default_factory=list)
+    answers: list = field(default_factory=list)
     spend_usd: float = 0.0
     seconds: float = 0.0
     error: str = ""
@@ -174,8 +183,14 @@ def _possible_false_gaps(question: dict) -> list[dict]:
             if w not in STOPWORDS and _stem(w) not in GENERIC | asked
         ]
         hits = sorted({w for w in words if _stem(w) in said_stems})
-        if hits:
-            out.append({"question_id": question["question_id"], "point": m["point"], "words": hits})
+        if len(hits) >= 2 and len(hits) >= 0.75 * len(words):
+            out.append(
+                {
+                    "question_id": question["question_id"],
+                    "point": m["point"],
+                    "words": hits,
+                }
+            )
     return out
 
 
@@ -195,8 +210,12 @@ def run_one(app, field_key: str, persona: str, live: bool) -> Run:
         return r.get_json()
 
     try:
-        resume_id = post("/documents", {"kind": "resume", "text": f["resume"]})["document"]["id"]
-        jd_id = post("/documents", {"kind": "job_description", "text": f["jd"]})["document"]["id"]
+        resume_id = post("/documents", {"kind": "resume", "text": f["resume"]})[
+            "document"
+        ]["id"]
+        jd_id = post("/documents", {"kind": "job_description", "text": f["jd"]})[
+            "document"
+        ]["id"]
         session = post(
             "/sessions",
             {
@@ -222,6 +241,7 @@ def run_one(app, field_key: str, persona: str, live: bool) -> Run:
                 run.unsafe_lines.append(message)
             answer = reply(message, history)
             history.append((message, answer))
+            run.answers.append(answer)
             duration = len(answer.split()) / WORDS_PER_SEC
             _clock_forward(sid, duration + INTERVIEWER_SEC)
             session = post(
@@ -236,7 +256,9 @@ def run_one(app, field_key: str, persona: str, live: bool) -> Run:
             post(f"/sessions/{sid}/end")
         run.status = "completed"
         post(f"/sessions/{sid}/report")
-        report = client.get(f"/api/sessions/{sid}/report", headers=auth).get_json()["report"]
+        report = client.get(f"/api/sessions/{sid}/report", headers=auth).get_json()[
+            "report"
+        ]
         run.status = f"report {report['status']}"
         run.overall = report["overall_score"]
         run.verdict = report["verdict"]
@@ -254,13 +276,46 @@ def run_one(app, field_key: str, persona: str, live: bool) -> Run:
     return run
 
 
+def persona_drift(r: Run) -> str:
+    """Why the candidate didn't behave like its persona ("" if it did).
+
+    Skips the first answer (small talk) and the last (questions for them)."""
+    rule = DRIFT.get(r.persona)
+    answers = r.answers[1:-1] if len(r.answers) > 2 else r.answers
+    if not rule or not answers:
+        return ""
+    avg = sum(len(a.split()) for a in answers) / len(answers)
+    if "max_words" in rule and avg > rule["max_words"]:
+        return f"answers average {avg:.0f} words (max {rule['max_words']})"
+    if "min_words" in rule and avg < rule["min_words"]:
+        return f"answers average {avg:.0f} words (min {rule['min_words']})"
+    if rule.get("numbers") is False:
+        n = sum(bool(DIGIT_RE.search(a)) for a in answers)
+        if n:
+            return f"{n} of {len(answers)} answers state numbers"
+    return ""
+
+
 def checks(runs: list[Run]) -> list[tuple[str, bool]]:
     """Expectations a sound interviewer and scorer should meet."""
     out = []
     by = {(r.field, r.persona): r for r in runs}
     for r in runs:
+        if r.persona in DRIFT and r.answers:
+            drift = persona_drift(r)
+            out.append(
+                (
+                    f"{r.field}/{r.persona}: candidate stayed in persona {drift and '(' + drift + ')'}".rstrip(),
+                    not drift,
+                )
+            )
         out.append((f"{r.field}/{r.persona}: finished without errors", not r.error))
-        out.append((f"{r.field}/{r.persona}: no disrespectful interviewer lines", not r.unsafe_lines))
+        out.append(
+            (
+                f"{r.field}/{r.persona}: no disrespectful interviewer lines",
+                not r.unsafe_lines,
+            )
+        )
     for field_key in sorted({r.field for r in runs}):
         strong = by.get((field_key, "strong"))
         for other in ("weak", "rambling"):
@@ -273,9 +328,19 @@ def checks(runs: list[Run]) -> list[tuple[str, bool]]:
                     )
                 )
             if o and o.verdict:
-                out.append((f"{field_key}/{other}: verdict is not hire ({o.verdict})", o.verdict != "hire"))
+                out.append(
+                    (
+                        f"{field_key}/{other}: verdict is not hire ({o.verdict})",
+                        o.verdict != "hire",
+                    )
+                )
         if strong and strong.verdict:
-            out.append((f"{field_key}/strong: verdict is not no hire ({strong.verdict})", strong.verdict != "no hire"))
+            out.append(
+                (
+                    f"{field_key}/strong: verdict is not no hire ({strong.verdict})",
+                    strong.verdict != "no hire",
+                )
+            )
     return out
 
 
@@ -300,7 +365,9 @@ def save(runs: list[Run], results: list[tuple[str, bool]], out_dir: Path) -> Pat
     path = out_dir / time.strftime("eval-%Y%m%d-%H%M%S.json")
     path.write_text(
         json.dumps(
-            {"runs": [asdict(r) for r in runs], "checks": results}, indent=2, default=str
+            {"runs": [asdict(r) for r in runs], "checks": results},
+            indent=2,
+            default=str,
         )
     )
     return path
