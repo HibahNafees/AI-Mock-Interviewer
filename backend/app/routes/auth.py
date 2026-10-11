@@ -6,10 +6,12 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..extensions import db
 from ..models import User
-from ..services import admin, privacy
+from ..services import admin, privacy, ratelimit
 from .common import first_error
 
 bp = Blueprint("auth", __name__)
+
+TOO_MANY = "Too many attempts. Please wait a few minutes and try again."
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -57,6 +59,8 @@ def _token_response(user: User, status: int = 200):
 
 @bp.post("/signup")
 def signup():
+    if not ratelimit.allow("signup", 5, 3600):
+        return jsonify(error=TOO_MANY), 429
     try:
         body = SignupBody.model_validate(request.get_json(silent=True) or {})
     except ValidationError as err:
@@ -74,6 +78,8 @@ def signup():
 
 @bp.post("/login")
 def login():
+    if not ratelimit.allow("login", 10, 300):
+        return jsonify(error=TOO_MANY), 429
     try:
         body = LoginBody.model_validate(request.get_json(silent=True) or {})
     except ValidationError as err:
@@ -102,6 +108,8 @@ def delete_me():
     user = db.session.get(User, int(get_jwt_identity()))
     if user is None:
         return jsonify(error="Account not found"), 404
+    if not ratelimit.allow("delete", 5, 900, key=str(user.id)):
+        return jsonify(error=TOO_MANY), 429
     if not user.check_password(body.password):
         return jsonify(error="Incorrect password"), 403
     privacy.delete_user(user.id)

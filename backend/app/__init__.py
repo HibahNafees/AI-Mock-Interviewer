@@ -17,6 +17,25 @@ def _sqlite_foreign_keys(app: Flask) -> None:
         )
 
 
+def _check_production(app: Flask) -> None:
+    """Refuse to start in production with settings that would be unsafe."""
+    problems = []
+    for key in ("SECRET_KEY", "JWT_SECRET_KEY"):
+        if len(app.config.get(key) or "") < 32:
+            problems.append(f"{key} must be a random string of 32+ characters")
+    if not app.config.get("FIRE_API_KEY"):
+        problems.append("FIRE_API_KEY is not set")
+    if app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"):
+        problems.append("DATABASE_URL must point at MySQL, not SQLite")
+    origins = app.config.get("CORS_ORIGINS") or []
+    if not origins or any(o == "*" or "localhost" in o for o in origins):
+        problems.append("CORS_ORIGINS must list the real frontend URL(s)")
+    if app.debug:
+        problems.append("debug mode must be off")
+    if problems:
+        raise RuntimeError("Unsafe production settings: " + "; ".join(problems))
+
+
 def create_app(config_class: type[Config] = Config) -> Flask:
     app = Flask(__name__)
     app.config.from_object(config_class)
@@ -24,6 +43,12 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     for key in ("SECRET_KEY", "JWT_SECRET_KEY", "SQLALCHEMY_DATABASE_URI"):
         if not app.config.get(key):
             raise RuntimeError(f"{key} is not set; copy .env.example to .env")
+    if app.config.get("APP_ENV") == "production":
+        _check_production(app)
+    if app.config.get("TRUST_PROXY"):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     db.init_app(app)
     if app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"):

@@ -72,6 +72,13 @@ class Config:
     # A 5-minute answer at the browser's 32 kbps is ~1.2 MB; Fire accepts ~25 MB.
     MAX_AUDIO_BYTES = 10 * 1024 * 1024
     MAX_CONTENT_LENGTH = 11 * 1024 * 1024
+    # Login/signup brute-force limits (services/ratelimit.py).
+    RATE_LIMITS = os.environ.get("RATE_LIMITS", "1") == "1"
+    # Behind Caddy: trust one proxy hop for the client address (X-Forwarded-For),
+    # used by rate limits and the signed-out decoder cap.
+    TRUST_PROXY = os.environ.get("TRUST_PROXY", "0") == "1"
+    # "production" refuses to start with weak or missing secrets.
+    APP_ENV = os.environ.get("APP_ENV", "development")
 
 
 class TestConfig(Config):
@@ -79,6 +86,7 @@ class TestConfig(Config):
     SECRET_KEY = "test-secret"
     JWT_SECRET_KEY = "test-jwt-secret-that-is-long-enough-for-hs256"
     ADMIN_EMAILS = {"admin@example.com"}
+    RATE_LIMITS = False  # tests sign up many users from one address
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     SQLALCHEMY_ENGINE_OPTIONS: dict = {}
     FIRE_API_KEY = None
