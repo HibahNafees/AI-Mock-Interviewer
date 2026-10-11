@@ -1,0 +1,26 @@
+# HTTPS for the API (Let's Encrypt, automatic). API_DOMAIN is e.g.
+# mockinterviewer.duckdns.org; use ":80" for a plain-HTTP local test.
+{$API_DOMAIN} {
+	encode gzip
+
+	# Answer clips are capped at 10 MB by Flask; leave a little headroom.
+	request_body {
+		max_size 12MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		respond "Not found" 404
+	}
+}
