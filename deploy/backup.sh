@@ -1,6 +1,6 @@
 #!/bin/sh
 # Daily MySQL dump from the compose stack; keeps the newest 14.
-# cron: 0 3 * * * /home/ubuntu/AI-Mock-Interviewer/deploy/backup.sh
+# cron: 0 3 * * * /home/ubuntu/InterVox/deploy/backup.sh
 set -e
 cd "$(dirname "$0")/.."
 mkdir -p "$HOME/backups"

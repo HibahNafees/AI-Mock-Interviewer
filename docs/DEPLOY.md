@@ -95,7 +95,7 @@ If Oracle ever works out, move with a backup (section 4) and the same `.env`.
 - **Update:** `git pull && docker compose up -d --build` (migrations run on start).
 - **Logs:** `docker compose logs -f api`.
 - **Backups** (daily at 03:00, keeps 14): `crontab -e` and add
-  `0 3 * * * $HOME/InterVox/deploy/backup.sh (on the devbox: /srv/intervox/deploy/backup.sh)`. Restore with
+  `0 3 * * * $HOME/InterVox/deploy/backup.sh` (on the devbox, `/srv/intervox/deploy/backup.sh`). Restore with
   `gunzip -c ~/backups/db-DATE.sql.gz | docker compose exec -T db sh -c 'mysql -u mock -p"$MYSQL_PASSWORD" mock_interviewer'`.
 - **Expired documents** are deleted daily by the `purge` service.
 - **Before each deploy:** `cd frontend && npm audit` (should report 0).
