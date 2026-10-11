@@ -28,7 +28,7 @@ def scored(score, criteria=None):
 
 def test_missed_questions_join_the_bank_after_the_report(client, auth, planned, fire):
     sid = planned["id"]
-    finished(client, auth, fire, sid)  # every answer scores 3.4 with the fake scorer
+    finished(client, auth, fire, sid)  # every answer scores 3.7 with the fake scorer
     build(client, auth, sid)
     q = client.get("/api/practice", headers=auth).get_json()["practice"]
     assert q["due"] == [] and q["mastered"] == 0
@@ -38,7 +38,7 @@ def test_missed_questions_join_the_bank_after_the_report(client, auth, planned, 
         PLAN["sections"][1]["questions"][0],
     ]
     item = db.session.scalar(db.select(QuestionBankItem))
-    assert item.interval_days == 3  # 3.4: back in three days
+    assert item.interval_days == 7  # 3.7: back in a week
     assert item.competency == "API design"
 
 
@@ -123,7 +123,7 @@ def test_try_again_counts_as_a_review(client, auth, planned, fire):
             question_text=PLAN["sections"][0]["questions"][0]
         )
     )
-    assert item.reviews == 1 and item.interval_days == 7
+    assert item.reviews == 1 and item.interval_days == 14
 
 
 def test_report_rerun_does_not_review_twice(client, auth, planned, fire):
@@ -133,7 +133,7 @@ def test_report_rerun_does_not_review_twice(client, auth, planned, fire):
     build(client, auth, sid)
     build(client, auth, sid)
     item = db.session.scalar(db.select(QuestionBankItem))
-    assert item.reviews == 0 and item.interval_days == 3
+    assert item.reviews == 0 and item.interval_days == 7
 
 
 def test_roleplay_openers_are_not_banked(client, auth, docs, fire):

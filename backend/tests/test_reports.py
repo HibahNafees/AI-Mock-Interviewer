@@ -227,8 +227,9 @@ def test_report_scores_each_question_then_summarizes(client, auth, planned, fire
 
     assert report["status"] == "ready"
     assert report["progress"] == {"scored": 2, "total": 2}
-    # Weights 0.4/0.2/0.2/0.2 over scores 4/3/4/2 → 3.4 (computed here, not by the AI).
-    assert report["overall_score"] == pytest.approx(3.4)
+    # Role 70% (API design 4) + communication 30% split equally (3, 4, 2) → 3.7,
+    # computed here, not by the AI.
+    assert report["overall_score"] == pytest.approx(3.7)
     assert report["verdict"] == "lean hire"
     assert report["takeaways"] == SUMMARY_TAKEAWAYS
     # The untested criterion isn't shown or counted.
@@ -268,7 +269,7 @@ def test_report_scores_each_question_then_summarizes(client, auth, planned, fire
     again = build(client, auth, sid)
     assert again.status_code == 202 and len(fire.calls) == before + 3
     got = client.get(f"/api/sessions/{sid}/report", headers=auth)
-    assert got.get_json()["report"]["overall_score"] == pytest.approx(3.4)
+    assert got.get_json()["report"]["overall_score"] == pytest.approx(3.7)
 
 
 SUMMARY_TAKEAWAYS = ["Quantify results.", "Lead with the point.", "Keep answers tight."]
@@ -508,7 +509,7 @@ def test_try_again_shows_before_and_after(client, auth, planned, fire):
     res = retry(client, auth, sid, qid)
     assert res.status_code == 201, res.get_json()
     body = res.get_json()
-    assert body["before_score"] == pytest.approx(3.4)
+    assert body["before_score"] == pytest.approx(3.7)
     assert body["attempt"]["attempt_no"] == 2
     assert body["attempt"]["evaluation"]["score"] == 5
 
@@ -520,7 +521,7 @@ def test_try_again_shows_before_and_after(client, auth, planned, fire):
     report = client.get(f"/api/sessions/{sid}/report", headers=auth).get_json()
     q = report["report"]["questions"][0]
     assert [a["attempt_no"] for a in q["attempts"]] == [2]
-    assert q["evaluation"]["score"] == pytest.approx(3.4)  # original kept
+    assert q["evaluation"]["score"] == pytest.approx(3.7)  # original kept
     # The interview transcript still shows only the original answers.
     s = client.get(f"/api/sessions/{sid}", headers=auth).get_json()["session"]
     assert "A tighter answer with a result: we cut p95 latency in half." not in [

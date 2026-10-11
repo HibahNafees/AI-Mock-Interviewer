@@ -328,10 +328,37 @@ def build_rubric(
     )
     rubric = chat_json(user_id, prompt, RubricOut, SYSTEM)
     rubric.criteria = dedupe_criteria(rubric.criteria)
-    total = sum(c.weight for c in rubric.criteria)
-    for c in rubric.criteria:
-        c.weight = round(c.weight / total, 3)
+    for c, w in zip(rubric.criteria, share_weights(rubric.criteria)):
+        c.weight = round(w, 3)
     return rubric
+
+
+# Communication (Structure, Clarity, Relevance) is 30% of every score. The model
+# gave it 0.05 each, so a rambling answer barely lost points (T-74).
+UNIVERSAL_SHARE = 0.3
+
+
+def share_weights(criteria: list) -> list[float]:
+    """Weights summing to 1: role criteria share 70% in proportion to their own
+    weights, universal ones split 30% equally (all of it if only one kind)."""
+
+    def get(c, key):
+        return c[key] if isinstance(c, dict) else getattr(c, key)
+
+    role = [get(c, "weight") or 0 for c in criteria if get(c, "kind") == "role"]
+    n_uni = sum(1 for c in criteria if get(c, "kind") != "role")
+    uni_share = UNIVERSAL_SHARE if role and n_uni else (1.0 if n_uni else 0.0)
+    role_total = sum(role) or 1
+    out = []
+    for c in criteria:
+        if get(c, "kind") == "role":
+            w = get(c, "weight") or 0
+            out.append(
+                (1 - uni_share) * (w / role_total if sum(role) else 1 / len(role))
+            )
+        else:
+            out.append(uni_share / n_uni)
+    return out
 
 
 def dedupe_criteria(criteria: list[Criterion]) -> list[Criterion]:

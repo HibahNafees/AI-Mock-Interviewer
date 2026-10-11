@@ -87,13 +87,13 @@ def test_ease_pressure_only_in_pressure_interviews(client, auth, planned):
 
 
 def test_composure_compares_with_normal_interviews(client, auth, docs, planned, fire):
-    finished(client, auth, fire, planned["id"])  # normal interview: 3.4 average
+    finished(client, auth, fire, planned["id"])  # normal interview: 3.7 average
     build(client, auth, planned["id"])
     s = pressured(client, auth, docs, 2)
     finished(client, auth, fire, s["id"])
     report = build(client, auth, s["id"]).get_json()["report"]
     c = report["pressure"]["composure"]
-    assert c["pct"] == 100 and c["baseline"] == 3.4 and c["same_job"] is True
+    assert c["pct"] == 100 and c["baseline"] == 3.7 and c["same_job"] is True
     assert c["label"] == "Held up well under pressure"
     # Scoring never sees the pressure: same standards as a normal interview.
     scoring = [p["prompt"] for p in fire.calls if p["prompt"].startswith("Score one")]
@@ -106,7 +106,7 @@ def test_composure_compares_with_normal_interviews(client, auth, docs, planned, 
     c = client.get(f"/api/sessions/{s['id']}/report", headers=auth).get_json()[
         "report"
     ]["pressure"]["composure"]
-    assert c["pct"] == 74 and c["label"] == "Pressure noticeably affected your answers"
+    assert c["pct"] == 68 and c["label"] == "Pressure noticeably affected your answers"
 
 
 def test_composure_needs_a_normal_interview_first(client, auth, docs, fire):

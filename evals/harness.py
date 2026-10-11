@@ -50,9 +50,11 @@ PERSONAS = {
         "résumé's achievements. 25 to 50 words."
     ),
     "rambling": (
-        "Knows the material but rambles: starts with long background and tangents, "
-        "repeats themselves, uses filler ('so, um, basically'), and buries the "
-        "point and result near the end, if at all. 200 to 260 words."
+        "Knows the material but rambles. Spend the first half on background, "
+        "context and side stories before getting to the question; repeat points; "
+        "use filler ('so, um, basically', 'anyway'); mention the actual result only "
+        "in passing near the end, if at all. Never use a clear Situation-Action-Result "
+        "order. At least 220 words, up to 280."
     ),
 }
 CANNED = {

@@ -20,6 +20,7 @@ from ..extensions import db
 from ..models import Document, Evaluation, Session
 from .analytics import Clip, delivery, word_count
 from .fire import FireError
+from . import planning
 from .llm import chat_json, render
 
 log = logging.getLogger(__name__)
@@ -162,6 +163,25 @@ STAR_POINT_RE = {
     "actions": re.compile(r"\b(actions?|steps?)\b", re.I),
     "result": RESULT_POINT_RE,
 }
+# Words that say a "result" didn't actually happen or isn't known (T-74: "I can't
+# recall the exact result", "the outcome was still mixed" counted as results).
+VAGUE_RESULT_RE = re.compile(
+    r"\b(?:can'?t|cannot|couldn'?t|don'?t|do not|didn'?t) (?:really )?"
+    r"(?:recall|remember|know|say|tell|measure|track)"
+    r"|\bnot (?:sure|certain|clear)\b|\bno idea\b|\bhard to (?:say|tell|measure)\b"
+    r"|\bunclear\b|\b(?:was|were|is|are) (?:still |kind of |pretty )?mixed\b"
+    r"|\bwent (?:fine|ok|okay|alright|all right|well enough|smoothly)\b"
+    r"|\bworked out\b|\bfelt like\b|\bseemed (?:like|to)\b|\bpositive step\b"
+    r"|\bi (?:think|guess|hope|believe) it (?:helped|worked|went)",
+    re.I,
+)
+# A low role score whose comment only says the skill wasn't shown (T-74).
+ABSENT_RE = re.compile(
+    r"\b(?:did not|didn'?t|does not|doesn'?t|no) (?:mention|provide|discuss|address"
+    r"|cover|show|describe|give|elaborate|include)|\bnot mentioned\b"
+    r"|\bno (?:evidence|example|mention)\b",
+    re.I,
+)
 TOO_SHORT = (
     "This answer was too short to score ({n} words). Answer with one specific "
     "example: the situation, what you did, and the result."
@@ -571,6 +591,9 @@ def weighted_score(
                     "comment": s.comment,
                 }
             )
+    # Over the criteria this answer was scored on: role 70%, communication 30%.
+    for r, w in zip(rows, planning.share_weights(rows)):
+        r["weight"] = round(w, 3)
     total_weight = sum(r["weight"] for r in rows)
     if not rows or total_weight <= 0:
         # The model renamed every criterion: fall back to a plain average.
@@ -624,6 +647,37 @@ def quote_found(quote: str, answers: list[str]) -> bool:
     return sum(w in said for w in quoted) / len(quoted) >= QUOTE_MATCH
 
 
+def states_outcome(quote: str | None) -> bool:
+    """The quote says what happened: a number, or wording that isn't a non-result."""
+    if not quote:
+        return False
+    text = quote.replace("’", "'")
+    return bool(re.search(r"\d", text)) or not VAGUE_RESULT_RE.search(text)
+
+
+def drop_untested(
+    criteria: list[CriterionScore], rubric: dict, question: str
+) -> list[CriterionScore]:
+    """A role criterion scored 1–2 only because the answer didn't mention it is
+    one the question doesn't test (the prompt says null, T-74: "Objection handling
+    2: did not mention objections" on a resilience question). Leave it out when
+    the question doesn't name the skill either."""
+    role = {
+        _norm(c["name"]) for c in rubric.get("criteria", []) if c.get("kind") == "role"
+    }
+    asked = {_stem(w) for w in _content_words(question)}
+    for c in criteria:
+        if (
+            c.score is not None
+            and c.score <= 2
+            and _norm(c.name) in role
+            and ABSENT_RE.search(c.comment)
+            and not {_stem(w) for w in _content_words(c.name)} & asked
+        ):
+            c.score, c.comment = None, ""
+    return criteria
+
+
 def verify_coverage(out: ScoreOut, answers: list[str]) -> None:
     """Decide "covered" and the STAR parts from the quoted words, not the model's
     yes/no: it marked every point uncovered and every result missing, even
@@ -638,9 +692,22 @@ def verify_coverage(out: ScoreOut, answers: list[str]) -> None:
         "situation": found(said.situation),
         "task": found(said.task),
         "actions": next((q for q in said.actions if found(q)), None),
-        "result": found(said.result)
-        or found(out.star.result_quote if out.star else None),
+        "result": next(
+            (
+                q
+                for q in (
+                    found(said.result),
+                    found(out.star.result_quote if out.star else None),
+                )
+                if states_outcome(q)
+            ),
+            None,
+        ),
     }
+    # Only words like "I can't recall the result" or "it went fine": no outcome.
+    vague_result = not star_quotes["result"] and bool(
+        found(said.result) or found(out.star.result_quote if out.star else None)
+    )
     for m in out.missing_points:
         if m.evidence:
             m.covered = quote_found(m.evidence, answers)
@@ -662,8 +729,10 @@ def verify_coverage(out: ScoreOut, answers: list[str]) -> None:
                 setattr(out.star, field, True)
         if star_quotes["result"]:
             out.star.result_quote = star_quotes["result"]
-        elif out.star.result_quote:
-            out.star.result = False  # quoted words the candidate never said
+        elif out.star.result_quote or vague_result:
+            # Quoted words the candidate never said, or no actual outcome.
+            out.star.result = False
+            out.star.result_quote = None
 
 
 def _too_short(
@@ -833,6 +902,8 @@ def evaluate(
             module=module,
         )
     verify_coverage(out, answers)
+    if not criteria:  # "Try again" must score the same criteria as before
+        drop_untested(out.criteria, rubric, question or exchange[0]["interviewer"])
     score, rows = weighted_score(out.criteria, rubric)
     relevance = next(
         (r["score"] for r in rows if _norm(r["name"]) == "relevance"), None

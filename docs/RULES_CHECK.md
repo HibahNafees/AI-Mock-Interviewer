@@ -128,3 +128,7 @@ Found and fixed: T-55 (editor code went out with unrelated later questions; now 
 Deploy stack smoke-tested locally with Docker (MySQL 8.4, gunicorn, Caddy): migrations, signup/login, upload, admin, share 404, rate limit and the body-size cap all behaved through Caddy. Real deploy waits for the Oracle, DuckDNS and Vercel accounts (docs/DEPLOY.md). Live eval spend: $0.0744 (month ≈ $0.452 of $1).
 
 **Open from this check:** T-72 (false gaps in missing points), T-74 (eval re-run with fixed personas).
+
+### Eval re-run with fixed personas (2026-10-11, T-74, $0.0768)
+
+Backend weak 2.11 (no hire) vs strong 3.86; sales weak 2.51 (no hire) vs strong 3.54: the scorer separates genuinely weak answers. Sales rambling (3.56) edged out sales strong (3.54), which exposed three scorer defects (T-75, fixed): communication criteria carried only 15% of the score (now fixed at 30% in code, `planning.share_weights`), skills a question doesn't test were marked down for "not mentioning" them (now left out, `scoring.drop_untested`), and "I can't recall the result" / "it was mixed" counted as STAR results (now rejected, `scoring.states_outcome`). Replaying the stored evaluations through the new code: backend strong 4.06 > rambling 3.75 > weak 2.14; sales strong 3.65 > rambling 3.59 > weak 2.56. The sales rambling candidate drifted from its persona (135 words); the persona now asks for 220+ words with background first. Scoring row: ✅ (separation verified), with T-72 (false gaps) still open.
