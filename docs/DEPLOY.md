@@ -37,7 +37,7 @@ browser ──https──> Vercel (React)          ──https──> intervox.d
    ```bash
    sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 git
    sudo usermod -aG docker $USER && newgrp docker
-   git clone https://github.com/HibahNafees/AI-Mock-Interviewer.git && cd AI-Mock-Interviewer
+   git clone https://github.com/HibahNafees/InterVox.git && cd AI-Mock-Interviewer
    cp deploy/env.example .env && chmod 600 .env
    nano .env      # fill every value; generate secrets with the command in the file
    ```
@@ -60,7 +60,7 @@ certbot already own ports 80/443. Point the DuckDNS name at the devbox's
 public IP, then run the same stack with Caddy off:
 
 ```bash
-sudo git clone https://github.com/HibahNafees/AI-Mock-Interviewer.git /srv/intervox
+sudo git clone https://github.com/HibahNafees/InterVox.git /srv/intervox
 sudo chown -R $USER: /srv/intervox && cd /srv/intervox
 cp deploy/env.example .env && chmod 600 .env      # fill it as in step 2.5
 docker compose -f docker-compose.yml -f deploy/compose.devbox.yml up -d --build
