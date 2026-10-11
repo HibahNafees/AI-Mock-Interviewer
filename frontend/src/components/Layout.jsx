@@ -11,15 +11,21 @@ const NAV = [
   ['/reverse', 'Reverse'],
 ]
 
-export function Logo() {
+// `onColor` is for coloured backgrounds (the sign-in panel), where the coral
+// "Vox" would disappear.
+export function Logo({ onColor = false }) {
   return (
     <span className="flex items-center gap-2">
       <Mascot className="h-10 w-10" />
       <span className="flex flex-col leading-tight">
-        <span className="font-display text-xl font-extrabold tracking-tight text-ink">
-          Inter<span className="text-brand-500">Vox</span>
+        <span
+          className={`font-display text-xl font-extrabold tracking-tight ${onColor ? 'text-white' : 'text-ink'}`}
+        >
+          Inter<span className={onColor ? 'text-ink' : 'text-brand-500'}>Vox</span>
         </span>
-        <span className="text-xs font-medium text-ink/70">AI voice practice interviews for any job</span>
+        <span className={`text-xs font-medium ${onColor ? 'text-white/90' : 'text-ink/70'}`}>
+          AI voice practice interviews for any job
+        </span>
       </span>
     </span>
   )

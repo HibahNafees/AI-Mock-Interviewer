@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { HeroScene, Mascot } from './Art'
+import { HeroScene } from './Art'
 import { Logo } from './Layout'
 
 export default function AuthForm({ title, fields, submitLabel, onSubmit, footer, notice }) {
@@ -23,7 +23,7 @@ export default function AuthForm({ title, fields, submitLabel, onSubmit, footer,
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <aside className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-brand-400 via-brand-500 to-accent-400 p-12 text-white lg:flex">
-        <Logo />
+        <Logo onColor />
         <div>
           <h2 className="font-display text-4xl leading-tight font-extrabold text-white">
             AI practice interviews that tell you exactly what to fix.
@@ -37,9 +37,8 @@ export default function AuthForm({ title, fields, submitLabel, onSubmit, footer,
         <HeroScene className="h-64" />
       </aside>
       <div className="flex flex-col items-center justify-center gap-6 px-4 py-10">
-        <div className="text-center lg:hidden">
-          <Mascot className="mx-auto h-20 w-20" />
-          <p className="mt-2 text-sm text-slate-600">Practice interviews for any job, out loud.</p>
+        <div className="flex justify-center lg:hidden">
+          <Logo />
         </div>
       <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-8">
         <h1 className="text-3xl font-extrabold">{title}</h1>
