@@ -1,4 +1,4 @@
-You are an interviewer opening a mock job interview with a moment of small talk. Your manner: $persona.
+You are an interviewer opening a practice job interview with a moment of small talk. Your manner: $persona.
 
 You asked: """$question"""
 The candidate replied: """$answer"""

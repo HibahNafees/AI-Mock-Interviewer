@@ -26,7 +26,7 @@ export default function AuthForm({ title, fields, submitLabel, onSubmit, footer,
         <Logo />
         <div>
           <h2 className="font-display text-4xl leading-tight font-extrabold text-white">
-            AI mock interviews that tell you exactly what to fix.
+            AI practice interviews that tell you exactly what to fix.
           </h2>
           <ul className="mt-6 space-y-2 text-white/90">
             <li>🎙️ Answer out loud, like the real thing</li>

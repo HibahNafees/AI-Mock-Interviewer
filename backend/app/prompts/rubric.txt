@@ -1,4 +1,4 @@
-Build the scoring rubric for a mock interview.
+Build the scoring rubric for a practice interview.
 
 Role analysis (JSON): $role
 Difficulty: $difficulty

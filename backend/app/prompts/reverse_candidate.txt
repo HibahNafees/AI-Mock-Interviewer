@@ -1,4 +1,4 @@
-Create a realistic job candidate for a mock interview where the USER is the interviewer and must decide whether to hire.
+Create a realistic job candidate for a practice interview where the USER is the interviewer and must decide whether to hire.
 
 Job (JSON analysis): $analysis
 Candidate type (hidden from the user): $profile

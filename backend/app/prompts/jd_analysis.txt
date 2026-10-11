@@ -1,4 +1,4 @@
-Analyze this job description for a mock interview.
+Analyze this job description for a practice interview.
 
 Return JSON with exactly these keys:
 {

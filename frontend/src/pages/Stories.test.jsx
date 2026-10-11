@@ -115,7 +115,7 @@ describe('story bank', () => {
     })
     renderAt('/stories')
     expect(await screen.findByText('No stories yet')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Start a mock interview' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Start a practice interview' })).toBeInTheDocument()
   })
 })
 

@@ -1,4 +1,4 @@
-Write the summary for a mock-interview practice report.
+Write the summary for a practice-interview practice report.
 
 Role: $role ($difficulty level).
 Overall score: $overall out of 5. Practice verdict: $verdict.

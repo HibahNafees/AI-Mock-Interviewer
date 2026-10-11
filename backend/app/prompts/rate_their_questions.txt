@@ -1,4 +1,4 @@
-At the end of a mock interview for $role, the interviewer asked "Do you have any questions for me?". Rate the candidate's questions as a hiring manager would.
+At the end of a practice interview for $role, the interviewer asked "Do you have any questions for me?". Rate the candidate's questions as a hiring manager would.
 
 What the candidate said, turn by turn (JSON): $turns
 

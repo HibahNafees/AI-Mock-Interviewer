@@ -1,4 +1,4 @@
-Fix a "stronger version" of a mock-interview answer so it only uses facts the candidate actually gave.
+Fix a "stronger version" of a practice-interview answer so it only uses facts the candidate actually gave.
 
 Question: $question
 

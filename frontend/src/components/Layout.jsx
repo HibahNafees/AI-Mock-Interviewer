@@ -15,8 +15,11 @@ export function Logo() {
   return (
     <span className="flex items-center gap-2">
       <Mascot className="h-10 w-10" />
-      <span className="font-display text-xl font-extrabold tracking-tight text-ink">
-        Inter<span className="text-brand-500">Vox</span>
+      <span className="flex flex-col leading-tight">
+        <span className="font-display text-xl font-extrabold tracking-tight text-ink">
+          Inter<span className="text-brand-500">Vox</span>
+        </span>
+        <span className="text-xs font-medium text-ink/70">AI voice practice interviews for any job</span>
       </span>
     </span>
   )

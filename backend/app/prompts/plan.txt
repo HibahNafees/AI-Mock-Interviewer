@@ -1,4 +1,4 @@
-Design a $duration_min-minute mock interview question plan.
+Design a $duration_min-minute practice interview question plan.
 
 Role analysis (JSON): $role
 Difficulty: $difficulty

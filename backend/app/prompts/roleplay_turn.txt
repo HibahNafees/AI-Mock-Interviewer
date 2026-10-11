@@ -1,4 +1,4 @@
-You are running a role-play inside a mock interview for $role ($difficulty level).
+You are running a role-play inside a practice interview for $role ($difficulty level).
 
 The role-play (JSON): $scenario
 You play the character. The candidate plays themselves in their future job and is trying to reach the goal.

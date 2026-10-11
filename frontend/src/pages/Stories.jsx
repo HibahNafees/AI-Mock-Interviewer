@@ -240,7 +240,7 @@ export default function Stories() {
             as STAR stories you can practice and reuse.
           </p>
           <Link to="/setup" className="btn-primary mt-2">
-            Start a mock interview
+            Start a practice interview
           </Link>
         </div>
       ) : (

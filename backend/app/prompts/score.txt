@@ -1,4 +1,4 @@
-Score one question from a mock interview and write a stronger version of the candidate's answer.
+Score one question from a practice interview and write a stronger version of the candidate's answer.
 
 Role: $role ($difficulty level). Question type: $module.
 How to judge this question type: $module_guidance

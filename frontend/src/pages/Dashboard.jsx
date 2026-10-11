@@ -12,7 +12,7 @@ const STATUS = {
   abandoned: ['Cancelled', 'bg-slate-100 text-slate-500'],
 }
 
-// Interviews that aren't regular mock interviews get their own label.
+// Interviews that aren't regular practice interviews get their own label.
 const MODE_LABEL = {
   reverse: ['You interviewed', 'bg-accent-100 text-accent-700'],
   debrief: ['Debrief', 'bg-navy-100 text-navy-700'],
@@ -167,7 +167,7 @@ function GoalCard({ goal, onChange }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold">This week's goal</h2>
-          <p className="text-sm text-slate-500">Mock interviews completed since Monday</p>
+          <p className="text-sm text-slate-500">Practice interviews completed since Monday</p>
         </div>
         <IconTile tone="green">🎯</IconTile>
       </div>
@@ -218,7 +218,7 @@ export default function Dashboard() {
       <div className="relative overflow-hidden rounded-[2rem] border border-[#f6dccf] bg-gradient-to-br from-brand-50 via-white to-accent-50 p-8 sm:p-10">
         <div className="grid items-center gap-6 md:grid-cols-[1fr_18rem]">
           <div>
-            <p className="eyebrow">AI mock interview practice</p>
+            <p className="eyebrow">AI voice practice interviews for any job</p>
             <h1 className="mt-2 text-4xl font-extrabold sm:text-5xl">
               Welcome, {first} <span aria-hidden="true">👋</span>
             </h1>
@@ -228,7 +228,7 @@ export default function Dashboard() {
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link to="/setup" className="btn-primary px-6 py-3 text-base">
-                Start a mock interview <span aria-hidden="true">🚀</span>
+                Start a practice interview <span aria-hidden="true">🚀</span>
               </Link>
               {s && s.interviews > 0 && (
                 <span className="chip bg-white text-slate-700 ring-1 ring-[#f1e6da]">
@@ -244,7 +244,7 @@ export default function Dashboard() {
       {s && s.interviews > 0 ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat icon="🎯" tone="brand" label="Mock interviews" value={s.interviews} sub={`${s.started} started`} />
+            <Stat icon="🎯" tone="brand" label="Practice interviews" value={s.interviews} sub={`${s.started} started`} />
             <Stat icon="⭐" tone="accent" label="Average score" value={`${fmt(s.average_score)} / 5`} sub={s.latest_score != null ? `Latest ${fmt(s.latest_score)}` : null} />
             <Stat icon="🏆" tone="green" label="Best score" value={`${fmt(s.best_score)} / 5`} />
             <Stat icon="⏱️" tone="navy" label="Time practicing" value={`${s.practice_minutes} min`} sub={`${s.questions_answered} questions answered`} />

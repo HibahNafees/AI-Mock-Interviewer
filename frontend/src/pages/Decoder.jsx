@@ -147,7 +147,7 @@ export function DecodeResult({ d, signedIn }) {
         <Mascot className="h-16 w-16 shrink-0" />
         <div className="flex-1">
           <p className="text-lg font-semibold">Practice these questions out loud before the real thing.</p>
-          <p className="text-sm text-white/75">A timed mock interview for this exact job, with scores and stronger answers.</p>
+          <p className="text-sm text-white/75">A timed practice interview for this exact job, with scores and stronger answers.</p>
         </div>
         <Link to={signedIn ? '/setup' : '/signup'} className="btn-primary">
           {signedIn ? 'Practice for this job' : 'Sign up free to practice'}

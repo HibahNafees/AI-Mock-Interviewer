@@ -1,4 +1,4 @@
-Find the reusable interview stories in a candidate's answers from one mock interview, so they can practice telling them again.
+Find the reusable interview stories in a candidate's answers from one practice interview, so they can practice telling them again.
 
 Role practiced: $role.
 
