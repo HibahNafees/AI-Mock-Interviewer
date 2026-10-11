@@ -33,6 +33,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     CORS(app, origins=app.config["CORS_ORIGINS"])
 
     from . import models  # noqa: F401  (register tables with SQLAlchemy)
+    from .routes.admin import bp as admin_bp
     from .routes.auth import bp as auth_bp
     from .routes.common import register_error_handlers
     from .routes.company import bp as company_bp
@@ -55,6 +56,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.register_blueprint(company_bp, url_prefix="/api/company")
     app.register_blueprint(stories_bp, url_prefix="/api/stories")
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    app.register_blueprint(admin_bp, url_prefix="/api/admin")
     app.register_blueprint(documents_bp, url_prefix="/api/documents")
     app.register_blueprint(sessions_bp, url_prefix="/api/sessions")
     app.register_blueprint(reports_bp, url_prefix="/api/sessions")

@@ -32,7 +32,7 @@ export default function Layout() {
             <Logo />
           </Link>
           <nav className="flex flex-wrap gap-1 text-sm">
-            {NAV.map(([to, label]) => (
+            {[...NAV, ...(user?.is_admin ? [['/admin', 'Admin']] : [])].map(([to, label]) => (
               <NavLink
                 key={to}
                 to={to}

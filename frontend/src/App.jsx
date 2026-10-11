@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Account from './pages/Account'
+import Admin from './pages/Admin'
 import CheatSheet from './pages/CheatSheet'
 import Dashboard from './pages/Dashboard'
 import Debrief from './pages/Debrief'
@@ -33,6 +34,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="setup" element={<Setup />} />
         <Route path="account" element={<Account />} />
+        <Route path="admin" element={<Admin />} />
         <Route path="interview/:id" element={<Interview />} />
         <Route path="report/:id" element={<Report />} />
         <Route path="report/:id/cheatsheet" element={<CheatSheet />} />

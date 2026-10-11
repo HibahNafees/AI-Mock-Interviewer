@@ -51,6 +51,12 @@ class Config:
         )
         if os.environ.get(f"FIRE_VOICE_{k.upper()}")
     }
+    # Who can open the admin usage page (comma-separated emails).
+    ADMIN_EMAILS = {
+        e.strip().lower()
+        for e in os.environ.get("ADMIN_EMAILS", "").split(",")
+        if e.strip()
+    }
     # Per-user daily caps (usage_limits).
     DAILY_INTERVIEW_MINUTES = int(os.environ.get("DAILY_INTERVIEW_MINUTES", "60"))
     DAILY_LONG_SESSIONS = int(os.environ.get("DAILY_LONG_SESSIONS", "1"))
@@ -72,6 +78,7 @@ class TestConfig(Config):
     TESTING = True
     SECRET_KEY = "test-secret"
     JWT_SECRET_KEY = "test-jwt-secret-that-is-long-enough-for-hs256"
+    ADMIN_EMAILS = {"admin@example.com"}
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     SQLALCHEMY_ENGINE_OPTIONS: dict = {}
     FIRE_API_KEY = None

@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..extensions import db
 from ..models import User
-from ..services import privacy
+from ..services import admin, privacy
 from .common import first_error
 
 bp = Blueprint("auth", __name__)
@@ -114,4 +114,4 @@ def me():
     user = db.session.get(User, int(get_jwt_identity()))
     if user is None:
         return jsonify(error="Account not found"), 404
-    return jsonify(user=user.to_dict())
+    return jsonify(user={**user.to_dict(), "is_admin": admin.is_admin(user)})
