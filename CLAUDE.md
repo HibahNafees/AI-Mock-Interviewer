@@ -26,7 +26,7 @@ Full spec: `docs/SPEC.md` (read the relevant section before starting each phase)
 | Backend | Flask (Python), JWT auth; the only component that talks to Fire |
 | Speech-to-text | Fire `POST /v1/transcribe` (Whisper Large v3 Turbo) |
 | Interviewer brain | Fire `POST /v1/chat` |
-| Interviewer voice | Browser Web Speech API (free, default); Fire `POST /v1/speech` behind `VOICE_PROVIDER=fire` once Fire deploys a speech model (T-27) |
+| Interviewer voice | Browser Web Speech API (free, default); Fire `POST /v1/speech` (`FIRE_SPEECH_MODEL`, default `tts-kokoro`, ~$0.0003 per short reply) behind `VOICE_PROVIDER=fire` |
 | Database | MySQL 8 |
 | Hosting | Oracle Cloud Always Free VM (Docker Compose + Caddy); frontend on Vercel |
 | Optional later | LiveKit Agents (real-time voice, peer practice); Hume EVI (emotion experiment) |
@@ -128,7 +128,7 @@ Flexible LLM output is stored in JSON columns. No table stores audio/video. Docu
 11. Optional: real-time voice with LiveKit (interruptions, peer practice)
 12. Optional: Hume EVI experiment
 
-**Current phase:** 9 done and live-checked (extras). Coding round (`modules` coding, Monaco bundled lean in `src/lib/monaco.js`), system design whiteboard (Excalidraw; only a text description of the sketch is sent, `src/lib/whiteboard.js`), both saved in `answers.work_json` (`services/work.py`); panel (`services/panel.py`, 2–3 interviewers, handovers, per-panelist voices); negotiation (`services/negotiation.py`, fixed plan and rubric, no Fire call to plan); body language (opt-in, MediaPipe in the browser, percentages in `answers.body_json`, `services/body.py`); gap analysis, company research (`services/company.py`, SSRF-safe fetch), questions-for-them coach, cheat sheet, thank-you email. Earlier: Phase 8 signature modes (decoder, pressure, debrief, reverse); Phase 7 story bank; Phase 6 voice (browser by default, Fire speech pending T-27). Next: Phase 10 (deploy and harden).
+**Current phase:** 9 done and live-checked (extras). Coding round (`modules` coding, Monaco bundled lean in `src/lib/monaco.js`), system design whiteboard (Excalidraw; only a text description of the sketch is sent, `src/lib/whiteboard.js`), both saved in `answers.work_json` (`services/work.py`); panel (`services/panel.py`, 2–3 interviewers, handovers, per-panelist voices); negotiation (`services/negotiation.py`, fixed plan and rubric, no Fire call to plan); body language (opt-in, MediaPipe in the browser, percentages in `answers.body_json`, `services/body.py`); gap analysis, company research (`services/company.py`, SSRF-safe fetch), questions-for-them coach, cheat sheet, thank-you email. Earlier: Phase 8 signature modes (decoder, pressure, debrief, reverse); Phase 7 story bank; Phase 6 voice (browser by default; Fire speech via `tts-kokoro` live-checked 2026-10-11, T-27). Next: Phase 10 (deploy and harden).
 
 ## Running locally
 
