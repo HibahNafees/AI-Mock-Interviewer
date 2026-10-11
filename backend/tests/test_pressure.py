@@ -42,7 +42,7 @@ def test_level_three_adds_time_limits_and_pushback(client, auth, docs, fire):
     prompt = next(
         c["prompt"]
         for c in reversed(fire.calls)
-        if "live mock interview" in c["prompt"]
+        if "live practice interview" in c["prompt"]
     )
     for n in (1, 2, 3):
         assert encoded(LEVEL_NOTES[n]) in prompt
@@ -73,7 +73,7 @@ def test_pressure_can_be_lowered_or_stopped_never_raised(client, auth, docs, fir
     prompt = next(
         c["prompt"]
         for c in reversed(fire.calls)
-        if "live mock interview" in c["prompt"]
+        if "live practice interview" in c["prompt"]
     )
     assert LEVEL_NOTES[1] not in prompt and RESPECT not in prompt
 

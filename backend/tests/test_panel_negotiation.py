@@ -184,7 +184,7 @@ def test_negotiation_report_speaks_about_the_negotiation(app, client, auth, docs
     assert report["mode"] == "negotiation"
     assert report["negotiation"] == TERMS
     summary = next(
-        c for c in fire.calls if "summary for a mock-interview" in c["prompt"]
+        c for c in fire.calls if "summary for a practice-interview" in c["prompt"]
     )
     assert "an offer negotiation for Backend Engineer" in summary["prompt"]
     assert any(

@@ -273,7 +273,7 @@ class FakeFire:
             body = self.scores.pop(0) if self.scores else SCORE
             if isinstance(body, Exception):
                 raise body
-        elif "summary for a mock-interview" in prompt:
+        elif "summary for a practice-interview" in prompt:
             body = SUMMARY
         elif 'Fix a "stronger version"' in prompt:
             body = self.repairs.pop(0) if self.repairs else REPAIR
@@ -380,7 +380,7 @@ class FakeFire:
                 ("question plan", "plan"),
                 ("scoring rubric", "rubric"),
                 ("Score one question", "score"),
-                ("summary for a mock-interview", "summary"),
+                ("summary for a practice-interview", "summary"),
                 ('Fix a "stronger version"', "repair"),
             ):
                 if marker in p:

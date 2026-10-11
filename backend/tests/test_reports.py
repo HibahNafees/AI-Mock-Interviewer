@@ -757,7 +757,7 @@ def test_fairness_rules_reach_every_prompt(client, auth, planned, fire):
         kind: next(c["prompt"] for c in fire.calls if marker in c["prompt"])
         for kind, marker in (
             ("plan", "question plan"),
-            ("turn", "live mock interview"),
+            ("turn", "live practice interview"),
             ("score", "Score one question"),
         )
     }
@@ -776,7 +776,7 @@ def test_interviewer_adapts_the_challenge(client, auth, planned, fire):
     started(client, auth, sid)
     answer(client, auth, sid, "I designed the billing API and owned its schema.")
     prompt = next(
-        c["prompt"] for c in fire.calls if "live mock interview" in c["prompt"]
+        c["prompt"] for c in fire.calls if "live practice interview" in c["prompt"]
     )
     assert "raise the challenge one step" in prompt
     assert "Never make it harder after a struggle" in prompt
