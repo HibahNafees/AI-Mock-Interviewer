@@ -1,7 +1,12 @@
 // Decides when an answer is over: after the candidate has spoken, a few seconds of
-// quiet stops the recording. It never stops before any speech (they may be thinking).
+// quiet stops the recording. It never stops before any speech (they may be thinking),
+// and early in an answer it waits longer: "So, when I worked..." and a pause to
+// think is not the end of an answer (T-88).
 
 export const SILENCE_MS = 4000
+export const EARLY_SILENCE_MS = 8000
+// Speech needed before the normal pause length applies.
+export const SETTLED_SPEECH_MS = 5000
 const CALIBRATE_MS = 500
 const MIN_THRESHOLD = 0.01
 
@@ -19,6 +24,8 @@ export class SilenceDetector {
     this.noise = Infinity
     this.heardSpeech = false
     this.lastLoud = 0
+    this.speechMs = 0
+    this.last = null
   }
 
   get threshold() {
@@ -30,6 +37,8 @@ export class SilenceDetector {
   // null while no countdown applies (no speech yet, or currently speaking).
   update(level, now) {
     if (this.start === null) this.start = now
+    const step = this.last === null ? 0 : now - this.last
+    this.last = now
     if (now - this.start < CALIBRATE_MS) {
       this.noise = Math.min(this.noise, level)
       return null
@@ -37,9 +46,11 @@ export class SilenceDetector {
     if (level >= this.threshold) {
       this.heardSpeech = true
       this.lastLoud = now
+      this.speechMs += step
       return null
     }
     if (!this.heardSpeech) return null
-    return Math.max(0, this.silenceMs - (now - this.lastLoud))
+    const wait = this.speechMs < SETTLED_SPEECH_MS ? Math.max(this.silenceMs, EARLY_SILENCE_MS) : this.silenceMs
+    return Math.max(0, wait - (now - this.lastLoud))
   }
 }

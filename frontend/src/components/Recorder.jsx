@@ -103,6 +103,8 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
 
   function finish(keep, auto = false) {
     const r = rec.current
+    // Cancel still wins if the auto-stop began a moment earlier (T-88).
+    if (r?.finishing && !keep) r.keep = false
     if (!r || r.finishing) return
     r.finishing = true
     r.keep = keep
@@ -199,17 +201,19 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
 
   if (state === 'pending') {
     return (
-      <div className="space-y-2 rounded-2xl bg-brand-50 p-4 ring-1 ring-brand-200">
-        <p role="status" className="text-sm font-medium text-brand-800">
-          Stopped after a pause. Sending your answer in {Math.ceil(sendIn / 1000)}…
-        </p>
+      // Same spot and order as Done / Cancel, so a click aimed at Cancel during the
+      // switch still discards the answer (T-88).
+      <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" onClick={sendPending} className="btn-primary px-4 py-2 text-sm">
+          <button type="button" onClick={sendPending} className="btn-primary px-6 py-3 text-base">
             Send now
           </button>
           <button type="button" onClick={discardPending} className="btn-secondary">
-            Discard
+            <span aria-hidden="true">✕</span>Cancel
           </button>
+          <p role="status" className="text-sm font-medium text-brand-800">
+            Stopped after a pause. Sending your answer in {Math.ceil(sendIn / 1000)}…
+          </p>
         </div>
       </div>
     )

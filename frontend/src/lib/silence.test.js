@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SILENCE_MS, SilenceDetector, rms } from './silence'
+import { EARLY_SILENCE_MS, SETTLED_SPEECH_MS, SILENCE_MS, SilenceDetector, rms } from './silence'
 
 function feed(detector, levels, start = 0, step = 100) {
   return levels.map((lvl, i) => detector.update(lvl, start + i * step))
@@ -19,21 +19,33 @@ describe('SilenceDetector', () => {
     expect(out.every((v) => v === null)).toBe(true)
   })
 
-  it('counts down after speech and stops after the silence window', () => {
-    const d = new SilenceDetector()
+  // Calibrate, then speak for `ms`; returns when the speech ended.
+  function speak(d, ms) {
     feed(d, Array(5).fill(0.002)) // calibrate on room noise
-    expect(d.update(0.2, 600)).toBeNull() // speaking
-    expect(d.update(0.002, 1600)).toBe(SILENCE_MS - 1000)
-    expect(d.update(0.002, 600 + SILENCE_MS)).toBe(0)
+    feed(d, Array(ms / 100 + 1).fill(0.2), 500)
+    return 500 + ms
+  }
+
+  it('counts down after a settled answer and stops after the silence window', () => {
+    const d = new SilenceDetector()
+    const end = speak(d, SETTLED_SPEECH_MS)
+    expect(d.update(0.002, end + 1000)).toBe(SILENCE_MS - 1000)
+    expect(d.update(0.002, end + SILENCE_MS)).toBe(0)
+  })
+
+  it('waits longer when the answer has barely started (T-88)', () => {
+    const d = new SilenceDetector()
+    const end = speak(d, 1000)
+    expect(d.update(0.002, end + SILENCE_MS)).toBe(EARLY_SILENCE_MS - SILENCE_MS)
+    expect(d.update(0.002, end + EARLY_SILENCE_MS)).toBe(0)
   })
 
   it('speaking again resets the countdown', () => {
     const d = new SilenceDetector()
-    feed(d, Array(5).fill(0.002))
-    d.update(0.2, 600)
-    d.update(0.002, 3000)
-    expect(d.update(0.3, 3500)).toBeNull()
-    expect(d.update(0.002, 4500)).toBe(SILENCE_MS - 1000)
+    const end = speak(d, SETTLED_SPEECH_MS)
+    d.update(0.002, end + 2000)
+    expect(d.update(0.3, end + 2500)).toBeNull()
+    expect(d.update(0.002, end + 3500)).toBe(SILENCE_MS - 1000)
   })
 
   it('raises the threshold in a noisy room', () => {

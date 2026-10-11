@@ -102,12 +102,28 @@ describe('Recorder', () => {
     await act(async () => screen.getByRole('button', { name: 'Record answer' }).click())
     await act(async () => vi.advanceTimersByTime(700)) // calibrate on silence
     level = 0.3
-    await act(async () => vi.advanceTimersByTime(1000)) // speaking
+    await act(async () => vi.advanceTimersByTime(6000)) // a settled answer
     level = 0
     await act(async () => vi.advanceTimersByTime(2000))
     expect(screen.getByRole('status')).toHaveTextContent('Stopping in')
     await act(async () => vi.advanceTimersByTime(2500))
   }
+
+  it('waits longer through a thinking pause early in an answer (T-88)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const onRecorded = vi.fn()
+    render(<Recorder onRecorded={onRecorded} />)
+    await act(async () => screen.getByRole('button', { name: 'Record answer' }).click())
+    await act(async () => vi.advanceTimersByTime(700))
+    level = 0.3
+    await act(async () => vi.advanceTimersByTime(1000)) // "So, when I worked..."
+    level = 0
+    await act(async () => vi.advanceTimersByTime(5000)) // thinking
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument() // still recording
+    await act(async () => screen.getByRole('button', { name: 'Cancel' }).click())
+    await act(async () => vi.advanceTimersByTime(5000))
+    expect(onRecorded).not.toHaveBeenCalled()
+  })
 
   it('stops by itself after speech then silence, and sends after a short wait', async () => {
     const onRecorded = vi.fn()
@@ -123,7 +139,7 @@ describe('Recorder', () => {
   it('an auto-stopped answer can be discarded', async () => {
     const onRecorded = vi.fn()
     await autoStop(onRecorded)
-    await act(async () => screen.getByRole('button', { name: 'Discard' }).click())
+    await act(async () => screen.getByRole('button', { name: 'Cancel' }).click())
     await act(async () => vi.advanceTimersByTime(5000))
     expect(onRecorded).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Record answer' })).toBeInTheDocument()
