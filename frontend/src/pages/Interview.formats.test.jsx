@@ -195,7 +195,7 @@ describe('setup choices for hands-on rounds and pressure', () => {
     await userEvent.type(screen.getByLabelText('Paste job description'), long)
     await userEvent.click(screen.getByRole('button', { name: 'Use this text' }))
     const coding = await screen.findByRole('radiogroup', { name: 'Coding problems' })
-    await userEvent.click(within(coding).getByRole('radio', { name: 'Choose how many' }))
+    await userEvent.click(within(coding).getByRole('radio', { name: 'Custom' }))
     fireEvent.change(screen.getByLabelText('Coding problems: how many'), { target: { value: '10' } })
     // 10 problems need 40+ minutes: blocked with a reason until it fits.
     expect(screen.getByRole('alert')).toHaveTextContent('10 coding problems (4+ min each) need at least 40 minutes')
@@ -203,8 +203,7 @@ describe('setup choices for hands-on rounds and pressure', () => {
     await userEvent.click(screen.getByRole('radio', { name: '30 min' }))
     fireEvent.change(screen.getByLabelText('Coding problems: how many'), { target: { value: '5' } })
     expect(screen.queryByText(/need at least/)).not.toBeInTheDocument()
-    const design = screen.getByRole('radiogroup', { name: 'System design questions' })
-    await userEvent.click(within(design).getByRole('radio', { name: 'None' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Skip it' }))
     // Pressure stays visible with a panel, and picking a level goes back to one interviewer.
     await userEvent.click(screen.getByRole('radio', { name: '👥 Panel' }))
     await userEvent.click(screen.getByRole('radio', { name: '2 · Pushback' }))

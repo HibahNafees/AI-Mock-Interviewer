@@ -66,24 +66,20 @@ function Choice({ name, options, value, onChange }) {
   )
 }
 
-// How many coding problems or design questions: the plan decides, none, or a
-// count the candidate picks (1–10).
-function HandsOnCount({ label, name, value, onChange, autoNote }) {
-  const picked = value !== 'auto' && value > 0
+// How many coding problems or design questions. `presets` are the quick
+// choices ([value, label]); Custom picks any count from 1 to 10.
+function HandsOnCount({ label, name, presets, value, onChange, autoNote }) {
+  const custom = value !== 'auto' && !presets.some(([v]) => v === value)
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-ink">{label}</p>
       <Choice
         name={name}
-        options={[
-          ['auto', 'Let the plan decide'],
-          [0, 'None'],
-          ['pick', 'Choose how many'],
-        ]}
-        value={picked ? 'pick' : value}
-        onChange={(v) => onChange(v === 'pick' ? (picked ? value : 1) : v)}
+        options={[['auto', 'Let the plan decide'], ...presets, ['custom', 'Custom']]}
+        value={custom ? 'custom' : value}
+        onChange={(v) => onChange(v === 'custom' ? (custom ? value : 4) : v)}
       />
-      {picked && (
+      {custom && (
         <label className="flex items-center gap-3 text-sm">
           <input
             type="range"
@@ -343,6 +339,12 @@ export default function Setup() {
             <HandsOnCount
               label="Coding problems (in a code editor)"
               name="Coding problems"
+              presets={[
+                [0, 'None'],
+                [1, '1'],
+                [2, '2'],
+                [3, '3'],
+              ]}
               value={codingProblems}
               onChange={setCodingProblems}
               autoNote={autoCodingFits ? null : 'The plan would leave coding out: a problem needs about 8 minutes.'}
@@ -350,8 +352,12 @@ export default function Setup() {
           )}
           {offersDesign && (
             <HandsOnCount
-              label="System design questions (on a whiteboard)"
-              name="System design questions"
+              label="System design question (on a whiteboard)"
+              name="System design"
+              presets={[
+                [1, 'Include one'],
+                [0, 'Skip it'],
+              ]}
               value={design}
               onChange={setDesign}
               autoNote={
