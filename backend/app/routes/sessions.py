@@ -48,8 +48,9 @@ class CreateBody(BaseModel):
     format: Literal["standard", "panel", "negotiation"] = "standard"
     # How many coding problems / whether to include a design question (None = the
     # plan decides). Only used when the job offers those modules.
-    coding_problems: int | None = Field(default=None, ge=0, le=3)
-    system_design: bool | None = None
+    coding_problems: int | None = Field(default=None, ge=0, le=10)
+    # How many system design questions (0–10); true/false still mean 1/0.
+    system_design: int | None = Field(default=None, ge=0, le=10)
     negotiation: nego.NegotiationIn | None = None
 
 
@@ -57,7 +58,7 @@ class PlanSectionIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     module: str = "behavioral"
     minutes: int = Field(ge=1, le=60)
-    questions: list[str] = Field(min_length=1, max_length=8)
+    questions: list[str] = Field(min_length=1, max_length=10)
     scenario: planning.Scenario | None = None
 
     @field_validator("questions")

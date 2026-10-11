@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -195,18 +195,22 @@ describe('setup choices for hands-on rounds and pressure', () => {
     await userEvent.type(screen.getByLabelText('Paste job description'), long)
     await userEvent.click(screen.getByRole('button', { name: 'Use this text' }))
     const coding = await screen.findByRole('radiogroup', { name: 'Coding problems' })
-    // 10 minutes fits one problem; 30 fits three.
-    expect(screen.queryByRole('radio', { name: '2' })).not.toBeInTheDocument()
+    await userEvent.click(within(coding).getByRole('radio', { name: 'Choose how many' }))
+    fireEvent.change(screen.getByLabelText('Coding problems: how many'), { target: { value: '10' } })
+    // 10 problems need 40+ minutes: blocked with a reason until it fits.
+    expect(screen.getByRole('alert')).toHaveTextContent('10 coding problems (4+ min each) need at least 40 minutes')
+    expect(screen.getByRole('button', { name: 'Build my interview plan' })).toBeDisabled()
     await userEvent.click(screen.getByRole('radio', { name: '30 min' }))
-    await userEvent.click(screen.getByRole('radio', { name: '2' }))
-    expect(coding).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('radio', { name: 'Skip it' }))
+    fireEvent.change(screen.getByLabelText('Coding problems: how many'), { target: { value: '5' } })
+    expect(screen.queryByText(/need at least/)).not.toBeInTheDocument()
+    const design = screen.getByRole('radiogroup', { name: 'System design questions' })
+    await userEvent.click(within(design).getByRole('radio', { name: 'None' }))
     // Pressure stays visible with a panel, and picking a level goes back to one interviewer.
     await userEvent.click(screen.getByRole('radio', { name: '👥 Panel' }))
     await userEvent.click(screen.getByRole('radio', { name: '2 · Pushback' }))
     expect(screen.getByRole('radio', { name: 'One interviewer' })).toBeChecked()
     await userEvent.click(screen.getByRole('button', { name: 'Build my interview plan' }))
     await screen.findByText('stop here')
-    expect(created).toMatchObject({ format: 'standard', pressure_level: 2, coding_problems: 2, system_design: false, duration_min: 30 })
+    expect(created).toMatchObject({ format: 'standard', pressure_level: 2, coding_problems: 5, system_design: 0, duration_min: 30 })
   })
 })

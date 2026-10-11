@@ -66,6 +66,42 @@ function Choice({ name, options, value, onChange }) {
   )
 }
 
+// How many coding problems or design questions: the plan decides, none, or a
+// count the candidate picks (1–10).
+function HandsOnCount({ label, name, value, onChange, autoNote }) {
+  const picked = value !== 'auto' && value > 0
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-ink">{label}</p>
+      <Choice
+        name={name}
+        options={[
+          ['auto', 'Let the plan decide'],
+          [0, 'None'],
+          ['pick', 'Choose how many'],
+        ]}
+        value={picked ? 'pick' : value}
+        onChange={(v) => onChange(v === 'pick' ? (picked ? value : 1) : v)}
+      />
+      {picked && (
+        <label className="flex items-center gap-3 text-sm">
+          <input
+            type="range"
+            min={1}
+            max={10}
+            value={value}
+            onChange={(e) => onChange(Number(e.target.value))}
+            aria-label={`${name}: how many`}
+            className="accent-brand-600"
+          />
+          <span>{value}</span>
+        </label>
+      )}
+      {value === 'auto' && autoNote && <p className="text-xs text-slate-500">{autoNote}</p>}
+    </div>
+  )
+}
+
 export default function Setup() {
   const navigate = useNavigate()
   const [resumeId, setResumeId] = useState(null)
@@ -81,8 +117,8 @@ export default function Setup() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [format, setFormat] = useState('standard')
-  const [codingProblems, setCodingProblems] = useState('auto')
-  const [design, setDesign] = useState('auto')
+  const [codingProblems, setCodingProblems] = useState('auto') // 'auto' or a count, 0–10
+  const [design, setDesign] = useState('auto') // 'auto' or a count, 0–10
   const [terms, setTerms] = useState({ offer: '', target: '', company: '' })
   const [company, setCompany] = useState(null)
   const [whyUs, setWhyUs] = useState(true)
@@ -114,15 +150,18 @@ export default function Setup() {
   // Hands-on rounds the candidate can ask for (T-65), when the job fits them.
   const offersCoding = offered.some((m) => m.name === 'coding') && ['mixed', 'coding'].includes(chosen)
   const offersDesign = offered.some((m) => m.name === 'system_design') && chosen === 'mixed'
-  // Same limits as the planner (planning.fit_hands_on): about 8 minutes per coding
-  // problem and 10 for a design question, with 2 minutes left for the rest of a
-  // mixed interview. Rounds that don't fit aren't offered.
-  const spare = length - 2
-  const maxProblems =
-    chosen === 'coding' ? Math.max(1, Math.min(3, Math.floor(length / 8))) : Math.min(3, Math.floor(spare / 8))
-  const problems = codingProblems === 'auto' ? 'auto' : Math.min(codingProblems, maxProblems)
-  const codingMinutes = !offersCoding ? 0 : problems === 'auto' ? (maxProblems > 0 ? 8 : 0) : problems * 8
-  const designFits = spare - codingMinutes >= 10
+  // Same limits as the planner (planning.fit_counts / fit_hands_on). A count the
+  // candidate picks (1–10) gets at least 4 minutes per coding problem and 5 per
+  // design question; a round the plan decides needs 8 or 10. A mixed interview
+  // keeps 2 minutes for everything else.
+  const spare = chosen === 'coding' ? length : length - 2
+  const codingCount = offersCoding && codingProblems !== 'auto' ? codingProblems : null
+  const designCount = offersDesign && design !== 'auto' ? design : null
+  const chosenMinutes = (codingCount ?? 0) * 4 + (designCount ?? 0) * 5
+  const countsFit = chosenMinutes <= spare || (chosen === 'coding' && codingCount === 1)
+  const autoCodingFits = chosen === 'coding' || spare - (designCount ?? 0) * 5 >= 8
+  const autoCodingMinutes = codingProblems === 'auto' && offersCoding && autoCodingFits ? 8 : 0
+  const autoDesignFits = spare - (codingCount ?? 0) * 4 - autoCodingMinutes >= 10
 
   function choosePressure(level) {
     setPressure(level)
@@ -156,8 +195,8 @@ export default function Setup() {
           pressure_level: pressure,
           format,
           ...(negotiating ? { negotiation: terms } : {}),
-          ...(offersCoding && maxProblems > 0 && !negotiating && problems !== 'auto' ? { coding_problems: problems } : {}),
-          ...(offersDesign && designFits && !negotiating && design !== 'auto' ? { system_design: design === 'yes' } : {}),
+          ...(!negotiating && codingCount !== null ? { coding_problems: codingCount } : {}),
+          ...(!negotiating && designCount !== null ? { system_design: designCount } : {}),
           ...(company && whyUs && !negotiating ? { company_research_id: company.id } : {}),
         },
       })
@@ -300,51 +339,37 @@ export default function Setup() {
           <h2 className="font-semibold text-slate-900">
             <span aria-hidden="true">⌨️ </span>Hands-on rounds
           </h2>
-          {offersCoding && maxProblems === 0 && (
-            <p className="text-sm text-slate-600">
-              <span className="font-medium text-ink">Coding problems</span> need at least a 10-minute interview.
+          {offersCoding && (
+            <HandsOnCount
+              label="Coding problems (in a code editor)"
+              name="Coding problems"
+              value={codingProblems}
+              onChange={setCodingProblems}
+              autoNote={autoCodingFits ? null : 'The plan would leave coding out: a problem needs about 8 minutes.'}
+            />
+          )}
+          {offersDesign && (
+            <HandsOnCount
+              label="System design questions (on a whiteboard)"
+              name="System design questions"
+              value={design}
+              onChange={setDesign}
+              autoNote={
+                autoDesignFits ? null : 'The plan would leave design out: a question needs about 10 minutes.'
+              }
+            />
+          )}
+          {!countsFit && (
+            <p role="alert" className="text-sm text-red-700">
+              {[
+                codingCount ? `${codingCount} coding problem${codingCount === 1 ? '' : 's'} (4+ min each)` : null,
+                designCount ? `${designCount} design question${designCount === 1 ? '' : 's'} (5+ min each)` : null,
+              ]
+                .filter(Boolean)
+                .join(' and ')}{' '}
+              need at least {chosenMinutes} minutes, and this interview has {spare} for them. Choose a longer
+              interview or fewer questions.
             </p>
-          )}
-          {offersCoding && maxProblems > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-ink">Coding problems (in a code editor)</p>
-              <Choice
-                name="Coding problems"
-                options={[
-                  ['auto', 'Let the plan decide'],
-                  [0, 'None'],
-                  ...[1, 2, 3].filter((n) => n <= maxProblems).map((n) => [n, `${n}`]),
-                ]}
-                value={problems}
-                onChange={setCodingProblems}
-              />
-              {maxProblems < 3 && (
-                <p className="text-xs text-slate-500">
-                  Each problem needs about 8 minutes; choose a longer interview for more.
-                </p>
-              )}
-            </div>
-          )}
-          {offersDesign && !designFits && (
-            <p className="text-sm text-slate-600">
-              <span className="font-medium text-ink">A system design question</span> needs about 10 minutes of its
-              own. Choose a longer interview{codingMinutes ? ' or fewer coding problems' : ''} to add one.
-            </p>
-          )}
-          {offersDesign && designFits && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-ink">System design question (on a whiteboard)</p>
-              <Choice
-                name="System design"
-                options={[
-                  ['auto', 'Let the plan decide'],
-                  ['yes', 'Include one'],
-                  ['no', 'Skip it'],
-                ]}
-                value={design}
-                onChange={setDesign}
-              />
-            </div>
           )}
         </section>
       )}
@@ -480,7 +505,7 @@ export default function Setup() {
       )}
       <button
         type="submit"
-        disabled={busy || !resumeId || !jdId || job.status !== 'ready' || !termsReady}
+        disabled={busy || !resumeId || !jdId || job.status !== 'ready' || !termsReady || (!negotiating && !countsFit)}
         className="btn-primary"
       >
         {busy

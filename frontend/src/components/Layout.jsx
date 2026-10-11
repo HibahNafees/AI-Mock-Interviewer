@@ -1,16 +1,16 @@
-import { Link, NavLink, Outlet } from "react-router-dom";
-import { useAuth } from "../lib/auth";
-import { Mascot } from "./Art";
-import ThemeToggle from "./ThemeToggle";
+import { Link, NavLink, Outlet } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
+import { Mascot } from './Art'
+import ThemeToggle from './ThemeToggle'
 
 const NAV = [
-  ["/", "Dashboard"],
-  ["/setup", "New interview"],
-  ["/stories", "Story bank"],
-  ["/decoder", "JD decoder"],
-  ["/debrief", "Debrief"],
-  ["/reverse", "Reverse"],
-];
+  ['/', 'Dashboard'],
+  ['/setup', 'New interview'],
+  ['/stories', 'Story bank'],
+  ['/decoder', 'JD decoder'],
+  ['/debrief', 'Debrief'],
+  ['/reverse', 'Reverse'],
+]
 
 // `onColor` is for coloured backgrounds (the sign-in panel), where the coral
 // "Vox" would disappear.
@@ -19,24 +19,20 @@ export function Logo({ onColor = false }) {
     <span className="flex items-center gap-2">
       <Mascot className="h-10 w-10" />
       <span className="flex flex-col leading-tight">
-        <span
-          className={`font-display text-xl font-extrabold tracking-tight ${onColor ? "text-white" : "text-ink"}`}
-        >
+        <span className={`font-display text-xl font-extrabold tracking-tight ${onColor ? 'text-white' : 'text-ink'}`}>
           Inter
-          <span className={onColor ? "text-night" : "text-brand-500"}>Vox</span>
+          <span className={onColor ? 'text-night' : 'text-brand-500'}>Vox</span>
         </span>
-        <span
-          className={`text-xs font-medium ${onColor ? "text-white/90" : "text-ink/70"}`}
-        >
+        <span className={`text-xs font-medium ${onColor ? 'text-white/90' : 'text-ink/70'}`}>
           AI voice practice interviews for any job
         </span>
       </span>
     </span>
-  );
+  )
 }
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, logout } = useAuth()
   return (
     <div className="min-h-screen text-slate-800">
       <header className="sticky top-0 z-10 border-b border-line bg-cream/85 backdrop-blur-md print:hidden">
@@ -45,24 +41,20 @@ export default function Layout() {
             <Logo />
           </Link>
           <nav className="flex flex-wrap gap-0.5 text-sm">
-            {[...NAV, ...(user?.is_admin ? [["/admin", "Admin"]] : [])].map(
-              ([to, label]) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={to === "/"}
-                  className={({ isActive }) =>
-                    `rounded-full px-2.5 py-1.5 font-medium transition ${
-                      isActive
-                        ? "bg-brand-100 text-brand-700"
-                        : "text-slate-600 hover:bg-surface hover:text-slate-900"
-                    }`
-                  }
-                >
-                  {label}
-                </NavLink>
-              ),
-            )}
+            {[...NAV, ...(user?.is_admin ? [['/admin', 'Admin']] : [])].map(([to, label]) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) =>
+                  `rounded-full px-2.5 py-1.5 font-medium transition ${
+                    isActive ? 'bg-brand-100 text-brand-700' : 'text-slate-600 hover:bg-surface hover:text-slate-900'
+                  }`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
           </nav>
           {user && (
             <div className="ml-auto flex items-center gap-2 text-sm">
@@ -91,5 +83,5 @@ export default function Layout() {
         <Outlet />
       </main>
     </div>
-  );
+  )
 }

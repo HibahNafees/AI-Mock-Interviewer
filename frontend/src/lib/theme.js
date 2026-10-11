@@ -1,66 +1,43 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react'
 
-const THEME_KEY = "mi_theme";
-const PREFS = ["system", "light", "dark"];
-const listeners = new Set();
+const THEME_KEY = 'mi_theme'
+const listeners = new Set()
 
-// The user's choice: 'system' (follow the device), 'light' or 'dark'.
+// 'light' (the default) or 'dark', remembered per browser.
 export function themePref() {
   try {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (PREFS.includes(saved)) return saved;
+    if (localStorage.getItem(THEME_KEY) === 'dark') return 'dark'
   } catch {
-    // Storage unavailable: follow the device.
+    // Storage unavailable: light.
   }
-  return "system";
-}
-
-function systemDark() {
-  return (
-    typeof window !== "undefined" &&
-    Boolean(window.matchMedia?.("(prefers-color-scheme: dark)").matches)
-  );
-}
-
-export function resolveTheme(pref = themePref()) {
-  if (pref === "system") return systemDark() ? "dark" : "light";
-  return pref;
+  return 'light'
 }
 
 // Sets <html data-theme>, which index.css keys the dark palette on. index.html
-// runs the same logic inline before the app loads, so pages never flash light.
-export function applyTheme(pref = themePref()) {
-  const theme = resolveTheme(pref);
-  document.documentElement.dataset.theme = theme;
-  listeners.forEach((fn) => fn(theme));
-  return theme;
+// runs the same logic inline before the app loads, so pages never flash.
+export function applyTheme(theme = themePref()) {
+  document.documentElement.dataset.theme = theme
+  listeners.forEach((fn) => fn(theme))
+  return theme
 }
 
-export function setThemePref(pref) {
+export function setThemePref(theme) {
   try {
-    if (pref === "system") localStorage.removeItem(THEME_KEY);
-    else localStorage.setItem(THEME_KEY, pref);
+    if (theme === 'dark') localStorage.setItem(THEME_KEY, 'dark')
+    else localStorage.removeItem(THEME_KEY)
   } catch {
     // Storage unavailable: the choice lasts for this page only.
   }
-  applyTheme(pref);
-}
-
-if (typeof window !== "undefined" && window.matchMedia) {
-  window
-    .matchMedia("(prefers-color-scheme: dark)")
-    .addEventListener?.("change", () => {
-      if (themePref() === "system") applyTheme("system");
-    });
+  applyTheme(theme)
 }
 
 // The theme in effect right now ('light' | 'dark'), for widgets that take a
 // theme prop (code editor, whiteboard).
 export function useTheme() {
-  const [theme, setTheme] = useState(() => resolveTheme());
+  const [theme, setTheme] = useState(themePref)
   useEffect(() => {
-    listeners.add(setTheme);
-    return () => listeners.delete(setTheme);
-  }, []);
-  return theme;
+    listeners.add(setTheme)
+    return () => listeners.delete(setTheme)
+  }, [])
+  return theme
 }

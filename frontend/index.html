@@ -4,12 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script>
-      // Theme before first paint (same logic as src/lib/theme.js).
+      // Theme before first paint (same as src/lib/theme.js): light unless dark was picked.
       try {
-        var t = localStorage.getItem('mi_theme')
-        if (t !== 'light' && t !== 'dark')
-          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-        document.documentElement.dataset.theme = t
+        document.documentElement.dataset.theme = localStorage.getItem('mi_theme') === 'dark' ? 'dark' : 'light'
       } catch (e) {
         document.documentElement.dataset.theme = 'light'
       }

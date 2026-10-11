@@ -6,6 +6,7 @@ from app.services.planning import (
     JdAnalysisOut,
     PlanSectionOut,
     enforce_hands_on,
+    fit_counts,
     fit_hands_on,
     hands_on_limit,
     normalize_minutes,
@@ -108,3 +109,33 @@ def test_hands_on_sections_can_share_spare_time():
     # Only coding and design: design borrows coding's minutes above its 8.
     out = enforce_hands_on([section("coding", 12), section("system_design", 8)], 20)
     assert {s.module: s.minutes for s in out} == {"coding": 10, "system_design": 10}
+
+
+@pytest.mark.parametrize(
+    "duration,asked,got",
+    [
+        (60, (10, 2), (10, 2)),  # 40 + 10 of 58 spare minutes
+        (30, (10, None), (7, None)),  # 28 // 4
+        (30, (5, 10), (5, 1)),  # 28 - 20 = 8 → one design question
+        (10, (0, 10), (0, 1)),
+        (5, (3, None), (0, None)),
+    ],
+)
+def test_chosen_counts_are_trimmed_to_fit(duration, asked, got):
+    assert fit_counts(duration, *asked) == got
+
+
+def test_a_coding_only_interview_always_gets_a_problem():
+    assert fit_counts(5, 10, None, only=True) == (1, None)
+
+
+def test_chosen_counts_use_the_shorter_floor_minutes():
+    plan = [
+        section("behavioral", 2),
+        section("coding", 10, n=5),
+        section("system_design", 6, n=2),
+    ]
+    out = enforce_hands_on(plan, 18, {"coding": 4, "system_design": 5})
+    minutes = {s.module: s.minutes for s in out}
+    assert minutes["coding"] >= 20 or len(out[1].questions) < 5
+    assert sum(minutes.values()) == 18

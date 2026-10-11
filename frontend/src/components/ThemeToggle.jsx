@@ -1,30 +1,24 @@
-import { useState } from "react";
-import { setThemePref, themePref } from "../lib/theme";
+import { useState } from 'react'
+import { setThemePref, themePref } from '../lib/theme'
 
-const NEXT = { system: "light", light: "dark", dark: "system" };
-const SHOW = {
-  system: ["🖥️", "Theme: follows your device"],
-  light: ["☀️", "Theme: light"],
-  dark: ["🌙", "Theme: dark"],
-};
-
-// Cycles system → light → dark. The label says what's on now.
-export default function ThemeToggle({ className = "" }) {
-  const [pref, setPref] = useState(themePref);
-  const [icon, label] = SHOW[pref];
+// One click switches between light and dark. The icon shows where a click
+// takes you: a moon in light mode, a sun in dark mode.
+export default function ThemeToggle({ className = '' }) {
+  const [theme, setTheme] = useState(themePref)
+  const next = theme === 'dark' ? 'light' : 'dark'
+  const label = `Switch to ${next} mode`
   return (
     <button
       type="button"
       onClick={() => {
-        const next = NEXT[pref];
-        setThemePref(next);
-        setPref(next);
+        setThemePref(next)
+        setTheme(next)
       }}
       className={`grid h-9 w-9 place-items-center rounded-full text-base ring-1 ring-line transition hover:bg-surface ${className}`}
-      aria-label={`${label}. Click to change.`}
+      aria-label={label}
       title={label}
     >
-      <span aria-hidden="true">{icon}</span>
+      <span aria-hidden="true">{next === 'dark' ? '🌙' : '☀️'}</span>
     </button>
-  );
+  )
 }

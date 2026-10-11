@@ -70,11 +70,15 @@ class Scenario(BaseModel):
     private: str = Field(default="", max_length=1200)
 
 
+# Most questions in one section (10 coding problems fit in one, T-85).
+MAX_QUESTIONS = 10
+
+
 class PlanSectionOut(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     module: str
     minutes: int = Field(ge=1, le=60)
-    questions: list[str] = Field(default_factory=list, max_length=8)
+    questions: list[str] = Field(default_factory=list, max_length=MAX_QUESTIONS)
     scenario: Scenario | None = None
 
     @field_validator("questions", mode="before")
@@ -243,28 +247,58 @@ def offered_modules(analysis: JdAnalysis) -> list[str]:
 
 
 MINUTES_PER_PROBLEM = 8
-# Least time a hands-on round needs: a coding problem, or one design question.
+# Time per hands-on question when the plan decides how many (T-81)...
 HANDS_ON_MIN = {"coding": MINUTES_PER_PROBLEM, "system_design": 10}
+# ...and the least each gets when the candidate picks the count (1–10 each, T-85).
+HANDS_ON_FLOOR = {"coding": 4, "system_design": 5}
+MAX_HANDS_ON = 10
 # Minutes a mixed loop keeps for its other sections.
 OTHER_MIN = 2
 
 
 def hands_on_limit(duration_min: int, only: bool = False) -> int:
-    """How many coding problems fit (about 8 minutes each, at most 3). `only`: the
-    whole interview is coding, so it gets at least one whatever the length."""
+    """How many coding problems fit when the plan decides (about 8 minutes each, at
+    most 3). `only`: the whole interview is coding, so at least one."""
     spare = duration_min if only else duration_min - OTHER_MIN
     return max(1 if only else 0, min(3, spare // MINUTES_PER_PROBLEM))
 
 
-def fit_hands_on(allowed: list[str], duration_min: int) -> list[str]:
+def fit_counts(
+    duration_min: int, coding: int | None, design: int | None, only: bool = False
+) -> tuple[int | None, int | None]:
+    """Trim the candidate's chosen counts to what fits at the floor minutes
+    (coding first). The setup page blocks counts that don't fit; this is the
+    server-side guard."""
+    spare = duration_min if only else duration_min - OTHER_MIN
+    if coding is not None:
+        coding = min(coding, MAX_HANDS_ON, spare // HANDS_ON_FLOOR["coding"])
+        if only:
+            coding = max(coding, 1)
+        spare -= coding * HANDS_ON_FLOOR["coding"]
+    if design is not None:
+        design = max(
+            0, min(design, MAX_HANDS_ON, spare // HANDS_ON_FLOOR["system_design"])
+        )
+    return coding, design
+
+
+def fit_hands_on(
+    allowed: list[str], duration_min: int, reserved: dict[str, int] | None = None
+) -> list[str]:
     """Drop the coding round and the whiteboard from a mixed loop when the
     interview is too short for them (a 5-minute plan once gave each 2 minutes).
+    `reserved`: modules whose count the candidate chose, with the minutes they
+    take; they stay (if the count isn't 0) and the plan-decided ones get the rest.
     Coding is kept before system design."""
-    spare = duration_min - OTHER_MIN
+    reserved = reserved or {}
+    spare = duration_min - OTHER_MIN - sum(reserved.values())
     out = []
     for m in allowed:
         need = HANDS_ON_MIN.get(m)
-        if need is None:
+        if m in reserved:
+            if reserved[m]:
+                out.append(m)
+        elif need is None:
             out.append(m)
         elif spare >= need:
             out.append(m)
@@ -272,34 +306,36 @@ def fit_hands_on(allowed: list[str], duration_min: int) -> list[str]:
     return out or allowed
 
 
-def section_need(section) -> int:
-    """Least minutes a section needs (0 for ordinary sections)."""
-    need = HANDS_ON_MIN.get(section.module, 0)
-    return need * len(section.questions) if section.module == "coding" else need
+def section_need(section, per_question: dict[str, int] | None = None) -> int:
+    """Least minutes a section needs (0 for ordinary sections): its per-question
+    minimum times its questions."""
+    return (per_question or HANDS_ON_MIN).get(section.module, 0) * len(
+        section.questions
+    )
 
 
-def enforce_hands_on(sections: list, duration_min: int) -> list:
+def enforce_hands_on(
+    sections: list, duration_min: int, per_question: dict[str, int] | None = None
+) -> list:
     """Give coding and design sections their minimum minutes, taken from the other
-    sections' spare time (each keeps at least 1, or its own minimum). Coding problems that still don't fit are
-    dropped; a hands-on section with nothing left is removed."""
+    sections' spare time (each keeps at least 1, or its own minimum). Hands-on
+    questions that still don't fit are dropped; a section left with none is removed."""
+
+    def need(s) -> int:
+        return section_need(s, per_question)
+
     for s in sections:
-        need = section_need(s)
-        while s.minutes < need:
-            donors = [
-                d
-                for d in sections
-                if d is not s and d.minutes > max(1, section_need(d))
-            ]
+        while s.minutes < need(s):
+            donors = [d for d in sections if d is not s and d.minutes > max(1, need(d))]
             if donors:
-                donor = max(donors, key=lambda d: d.minutes)
+                donor = max(donors, key=lambda d: d.minutes - need(d))
                 donor.minutes -= 1
                 s.minutes += 1
-            elif s.module == "coding" and len(s.questions) > 1:
+            elif len(s.questions) > 1:
                 s.questions = s.questions[:-1]
-                need = section_need(s)
             else:
                 break
-    kept = [s for s in sections if s.minutes >= section_need(s)]
+    kept = [s for s in sections if s.minutes >= need(s)]
     if kept and len(kept) < len(sections):
         return normalize_minutes(kept, duration_min)
     return sections
@@ -313,30 +349,40 @@ def build_plan(
     difficulty: str,
     focus: str = MIXED,
     coding: int | None = None,
-    system_design: bool | None = None,
+    system_design: int | None = None,
 ) -> PlanOut:
-    """`coding` / `system_design`: what the candidate asked for (None = plan decides)."""
+    """`coding` / `system_design`: how many of each the candidate asked for, 0–10
+    (None = the plan decides)."""
     summary = analysis_summary(analysis)
     allowed = offered_modules(analysis) if focus == MIXED else [focus]
+    if "coding" not in allowed:
+        coding = None
+    if "system_design" not in allowed or focus != MIXED:
+        system_design = None
+    coding, system_design = fit_counts(
+        duration_min, coding, system_design, only=focus != MIXED
+    )
+    chosen = {
+        m: n
+        for m, n in (("coding", coding), ("system_design", system_design))
+        if n is not None
+    }
+    # Chosen counts get the floor minutes; plan-decided ones the full time.
+    per_question = {
+        m: HANDS_ON_FLOOR[m] if m in chosen else HANDS_ON_MIN[m] for m in HANDS_ON_MIN
+    }
     if focus == MIXED:
-        allowed = fit_hands_on(allowed, duration_min)
-    rules, ctx = [], {}
-    if coding is not None and "coding" in allowed:
-        coding = min(coding, hands_on_limit(duration_min, only=focus != MIXED))
-        ctx["coding"] = coding
-        rules.append(
-            f"Use exactly {coding} coding problem(s): each is one question in a section "
-            'with module "coding".'
-            if coding
-            else 'Don\'t use the "coding" module.'
+        allowed = fit_hands_on(
+            allowed, duration_min, {m: n * HANDS_ON_FLOOR[m] for m, n in chosen.items()}
         )
-    if system_design is not None and "system_design" in allowed and focus == MIXED:
-        ctx["system_design"] = int(system_design)
+    rules, ctx = [], {}
+    for module, n in chosen.items():
+        what = "coding problem" if module == "coding" else "system design question"
+        ctx[module] = n
         rules.append(
-            "Include exactly one system design question, in a section with module "
-            '"system_design".'
-            if system_design
-            else 'Don\'t use the "system_design" module.'
+            f'Use exactly {n} {what}(s): each is one question in a section with module "{module}".'
+            if n
+            else f'Don\'t use the "{module}" module.'
         )
     focus_rule = (
         "Mix the modules to fit the role: a full interview loop."
@@ -368,7 +414,7 @@ def build_plan(
         fix_reversed_opener(section, names)
     plan.sections = normalize_minutes(plan.sections, duration_min)
     if focus == MIXED:
-        plan.sections = enforce_hands_on(plan.sections, duration_min)
+        plan.sections = enforce_hands_on(plan.sections, duration_min, per_question)
     return plan
 
 

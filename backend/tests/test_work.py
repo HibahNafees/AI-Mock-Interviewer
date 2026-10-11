@@ -294,10 +294,16 @@ def test_asked_number_of_coding_problems_is_enforced(client, auth, docs, fire):
 def test_coding_count_is_capped_by_the_length(client, auth, docs, fire):
     fire.plan = {
         "sections": [
-            {"name": "Coding", "module": "coding", "minutes": 10, "questions": ["A."]}
+            {
+                "name": "Coding",
+                "module": "coding",
+                "minutes": 10,
+                "questions": ["A.", "B."],
+            }
         ],
         "reserve": [],
     }
+    # 10 minutes keep 8 for coding: two problems at the 4-minute floor (T-85).
     r = client.post(
         "/api/sessions",
         json={**docs, "duration_min": 10, "coding_problems": 3},
@@ -305,7 +311,55 @@ def test_coding_count_is_capped_by_the_length(client, auth, docs, fire):
     )
     assert r.status_code == 201, r.get_json()
     prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
-    assert "Use exactly 1 coding problem(s)" in prompt
+    assert "Use exactly 2 coding problem(s)" in prompt
+
+
+def test_up_to_ten_coding_and_design_questions_can_be_chosen(client, auth, docs, fire):
+    fire.analysis = {
+        **fire.analysis,
+        "formats": [*fire.analysis["formats"], "system_design"],
+    }
+    fire.plan = {
+        "sections": [
+            {
+                "name": "Coding",
+                "module": "coding",
+                "minutes": 40,
+                "questions": [f"Problem {i}." for i in range(10)],
+            },
+            {
+                "name": "Design",
+                "module": "system_design",
+                "minutes": 20,
+                "questions": ["Design A.", "Design B."],
+            },
+        ],
+        "reserve": [],
+    }
+    r = client.post(
+        "/api/sessions",
+        json={
+            **docs,
+            "duration_min": 60,
+            "coding_problems": 10,
+            "system_design": 2,
+        },
+        headers=auth,
+    )
+    assert r.status_code == 201, r.get_json()
+    prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
+    assert "Use exactly 10 coding problem(s)" in prompt
+    assert "Use exactly 2 system design question(s)" in prompt
+    sections = {s["module"]: s for s in r.get_json()["session"]["plan"]["sections"]}
+    assert len(sections["coding"]["questions"]) == 10
+    assert sections["coding"]["minutes"] >= 40
+    assert sections["system_design"]["minutes"] >= 10
+    too_many = client.post(
+        "/api/sessions",
+        json={**docs, "duration_min": 60, "coding_problems": 11},
+        headers=auth,
+    )
+    assert too_many.status_code == 400
 
 
 def test_run_output_goes_with_the_code(client, auth, docs, fire):
