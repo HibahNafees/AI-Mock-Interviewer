@@ -26,7 +26,7 @@ MAX_REDIRECTS = 3
 MAX_TEXT = 6000
 MIN_TEXT = 300
 FALLBACK_PATHS = ("/about", "/about-us", "/careers")
-USER_AGENT = "MockInterviewer/1.0 (company research for interview prep)"
+USER_AGENT = "InterVox/1.0 (company research for interview prep)"
 
 
 class ResearchError(Exception):

@@ -16,7 +16,7 @@ export function Logo() {
     <span className="flex items-center gap-2">
       <Mascot className="h-10 w-10" />
       <span className="font-display text-xl font-extrabold tracking-tight text-ink">
-        Mock<span className="text-brand-500">Interviewer</span>
+        Inter<span className="text-brand-500">Vox</span>
       </span>
     </span>
   )
@@ -28,7 +28,7 @@ export default function Layout() {
     <div className="min-h-screen text-slate-800">
       <header className="sticky top-0 z-10 border-b border-[#f1e6da] bg-cream/85 backdrop-blur-md print:hidden">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
-          <Link to="/" aria-label="AI Mock Interviewer home">
+          <Link to="/" aria-label="InterVox home">
             <Logo />
           </Link>
           <nav className="flex flex-wrap gap-1 text-sm">
