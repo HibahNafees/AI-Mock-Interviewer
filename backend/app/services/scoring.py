@@ -475,15 +475,30 @@ RESULT_PLACEHOLDER_RE = re.compile(
 )
 
 
+def _tells_result(text: str, quote: str) -> bool:
+    """The rewrite already gives this result: its numbers, or most of its words."""
+    numbers = set(DIGITS_RE.findall(quote))
+    if numbers:
+        return numbers <= set(DIGITS_RE.findall(text))
+    words = _stems(quote)
+    return not words or len(words & _stems(text)) / len(words) >= 0.6
+
+
 def fill_result(stronger: str, result_quote: str | None) -> str:
     """Put the candidate's own, verified result where the rewrite asks them to
-    add one: it sometimes left the result they gave out (T-107)."""
-    if not result_quote or not RESULT_PLACEHOLDER_RE.search(stronger):
+    add one: it sometimes left the result they gave out (T-107). With no such
+    placeholder and the result nowhere in the rewrite (a repair dropped it, T-123),
+    it goes at the end."""
+    if not result_quote:
         return stronger
     quote = result_quote.strip().rstrip(".!?,;:")
     if not quote:
         return stronger
     sentence = quote[0].upper() + quote[1:] + "."
+    if not RESULT_PLACEHOLDER_RE.search(stronger):
+        if _tells_result(stronger, quote):
+            return stronger
+        return f"{stronger.strip()} {sentence}".strip()
     parts = re.split(r"(?<=[.!?])\s+", stronger.strip())
     # The rewrite already tells it elsewhere: just drop the placeholder (T-121).
     rest = " ".join(p for p in parts if not RESULT_PLACEHOLDER_RE.search(p))

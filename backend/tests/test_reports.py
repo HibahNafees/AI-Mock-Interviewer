@@ -454,7 +454,19 @@ def test_fill_result_only_replaces_result_placeholders():
     assert (
         fill_result("I did it. [add the result]", None) == "I did it. [add the result]"
     )
-    assert fill_result("At [add the company].", quote) == "At [add the company]."
+    # T-123: no result placeholder and no result: it goes at the end.
+    assert (
+        fill_result("At [add the company].", quote)
+        == "At [add the company]. We haven't had a locking incident since."
+    )
+    live = "p95 on the main app went from 1.8 seconds to 300 milliseconds."
+    moved = "I moved the reporting queries to a nightly ETL."
+    assert (
+        fill_result(moved, live)
+        == f"{moved} P95 on the main app went from 1.8 seconds to 300 milliseconds."
+    )
+    told = "I moved them to an ETL, and p95 fell from 1.8 s to 300 ms."
+    assert fill_result(told, live) == told
     # T-121: already in the rewrite, so the placeholder just goes.
     assert (
         fill_result(
