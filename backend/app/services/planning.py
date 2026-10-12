@@ -14,7 +14,7 @@ from pydantic import (
 from .. import modules
 from ..extensions import db
 from ..models import Document, JdAnalysis, Question, Session, User
-from . import panel
+from . import panel, pressure
 from .llm import chat_json, render
 
 ALL_MODULES = tuple(modules.MODULES)
@@ -481,18 +481,38 @@ def build_plan(
     focus: str = MIXED,
     coding: int | None = None,
     system_design: int | None = None,
+    pressure_level: int = 0,
 ) -> PlanOut:
     """`coding` / `system_design`: how many of each the candidate asked for, 0–10
     (None = the plan decides)."""
     summary = analysis_summary(analysis)
-    allowed = offered_modules(analysis) if focus == MIXED else [focus]
+    offered = offered_modules(analysis)
+    allowed = offered if focus == MIXED else [focus]
+    # A single interview type can still take the coding problems and design
+    # questions the candidate picked (T-95).
+    extras = [
+        m
+        for m, n in (("coding", coding), ("system_design", system_design))
+        if focus != MIXED and m != focus and m in offered and n
+    ]
+    allowed = allowed + extras
     if "coding" not in allowed:
         coding = None
-    if "system_design" not in allowed or focus != MIXED:
+    if "system_design" not in allowed:
         system_design = None
+    if focus == "system_design" and not system_design:
+        system_design = None
+    only_coding = focus == "coding" and not system_design
     coding, system_design = fit_counts(
-        duration_min, coding, system_design, only=focus != MIXED
+        duration_min, coding, system_design, only=only_coding
     )
+    if focus != MIXED:
+        allowed = [focus] + [
+            m
+            for m, n in (("coding", coding), ("system_design", system_design))
+            if m in extras and n
+        ]
+    with_hands_on = focus == MIXED or len(allowed) > 1
     chosen = {
         m: n
         for m, n in (("coding", coding), ("system_design", system_design))
@@ -502,7 +522,7 @@ def build_plan(
     per_question = {
         m: HANDS_ON_FLOOR[m] if m in chosen else HANDS_ON_MIN[m] for m in HANDS_ON_MIN
     }
-    if focus == MIXED:
+    if with_hands_on:
         allowed = fit_hands_on(
             allowed, duration_min, {m: n * HANDS_ON_FLOOR[m] for m, n in chosen.items()}
         )
@@ -531,7 +551,8 @@ def build_plan(
         "Mix the modules to fit the role: a full interview loop."
         if focus == MIXED
         else f'The candidate chose to practise only "{modules.MODULES[focus].label}": '
-        f'every section uses the "{focus}" module.'
+        f'every section uses the "{focus}" module'
+        + (", plus the hands-on sections below." if len(allowed) > 1 else ".")
     )
     prompt = render(
         "plan",
@@ -545,6 +566,7 @@ def build_plan(
         max_sections=str(section_limit(duration_min)),
         question_count=str(question_target(duration_min)),
         hands_on="\n".join(rules) or "",
+        pressure_rule=pressure.plan_rule(pressure_level),
         roleplay_example=ROLEPLAY_EXAMPLE if "roleplay" in allowed else "",
         roleplay_rule=ROLEPLAY_RULE if "roleplay" in allowed else NO_ROLEPLAY_RULE,
     )
@@ -570,7 +592,7 @@ def build_plan(
         fit_module(section, allowed)
         fix_reversed_opener(section, names)
     plan.sections = normalize_minutes(plan.sections, duration_min)
-    if focus == MIXED:
+    if with_hands_on:
         plan.sections = enforce_hands_on(plan.sections, duration_min, per_question)
     return plan
 

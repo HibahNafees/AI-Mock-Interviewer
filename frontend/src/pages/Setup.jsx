@@ -17,8 +17,7 @@ const FORMATS = [
 ]
 const FORMAT_BLURBS = {
   standard: 'A one-to-one interview.',
-  panel:
-    'Two or three interviewers (hiring manager, a future colleague and HR) take turns, each with their own voice.',
+  panel: 'Two or three interviewers (hiring manager, a future colleague and HR) take turns, each with their own voice.',
   negotiation:
     'A recruiter calls with an offer below what you want. Practice anchoring, justifying your number and staying calm. Scored on all three.',
 }
@@ -143,9 +142,13 @@ export default function Setup() {
   const length = negotiating ? Math.min(duration, 20) : duration
   const startNowFor = startNow || negotiating
 
-  // Hands-on rounds the candidate can ask for (T-65), when the job fits them.
-  const offersCoding = offered.some((m) => m.name === 'coding') && ['mixed', 'coding'].includes(chosen)
-  const offersDesign = offered.some((m) => m.name === 'system_design') && chosen === 'mixed'
+  // Hands-on rounds the candidate can ask for (T-65), when the job fits them, with
+  // any interview type (T-95). Outside a mixed loop, "Let the plan decide" adds none.
+  const offersCoding = offered.some((m) => m.name === 'coding')
+  const offersDesign = offered.some((m) => m.name === 'system_design')
+  const planAddsCoding = ['mixed', 'coding'].includes(chosen)
+  const planAddsDesign = ['mixed', 'system_design'].includes(chosen)
+  const typeLabel = offered.find((m) => m.name === chosen)?.label
   // Same limits as the planner (planning.fit_counts / fit_hands_on). A count the
   // candidate picks (1–10) gets at least 4 minutes per coding problem and 5 per
   // design question; a round the plan decides needs 8 or 10. A mixed interview
@@ -156,8 +159,10 @@ export default function Setup() {
   const chosenMinutes = (codingCount ?? 0) * 4 + (designCount ?? 0) * 5
   const countsFit = chosenMinutes <= spare || (chosen === 'coding' && codingCount === 1)
   const autoCodingFits = chosen === 'coding' || spare - (designCount ?? 0) * 5 >= 8
-  const autoCodingMinutes = codingProblems === 'auto' && offersCoding && autoCodingFits ? 8 : 0
-  const autoDesignFits = spare - (codingCount ?? 0) * 4 - autoCodingMinutes >= 10
+  const autoCodingMinutes =
+    codingProblems === 'auto' && offersCoding && planAddsCoding && autoCodingFits && chosen !== 'system_design' ? 8 : 0
+  const autoDesignFits = chosen === 'system_design' || spare - (codingCount ?? 0) * 4 - autoCodingMinutes >= 10
+  const onlyType = typeLabel ? `Only ${typeLabel} questions unless you pick a number.` : null
 
   function choosePressure(level) {
     setPressure(level)
@@ -310,15 +315,11 @@ export default function Setup() {
           <h2 className="font-semibold text-slate-900">Interview type</h2>
           <p className="text-sm text-slate-600">
             {job.analysis.role_title} · {job.analysis.field}
-            {job.analysis.competencies.length > 0 &&
-              ` · ${job.analysis.competencies.map((c) => c.name).join(', ')}`}
+            {job.analysis.competencies.length > 0 && ` · ${job.analysis.competencies.map((c) => c.name).join(', ')}`}
           </p>
           <Choice
             name="Interview type"
-            options={[
-              ['mixed', 'Full mixed loop'],
-              ...offered.map((m) => [m.name, m.label]),
-            ]}
+            options={[['mixed', 'Full mixed loop'], ...offered.map((m) => [m.name, m.label])]}
             value={chosen}
             onChange={setFocus}
           />
@@ -347,7 +348,13 @@ export default function Setup() {
               ]}
               value={codingProblems}
               onChange={setCodingProblems}
-              autoNote={autoCodingFits ? null : 'The plan would leave coding out: a problem needs about 8 minutes.'}
+              autoNote={
+                !planAddsCoding
+                  ? onlyType
+                  : autoCodingFits
+                    ? null
+                    : 'The plan would leave coding out: a problem needs about 8 minutes.'
+              }
             />
           )}
           {offersDesign && (
@@ -361,7 +368,11 @@ export default function Setup() {
               value={design}
               onChange={setDesign}
               autoNote={
-                autoDesignFits ? null : 'The plan would leave design out: a question needs about 10 minutes.'
+                !planAddsDesign
+                  ? onlyType
+                  : autoDesignFits
+                    ? null
+                    : 'The plan would leave design out: a question needs about 10 minutes.'
               }
             />
           )}
@@ -373,8 +384,8 @@ export default function Setup() {
               ]
                 .filter(Boolean)
                 .join(' and ')}{' '}
-              need at least {chosenMinutes} minutes, and this interview has {spare} for them. Choose a longer
-              interview or fewer questions.
+              need at least {chosenMinutes} minutes, and this interview has {spare} for them. Choose a longer interview
+              or fewer questions.
             </p>
           )}
         </section>
@@ -525,9 +536,7 @@ export default function Setup() {
               : 'Build my interview plan'}
       </button>
       {busy && (
-        <p className="text-sm text-slate-500">
-          Reading the job description and your résumé; this takes a few seconds.
-        </p>
+        <p className="text-sm text-slate-500">Reading the job description and your résumé; this takes a few seconds.</p>
       )}
     </form>
   )

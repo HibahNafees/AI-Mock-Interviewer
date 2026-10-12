@@ -470,3 +470,48 @@ def test_code_without_a_run_saves_no_output_key(client, auth, docs, fire):
     saved = db.session.scalar(db.select(Answer).order_by(Answer.id.desc()))
     assert "output" not in saved.work_json
     assert "[Output when" not in fire.calls[-1]["prompt"]
+
+
+def test_single_interview_type_can_add_coding_problems(client, auth, docs, fire):
+    # Behavioral only, plus one coding problem the candidate asked for (T-95).
+    fire.plan = {
+        "sections": [
+            {
+                "name": "Stories",
+                "module": "behavioral",
+                "minutes": 12,
+                "questions": ["Tell me about a conflict."],
+            },
+            {
+                "name": "Coding",
+                "module": "coding",
+                "minutes": 8,
+                "questions": ["Merge two sorted lists."],
+            },
+        ],
+        "reserve": [],
+    }
+    r = client.post(
+        "/api/sessions",
+        json={**docs, "duration_min": 20, "focus": "behavioral", "coding_problems": 1},
+        headers=auth,
+    )
+    assert r.status_code == 201, r.get_json()
+    modules_ = [s["module"] for s in r.get_json()["session"]["plan"]["sections"]]
+    assert modules_ == ["behavioral", "coding"]
+    prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
+    assert "Use exactly 1 coding problem(s)" in prompt
+    assert "plus the hands-on sections below" in prompt
+
+
+def test_single_interview_type_without_hands_on_stays_single(client, auth, docs, fire):
+    r = client.post(
+        "/api/sessions",
+        json={**docs, "duration_min": 20, "focus": "behavioral"},
+        headers=auth,
+    )
+    assert r.status_code == 201, r.get_json()
+    prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
+    assert (
+        '"coding"' not in prompt.split("Format modules you may use:")[1].split("\n")[0]
+    )

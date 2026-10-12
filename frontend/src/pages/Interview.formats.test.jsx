@@ -86,7 +86,10 @@ describe('formats', () => {
       'GET /api/auth/me': [200, { user: ADA }],
       'GET /api/documents?kind=resume': [200, { documents: [] }],
       'GET /api/documents?kind=job_description': [200, { documents: [] }],
-      'POST /api/documents': (opts) => [201, { document: { id: nextDoc++, kind: JSON.parse(opts.body).kind, title: 'x' } }],
+      'POST /api/documents': (opts) => [
+        201,
+        { document: { id: nextDoc++, kind: JSON.parse(opts.body).kind, title: 'x' } },
+      ],
       'POST /api/documents/11/analysis': [
         200,
         { analysis: { role_title: 'Backend Engineer', field: 'software', competencies: [] }, modules: [] },
@@ -170,7 +173,10 @@ describe('setup choices for hands-on rounds and pressure', () => {
       'GET /api/auth/me': [200, { user: ADA }],
       'GET /api/documents?kind=resume': [200, { documents: [] }],
       'GET /api/documents?kind=job_description': [200, { documents: [] }],
-      'POST /api/documents': (opts) => [201, { document: { id: nextDoc++, kind: JSON.parse(opts.body).kind, title: 'x' } }],
+      'POST /api/documents': (opts) => [
+        201,
+        { document: { id: nextDoc++, kind: JSON.parse(opts.body).kind, title: 'x' } },
+      ],
       'POST /api/documents/11/analysis': [
         200,
         {
@@ -210,6 +216,59 @@ describe('setup choices for hands-on rounds and pressure', () => {
     expect(screen.getByRole('radio', { name: 'One interviewer' })).toBeChecked()
     await userEvent.click(screen.getByRole('button', { name: 'Build my interview plan' }))
     await screen.findByText('stop here')
-    expect(created).toMatchObject({ format: 'standard', pressure_level: 2, coding_problems: 5, system_design: 0, duration_min: 30 })
+    expect(created).toMatchObject({
+      format: 'standard',
+      pressure_level: 2,
+      coding_problems: 5,
+      system_design: 0,
+      duration_min: 30,
+    })
+  })
+
+  it('keeps hands-on rounds for a single interview type (T-95)', async () => {
+    let created
+    let nextDoc = 10
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/documents?kind=resume': [200, { documents: [] }],
+      'GET /api/documents?kind=job_description': [200, { documents: [] }],
+      'POST /api/documents': (opts) => [
+        201,
+        { document: { id: nextDoc++, kind: JSON.parse(opts.body).kind, title: 'x' } },
+      ],
+      'POST /api/documents/11/analysis': [
+        200,
+        {
+          analysis: { role_title: 'Software Developer', field: 'software engineering', competencies: [] },
+          modules: [
+            { name: 'behavioral', label: 'Behavioral', blurb: '' },
+            { name: 'coding', label: 'Coding', blurb: '' },
+            { name: 'system_design', label: 'System design', blurb: '' },
+          ],
+        },
+      ],
+      'GET /api/stories/suggest?jd_id=11': [200, { stories: [] }],
+      'POST /api/sessions': (opts) => {
+        created = JSON.parse(opts.body)
+        return [400, { error: 'stop here' }]
+      },
+    })
+    renderAt('/setup')
+    const long = 'x'.repeat(60)
+    await userEvent.type(await screen.findByLabelText('Paste your résumé'), long)
+    await userEvent.click(screen.getAllByRole('button', { name: 'Use this text' })[0])
+    await userEvent.type(screen.getByLabelText('Paste job description'), long)
+    await userEvent.click(screen.getByRole('button', { name: 'Use this text' }))
+    const type = await screen.findByRole('radiogroup', { name: 'Interview type' })
+    await userEvent.click(within(type).getByRole('radio', { name: 'Behavioral' }))
+    const coding = screen.getByRole('radiogroup', { name: 'Coding problems' })
+    expect(screen.getByRole('radiogroup', { name: 'System design' })).toBeInTheDocument()
+    expect(screen.getAllByText('Only Behavioral questions unless you pick a number.')).toHaveLength(2)
+    await userEvent.click(screen.getByRole('radio', { name: '30 min' }))
+    await userEvent.click(within(coding).getByRole('radio', { name: '2' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Build my interview plan' }))
+    await screen.findByText('stop here')
+    expect(created).toMatchObject({ focus: 'behavioral', coding_problems: 2 })
+    expect(created).not.toHaveProperty('system_design')
   })
 })
