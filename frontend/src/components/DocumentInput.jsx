@@ -5,7 +5,8 @@ const LABELS = { resume: 'Your résumé', job_description: 'Job description' }
 const ICONS = { resume: '📄', job_description: '💼' }
 
 // Pick a saved document, upload a PDF/.txt, or paste text. Calls onChange(docId).
-export default function DocumentInput({ kind, value, onChange }) {
+// `optional`: nothing is picked until the user picks (onChange(null) = none).
+export default function DocumentInput({ kind, value, onChange, optional = false, hint = '' }) {
   const [docs, setDocs] = useState([])
   const [mode, setMode] = useState('paste')
   const [text, setText] = useState('')
@@ -18,7 +19,7 @@ export default function DocumentInput({ kind, value, onChange }) {
         setDocs(data.documents)
         if (data.documents.length) {
           setMode('saved')
-          onChange(data.documents[0].id)
+          if (!optional) onChange(data.documents[0].id)
         }
       })
       .catch(() => {})
@@ -66,10 +67,23 @@ export default function DocumentInput({ kind, value, onChange }) {
     if (!busy) send(e.dataTransfer.files?.[0])
   }
 
+  // Keep it past the 30 days, until the user deletes it.
+  async function keep() {
+    setError('')
+    setBusy(true)
+    try {
+      const { document } = await api(`/documents/${value}/save`, { method: 'POST' })
+      setDocs((all) => all.map((d) => (d.id === document.id ? { ...d, ...document } : d)))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function remove() {
     const doc = docs.find((d) => d.id === value)
     if (!doc) return
-    const what = kind === 'resume' ? 'résumé' : 'job posting'
     if (!window.confirm(`Delete the saved ${what} "${doc.title}"? Past interview reports stay.`)) return
     setError('')
     setBusy(true)
@@ -77,7 +91,7 @@ export default function DocumentInput({ kind, value, onChange }) {
       await api(`/documents/${doc.id}`, { method: 'DELETE' })
       const rest = docs.filter((d) => d.id !== doc.id)
       setDocs(rest)
-      onChange(rest[0]?.id ?? null)
+      onChange(optional ? null : (rest[0]?.id ?? null))
       if (!rest.length) setMode('paste')
     } catch (err) {
       setError(err.message)
@@ -86,11 +100,9 @@ export default function DocumentInput({ kind, value, onChange }) {
     }
   }
 
-  const tabs = [
-    ...(docs.length ? [['saved', 'Saved']] : []),
-    ['paste', 'Paste'],
-    ['upload', 'Upload file'],
-  ]
+  const current = docs.find((d) => d.id === value)
+  const what = kind === 'resume' ? 'résumé' : 'job posting'
+  const tabs = [...(docs.length ? [['saved', 'Saved']] : []), ['paste', 'Paste'], ['upload', 'Upload file']]
 
   return (
     <fieldset className="card p-5">
@@ -98,6 +110,7 @@ export default function DocumentInput({ kind, value, onChange }) {
       <p aria-hidden="true" className="mb-3 flex items-center gap-2 font-semibold text-slate-900">
         <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-100 text-base">{ICONS[kind]}</span>
         {LABELS[kind]}
+        {hint && <span className="text-sm font-normal text-slate-400">{hint}</span>}
       </p>
       <div className="mb-4 inline-flex gap-1 rounded-full bg-slate-100 p-1 text-sm" role="tablist">
         {tabs.map(([key, label]) => (
@@ -117,28 +130,47 @@ export default function DocumentInput({ kind, value, onChange }) {
       </div>
 
       {mode === 'saved' && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             aria-label={`Saved ${LABELS[kind].toLowerCase()}`}
             value={value ?? ''}
-            onChange={(e) => onChange(Number(e.target.value))}
+            onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
             className="field min-w-0 flex-1"
           >
+            {optional && <option value="">None</option>}
             {docs.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.title}
               </option>
             ))}
           </select>
+          {current && !current.saved && (
+            <button
+              type="button"
+              onClick={keep}
+              disabled={busy}
+              aria-label={`Save this ${what}`}
+              className="btn-link shrink-0 text-sm"
+            >
+              Save
+            </button>
+          )}
           <button
             type="button"
             onClick={remove}
             disabled={busy || !value}
-            aria-label={`Delete this saved ${kind === 'resume' ? 'résumé' : 'job posting'}`}
+            aria-label={`Delete this saved ${what}`}
             className="btn-link shrink-0 text-sm hover:text-red-600"
           >
             Delete
           </button>
+          {current && (
+            <p className="w-full text-xs text-slate-500">
+              {current.saved
+                ? 'Saved: kept until you delete it.'
+                : `Auto-deletes on ${new Date(current.expires_at).toLocaleDateString()} unless you save it.`}
+            </p>
+          )}
         </div>
       )}
 
@@ -183,7 +215,11 @@ export default function DocumentInput({ kind, value, onChange }) {
             className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-accent-500 text-white shadow-md shadow-brand-500/30"
           >
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </span>
           <span className="btn-primary px-4 py-2 text-sm">{busy ? 'Uploading…' : 'Choose file'}</span>

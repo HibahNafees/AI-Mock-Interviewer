@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { IconTile } from '../components/Art'
+import DocumentInput from '../components/DocumentInput'
 import Recorder from '../components/Recorder'
 import { api } from '../lib/api'
 import { canRecord, MAX_ANSWER_MS } from '../lib/recording'
@@ -11,10 +12,9 @@ const BLANK = { question: '', answer: '', input_mode: 'text', duration_ms: null 
 export function NoRecordingsNotice() {
   return (
     <p role="note" className="rounded-2xl bg-navy-50 p-4 text-sm text-navy-800 ring-1 ring-navy-100">
-      <span className="font-bold">Recall only, never recordings.</span> Recording an interviewer
-      without their consent is illegal in some places, so this app never accepts audio or video of
-      a real interview. Write (or say) what you remember: spoken recall is transcribed and the clip
-      is discarded; only your text is saved.
+      <span className="font-bold">Recall only, never recordings.</span> Recording an interviewer without their consent
+      is illegal in some places, so this app never accepts audio or video of a real interview. Write (or say) what you
+      remember: spoken recall is transcribed and the clip is discarded; only your text is saved.
     </p>
   )
 }
@@ -97,17 +97,23 @@ export default function Debrief() {
   const [role, setRole] = useState('')
   const [company, setCompany] = useState('')
   const [round, setRound] = useState('')
-  const [jdId, setJdId] = useState('')
-  const [jds, setJds] = useState([])
+  const [jdId, setJdId] = useState(null)
   const [items, setItems] = useState([{ ...BLANK }])
   const [past, setPast] = useState([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
+  async function removeDebrief(d) {
+    if (!window.confirm(`Delete the debrief "${d.role}"? Its report goes with it.`)) return
+    try {
+      await api(`/debriefs/${d.id}`, { method: 'DELETE' })
+      setPast((all) => all.filter((x) => x.id !== d.id))
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   useEffect(() => {
-    api('/documents?kind=job_description')
-      .then((d) => setJds(d.documents ?? []))
-      .catch(() => {})
     api('/debriefs')
       .then((d) => setPast(d.debriefs ?? []))
       .catch(() => {})
@@ -126,7 +132,7 @@ export default function Debrief() {
           role,
           company: company || null,
           round: round || null,
-          jd_id: jdId ? Number(jdId) : null,
+          jd_id: jdId,
           items: items.filter((i) => i.question.trim().length >= 3 && i.answer.trim()),
         },
       })
@@ -144,8 +150,8 @@ export default function Debrief() {
           <p className="eyebrow">Post-interview debrief</p>
           <h1 className="mt-1 text-3xl font-extrabold">How did the real one go?</h1>
           <p className="mt-2 max-w-2xl text-slate-600">
-            Recall the questions and your answers. You'll get scores, stronger versions, and the
-            questions the next round will likely ask, ready to practice.
+            Recall the questions and your answers. You'll get scores, stronger versions, and the questions the next
+            round will likely ask, ready to practice.
           </p>
         </div>
         <IconTile tone="navy" className="hidden h-14 w-14 text-2xl sm:grid">
@@ -159,7 +165,13 @@ export default function Debrief() {
         <div className="card grid gap-4 p-5 sm:grid-cols-3">
           <label className="block text-sm font-medium text-slate-700">
             Role
-            <input value={role} onChange={(e) => setRole(e.target.value)} required className="field mt-1" placeholder="Backend Engineer" />
+            <input
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              required
+              className="field mt-1"
+              placeholder="Backend Engineer"
+            />
           </label>
           <label className="block text-sm font-medium text-slate-700">
             Company <span className="font-normal text-slate-400">(optional)</span>
@@ -167,22 +179,21 @@ export default function Debrief() {
           </label>
           <label className="block text-sm font-medium text-slate-700">
             Round <span className="font-normal text-slate-400">(optional)</span>
-            <input value={round} onChange={(e) => setRound(e.target.value)} className="field mt-1" placeholder="Phone screen" />
+            <input
+              value={round}
+              onChange={(e) => setRound(e.target.value)}
+              className="field mt-1"
+              placeholder="Phone screen"
+            />
           </label>
-          {jds.length > 0 && (
-            <label className="block text-sm font-medium text-slate-700 sm:col-span-3">
-              Job description <span className="font-normal text-slate-400">(optional, scores against what the job needs)</span>
-              <select value={jdId} onChange={(e) => setJdId(e.target.value)} className="field mt-1">
-                <option value="">None</option>
-                {jds.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
         </div>
+        <DocumentInput
+          kind="job_description"
+          value={jdId}
+          onChange={setJdId}
+          optional
+          hint="(optional: scores against what the job needs)"
+        />
 
         <ol className="space-y-4">
           {items.map((item, i) => (
@@ -218,8 +229,11 @@ export default function Debrief() {
           <h2 className="text-xl font-bold">Past debriefs</h2>
           <ul className="card mt-3 divide-y divide-line-soft overflow-hidden">
             {past.map((d) => (
-              <li key={d.id}>
-                <Link to={`/report/${d.session_id}`} className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-brand-50/60">
+              <li key={d.id} className="flex items-center hover:bg-brand-50/60">
+                <Link
+                  to={`/report/${d.session_id}`}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-3 py-4 pl-5"
+                >
                   <span>
                     <span className="font-semibold text-ink">{d.role}</span>
                     <span className="text-sm text-slate-500">
@@ -229,6 +243,14 @@ export default function Debrief() {
                   </span>
                   <span className="chip bg-navy-50 text-navy-700">Debrief</span>
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => removeDebrief(d)}
+                  aria-label={`Delete the debrief ${d.role}`}
+                  className="btn-link shrink-0 px-5 text-sm hover:text-red-600"
+                >
+                  Delete
+                </button>
               </li>
             ))}
           </ul>

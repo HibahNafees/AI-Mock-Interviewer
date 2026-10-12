@@ -276,6 +276,15 @@ def practice_next_round(
     return session
 
 
+def _jd_info(d: Debrief) -> dict | None:
+    """The job description the debrief was scored against, while it still exists."""
+    session = db.session.get(Session, d.session_id) if d.session_id else None
+    jd = db.session.get(Document, session.jd_id) if session and session.jd_id else None
+    if jd is None or (jd.expires_at and jd.expires_at <= utcnow()):
+        return None
+    return {"id": jd.id, "title": jd.title, "saved": jd.expires_at is None}
+
+
 def debrief_dict(d: Debrief) -> dict:
     return {
         "id": d.id,
@@ -285,5 +294,6 @@ def debrief_dict(d: Debrief) -> dict:
         "session_id": d.session_id,
         "items": len(d.recalled_qa_json or []),
         "next_round": (d.analysis_json or {}).get("next_round") or [],
+        "jd": _jd_info(d),
         "created_at": d.created_at.isoformat() + "Z",
     }

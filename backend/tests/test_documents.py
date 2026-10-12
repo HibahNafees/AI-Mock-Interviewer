@@ -63,3 +63,20 @@ def test_other_users_documents_are_hidden(client, auth, signup):
     assert client.get(f"/api/documents/{doc_id}", headers=headers).status_code == 404
     assert client.delete(f"/api/documents/{doc_id}", headers=headers).status_code == 404
     assert client.delete(f"/api/documents/{doc_id}", headers=auth).status_code == 204
+
+
+def test_saving_a_document_keeps_it_past_30_days(client, auth, docs, signup):
+    doc = client.get(f"/api/documents/{docs['jd_id']}", headers=auth).get_json()
+    assert doc["document"]["expires_at"] and not doc["document"]["saved"]
+    r = client.post(f"/api/documents/{docs['jd_id']}/save", headers=auth)
+    assert r.status_code == 200
+    assert (
+        r.get_json()["document"]["saved"]
+        and r.get_json()["document"]["expires_at"] is None
+    )
+    token = signup("eve@example.com").get_json()["access_token"]
+    other = {"Authorization": f"Bearer {token}"}
+    assert (
+        client.post(f"/api/documents/{docs['jd_id']}/save", headers=other).status_code
+        == 404
+    )

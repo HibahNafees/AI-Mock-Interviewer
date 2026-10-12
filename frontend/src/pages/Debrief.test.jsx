@@ -84,7 +84,14 @@ describe('debrief', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Score my debrief' }))
     expect(await screen.findByText('Backend Engineer at Fintech Co')).toBeInTheDocument()
     const body = JSON.parse(calls.find((c) => c.key === 'POST /api/debriefs').opts.body)
-    expect(body.items).toEqual([{ question: 'Tell me about yourself.', answer: 'I build payment APIs at Acme.', input_mode: 'text', duration_ms: null }])
+    expect(body.items).toEqual([
+      {
+        question: 'Tell me about yourself.',
+        answer: 'I build payment APIs at Acme.',
+        input_mode: 'text',
+        duration_ms: null,
+      },
+    ])
     expect(body.company).toBe('Fintech Co')
   })
 
@@ -93,7 +100,10 @@ describe('debrief', () => {
       'GET /api/auth/me': [200, { user: ADA }],
       'GET /api/sessions/30/report': [200, { report: REPORT }],
       'POST /api/debriefs/4/practice': [201, { session: { id: 31 } }],
-      'GET /api/sessions/31': [200, { session: { id: 31, status: 'planned', plan: { sections: [], reserve: [] }, transcript: [], analysis: {} } }],
+      'GET /api/sessions/31': [
+        200,
+        { session: { id: 31, status: 'planned', plan: { sections: [], reserve: [] }, transcript: [], analysis: {} } },
+      ],
     })
     renderAt('/report/30')
     expect(await screen.findByText('Walk me through a schema you designed.')).toBeInTheDocument()
@@ -111,5 +121,66 @@ describe('debrief', () => {
     renderAt('/report/30')
     await userEvent.click(await screen.findByRole('button', { name: 'Predict the next round' }))
     expect(await screen.findByText('Walk me through a schema you designed.')).toBeInTheDocument()
+  })
+
+  it('takes a pasted job description and scores against it', async () => {
+    const calls = respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/documents?kind=job_description': [200, { documents: [] }],
+      'GET /api/debriefs': [200, { debriefs: [] }],
+      'POST /api/documents': [
+        201,
+        { document: { id: 9, title: 'Backend role', saved: false, expires_at: '2026-11-11T00:00:00Z' } },
+      ],
+      'POST /api/debriefs': [201, { debrief: { id: 4, session_id: 30 } }],
+      'GET /api/sessions/30/report': [200, { report: REPORT }],
+    })
+    renderAt('/debrief')
+    await userEvent.type(await screen.findByLabelText('Role'), 'Backend Engineer')
+    await userEvent.type(screen.getByLabelText('Paste job description'), 'Backend Engineer at a fintech. '.repeat(3))
+    await userEvent.click(screen.getByRole('button', { name: 'Use this text' }))
+    expect(await screen.findByRole('button', { name: 'Save this job posting' })).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('What they asked'), 'Tell me about yourself.')
+    await userEvent.type(screen.getByLabelText(/What you answered/), 'I build payment APIs at Acme.')
+    await userEvent.click(screen.getByRole('button', { name: 'Score my debrief' }))
+    await screen.findByText('Backend Engineer at Fintech Co')
+    const body = JSON.parse(calls.find((c) => c.key === 'POST /api/debriefs').opts.body)
+    expect(body.jd_id).toBe(9)
+  })
+
+  it('deletes a past debrief', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const calls = respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/documents?kind=job_description': [200, { documents: [] }],
+      'GET /api/debriefs': [200, { debriefs: [REPORT.debrief] }],
+      'DELETE /api/debriefs/4': [200, { ok: true }],
+    })
+    renderAt('/debrief')
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete the debrief Backend Engineer' }))
+    await vi.waitFor(() => expect(screen.queryByText('Past debriefs')).not.toBeInTheDocument())
+    expect(calls.some((c) => c.key === 'DELETE /api/debriefs/4')).toBe(true)
+    window.confirm.mockRestore()
+  })
+
+  it('after a debrief: save its job posting or delete the debrief', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const jd = { id: 9, title: 'Backend role', saved: false }
+    const calls = respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/30/report': [200, { report: { ...REPORT, debrief: { ...REPORT.debrief, jd } } }],
+      'POST /api/documents/9/save': [200, { document: { ...jd, saved: true } }],
+      'DELETE /api/debriefs/4': [200, { ok: true }],
+      'GET /api/documents?kind=job_description': [200, { documents: [] }],
+      'GET /api/debriefs': [200, { debriefs: [] }],
+    })
+    renderAt('/report/30')
+    await userEvent.click(await screen.findByRole('button', { name: 'Save job posting' }))
+    expect(await screen.findByText(/saved until you delete it/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete job posting' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Delete debrief' }))
+    expect(await screen.findByText('How did the real one go?')).toBeInTheDocument()
+    expect(calls.some((c) => c.key === 'DELETE /api/debriefs/4')).toBe(true)
+    window.confirm.mockRestore()
   })
 })

@@ -69,6 +69,9 @@ def shared_report(token: str):
         return jsonify(error="This link was turned off or never existed"), 404
     data = reports.report_dict(db.session.get(Session, report.session_id), report)
     data.pop("share_token", None)
+    if data.get("debrief"):
+        # Which saved job posting it was is the owner's business.
+        data["debrief"] = {**data["debrief"], "jd": None}
     return jsonify(report={**data, "shared": True})
 
 

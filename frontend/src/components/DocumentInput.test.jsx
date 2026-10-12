@@ -61,7 +61,12 @@ describe('saved documents', () => {
         return {
           ok: true,
           status: 200,
-          json: async () => ({ documents: [{ id: 1, title: 'Acme backend' }, { id: 2, title: 'Data role' }] }),
+          json: async () => ({
+            documents: [
+              { id: 1, title: 'Acme backend' },
+              { id: 2, title: 'Data role' },
+            ],
+          }),
         }
       }),
     )
@@ -74,5 +79,46 @@ describe('saved documents', () => {
     expect(deleted).toEqual(['/api/documents/1'])
     expect(screen.queryByRole('option', { name: 'Acme backend' })).not.toBeInTheDocument()
     window.confirm.mockRestore()
+  })
+
+  it('saves a document so it is kept past 30 days', async () => {
+    const posted = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url, opts = {}) => {
+        if (opts.method === 'POST') {
+          posted.push(url)
+          return { ok: true, status: 200, json: async () => ({ document: { id: 1, saved: true, expires_at: null } }) }
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            documents: [{ id: 1, title: 'Acme backend', saved: false, expires_at: '2026-11-11T00:00:00Z' }],
+          }),
+        }
+      }),
+    )
+    render(<DocumentInput kind="job_description" value={1} onChange={vi.fn()} />)
+    expect(await screen.findByText(/Auto-deletes on/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Save this job posting' }))
+    expect(await screen.findByText('Saved: kept until you delete it.')).toBeInTheDocument()
+    expect(posted).toEqual(['/api/documents/1/save'])
+    expect(screen.queryByRole('button', { name: 'Save this job posting' })).not.toBeInTheDocument()
+  })
+
+  it('optional: picks nothing until the user does', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ documents: [{ id: 1, title: 'Acme backend' }] }),
+      })),
+    )
+    const onChange = vi.fn()
+    render(<DocumentInput kind="job_description" value={null} onChange={onChange} optional />)
+    expect(await screen.findByRole('option', { name: 'None' })).toBeInTheDocument()
+    expect(onChange).not.toHaveBeenCalled()
   })
 })

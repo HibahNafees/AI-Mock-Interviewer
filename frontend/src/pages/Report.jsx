@@ -612,6 +612,78 @@ function ThankYou({ sessionId }) {
   )
 }
 
+// After a debrief: it's kept until deleted; its job posting can be saved or deleted.
+function DebriefKeep({ debrief }) {
+  const navigate = useNavigate()
+  const [jd, setJd] = useState(debrief.jd)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function act(confirmText, call) {
+    if (confirmText && !window.confirm(confirmText)) return
+    setError('')
+    setBusy(true)
+    try {
+      await call()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const removeDebrief = () =>
+    act('Delete this debrief and its report? This cannot be undone.', async () => {
+      await api(`/debriefs/${debrief.id}`, { method: 'DELETE' })
+      navigate('/debrief')
+    })
+  const saveJd = () =>
+    act('', async () => {
+      await api(`/documents/${jd.id}/save`, { method: 'POST' })
+      setJd({ ...jd, saved: true })
+    })
+  const removeJd = () =>
+    act(`Delete the job posting "${jd.title}"? This debrief stays.`, async () => {
+      await api(`/documents/${jd.id}`, { method: 'DELETE' })
+      setJd(null)
+    })
+
+  return (
+    <div className="card space-y-3 p-6">
+      <p className="eyebrow">Keep or delete</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-600">This debrief is saved under Past debriefs until you delete it.</p>
+        <button type="button" onClick={removeDebrief} disabled={busy} className="btn-secondary hover:text-red-600">
+          Delete debrief
+        </button>
+      </div>
+      {jd && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-soft pt-3">
+          <p className="text-sm text-slate-600">
+            Job posting <span className="font-medium text-ink">{jd.title}</span>
+            {jd.saved ? ': saved until you delete it.' : ': auto-deletes after 30 days unless you save it.'}
+          </p>
+          <span className="flex gap-2">
+            {!jd.saved && (
+              <button type="button" onClick={saveJd} disabled={busy} className="btn-secondary">
+                Save job posting
+              </button>
+            )}
+            <button type="button" onClick={removeJd} disabled={busy} className="btn-secondary hover:text-red-600">
+              Delete job posting
+            </button>
+          </span>
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-red-600">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function NextRound({ debrief }) {
   const navigate = useNavigate()
   const [next, setNext] = useState(debrief.next_round)
@@ -1111,6 +1183,7 @@ function ReportView({ report, id, onAttempt, build, busy, error, shared = false 
       {report.status === 'ready' && total > 0 && !shared && <ThankYou sessionId={report.session_id} />}
       {report.status === 'ready' && total > 0 && <Summary report={report} />}
       {report.debrief && report.status === 'ready' && !shared && <NextRound debrief={report.debrief} />}
+      {report.debrief && !shared && <DebriefKeep debrief={report.debrief} />}
 
       <div className="space-y-4">
         {report.questions.map((q, i) => (

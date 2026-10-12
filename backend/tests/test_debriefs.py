@@ -130,3 +130,36 @@ def test_spoken_recall_is_transcribed_not_stored(client, auth, fire):
     )
     assert r.status_code == 200 and r.get_json()["text"]
     assert fire.audio  # sent to Fire for transcription only
+
+
+def test_debrief_shows_its_job_description_to_save_or_delete(client, auth, docs, fire):
+    r = debrief(client, auth, jd_id=docs["jd_id"]).get_json()["debrief"]
+    assert r["jd"]["id"] == docs["jd_id"] and r["jd"]["saved"] is False
+    sid = r["session_id"]
+
+    saved = client.post(f"/api/documents/{docs['jd_id']}/save", headers=auth)
+    assert saved.status_code == 200 and saved.get_json()["document"]["saved"]
+    report = client.get(f"/api/sessions/{sid}/report", headers=auth).get_json()
+    assert report["report"]["debrief"]["jd"]["saved"] is True
+
+    # A shared link doesn't say which saved job posting it was.
+    token = client.post(f"/api/sessions/{sid}/report/share", headers=auth).get_json()[
+        "share_token"
+    ]
+    shared = client.get(f"/api/shared/reports/{token}").get_json()["report"]
+    assert shared["debrief"]["jd"] is None
+
+    # Deleting the posting keeps the debrief.
+    assert (
+        client.delete(f"/api/documents/{docs['jd_id']}", headers=auth).status_code
+        == 204
+    )
+    left = client.get("/api/debriefs", headers=auth).get_json()["debriefs"]
+    assert len(left) == 1 and left[0]["jd"] is None
+
+
+def test_debrief_can_be_deleted(client, auth, fire):
+    d = debrief(client, auth).get_json()["debrief"]
+    assert client.delete(f"/api/debriefs/{d['id']}", headers=auth).status_code == 200
+    assert client.get("/api/debriefs", headers=auth).get_json()["debriefs"] == []
+    assert db.session.get(Session, d["session_id"]) is None

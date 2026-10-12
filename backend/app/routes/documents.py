@@ -26,6 +26,7 @@ def document_dict(doc: Document, full: bool = False) -> dict:
         "chars": len(doc.raw_text),
         "preview": doc.raw_text[:300],
         "expires_at": doc.expires_at.isoformat() + "Z" if doc.expires_at else None,
+        "saved": doc.expires_at is None,
         "created_at": doc.created_at.isoformat() + "Z",
     }
     if full:
@@ -162,6 +163,18 @@ def questions_to_ask(doc_id: int):
         return jsonify(error="Job description not found"), 404
     limits.check_budget()
     return jsonify(coach=coach.questions_to_ask(current_user_id(), jd))
+
+
+@bp.post("/<int:doc_id>/save")
+@jwt_required()
+def save_document(doc_id: int):
+    """Keep a document past its 30 days, until the user deletes it."""
+    doc = owned_document(doc_id)
+    if doc is None:
+        return jsonify(error="Document not found"), 404
+    doc.expires_at = None
+    db.session.commit()
+    return jsonify(document=document_dict(doc))
 
 
 @bp.delete("/<int:doc_id>")
