@@ -261,6 +261,23 @@ class ScoreOut(BaseModel):
     confidence: Literal["high", "medium", "low"] = "medium"
     confidence_note: str = Field(default="", max_length=300)
 
+    @model_validator(mode="before")
+    @classmethod
+    def trim_overlong(cls, data):
+        """Cut lists and texts that run past their limits instead of rejecting the
+        whole score: one long list failed a report twice (T-93)."""
+        if not isinstance(data, dict):
+            return data
+        for name, f in cls.model_fields.items():
+            limit = next(
+                (m.max_length for m in f.metadata if getattr(m, "max_length", None)),
+                None,
+            )
+            v = data.get(name)
+            if limit and isinstance(v, (list, str)) and len(v) > limit:
+                data[name] = v[:limit]
+        return data
+
     @model_validator(mode="after")
     def some_criterion_scored(self, info: ValidationInfo) -> "ScoreOut":
         if all(c.score is None for c in self.criteria):
