@@ -1,5 +1,6 @@
 """JD analysis, question plan and rubric (Fire chat), plus plan bookkeeping."""
 
+import random
 import re
 from typing import Literal
 
@@ -181,6 +182,16 @@ def similar(a: str, b: str, threshold: float = 0.6) -> bool:
 # How many earlier hands-on questions the plan is told to avoid (T-90).
 RECENT_SESSIONS = 10
 RECENT_HANDS_ON = 15
+
+
+GIST_WORDS = 14
+
+
+def gist(question: str) -> str:
+    """The first sentence of a problem, at most GIST_WORDS words."""
+    first = re.split(r"(?<=[.?!])\s", question.strip(), maxsplit=1)[0]
+    words = first.split()
+    return " ".join(words[:GIST_WORDS]) + (" ..." if len(words) > GIST_WORDS else "")
 
 
 def recent_hands_on(user_id: int) -> list[str]:
@@ -387,6 +398,52 @@ MAX_HANDS_ON = 10
 OTHER_MIN = 2
 
 
+# One technique per coding problem, picked here: a list in the prompt alone still
+# got single-loop exercises at every level (T-101). Random picks also vary the
+# problems between sessions (T-90).
+CODING_TECHNIQUES = {
+    "entry": [
+        "a hash map to count or group items",
+        "a set to find duplicates or missing items",
+        "a stack to match brackets or undo steps",
+        "parsing strings into fields, with bad input to handle",
+        "two passes over a list with tricky edge cases",
+    ],
+    "mid": [
+        "two pointers",
+        "a sliding window",
+        "sorting, then one sweep",
+        "merging overlapping intervals",
+        "a monotonic stack (next greater or smaller item)",
+        "a heap for the top k",
+        "breadth-first search",
+        "prefix sums",
+    ],
+    "senior": [
+        "a class with O(1) get/put and eviction (LRU cache)",
+        "a rate limiter class over time windows",
+        "ordering tasks by their dependencies, detecting cycles",
+        "a scheduler that runs events in time order with a heap",
+        "merging k sorted streams",
+        "an in-memory key-value store with nested transactions",
+        "a sliding-window aggregate over a stream of events",
+    ],
+}
+
+
+def coding_rule(difficulty: str, count: int) -> str:
+    """The plan prompt's line naming the technique each coding problem needs."""
+    pool = CODING_TECHNIQUES.get(difficulty, CODING_TECHNIQUES["mid"])
+    picks = random.sample(pool, min(max(count, 1), len(pool)))
+    return (
+        "Coding problems, in order: "
+        + "; ".join(f"problem {i} needs {t}" for i, t in enumerate(picks, 1))
+        + ". Set each in this job's domain, but the technique must be essential (a "
+        "problem one simple loop solves doesn't count), and each is a different task. "
+        "Never name the technique in the question: finding it is part of the test."
+    )
+
+
 def hands_on_limit(duration_min: int, only: bool = False) -> int:
     """How many coding problems fit when the plan decides (about 8 minutes each, at
     most 3). `only`: the whole interview is coding, so at least one."""
@@ -536,11 +593,13 @@ def build_plan(
             else f'Don\'t use the "{module}" module.'
         )
     avoid = recent_hands_on(user_id) if any(m in HANDS_ON_MIN for m in allowed) else []
+    if "coding" in allowed:
+        rules.append(coding_rule(difficulty, chosen.get("coding") or 3))
     if avoid:
+        # Only the gist: full texts read as examples and got copied (T-101).
         rules.append(
-            "The candidate already practised these problems; give different ones "
-            "(a different task, not a reworded one):\n"
-            + "\n".join(f"- {q}" for q in avoid)
+            "The candidate already practised these; don't give them again or a "
+            "variant of them:\n" + "\n".join(f"- {gist(q)}" for q in avoid)
         )
     if any(m in HANDS_ON_MIN for m in allowed):
         rules.append(
@@ -564,7 +623,12 @@ def build_plan(
         module_guidance=modules.plan_guidance(allowed),
         focus_rule=focus_rule,
         max_sections=str(section_limit(duration_min)),
-        question_count=str(question_target(duration_min)),
+        # Only hands-on modules with chosen counts: the count is the total (T-102).
+        question_count=str(
+            sum(chosen[m] for m in allowed)
+            if set(allowed) <= set(chosen)
+            else question_target(duration_min)
+        ),
         hands_on="\n".join(rules) or "",
         pressure_rule=pressure.plan_rule(pressure_level),
         roleplay_example=ROLEPLAY_EXAMPLE if "roleplay" in allowed else "",

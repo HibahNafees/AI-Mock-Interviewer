@@ -67,6 +67,8 @@ def test_coding_and_system_design_are_planned_with_their_guidance(
         c["prompt"] for c in fire.calls if "question plan" in c["prompt"]
     )
     assert "code editor" in plan_prompt or "programming problem" in plan_prompt
+    # Problems scale with the level, never a one-liner (T-101).
+    assert "Below entry level is never acceptable" in plan_prompt
 
 
 def test_code_reaches_the_interviewer_and_is_saved(client, auth, docs, fire):
@@ -116,6 +118,7 @@ def test_scorer_judges_the_code_and_the_sketch(app, client, auth, docs, fire):
     assert len(scores) == 2
     assert "bucket[user].take()" in scores[0]
     assert "Judge the code shown" in scores[0]
+    assert "Judge against the main question" in scores[0]  # T-100
     assert "[Whiteboard sketch, described as text]" in scores[1]
     assert "API → Redis" in scores[1]
     exchange = report["report"]["questions"][0]["exchange"][0]
@@ -351,7 +354,7 @@ def test_next_plan_avoids_earlier_coding_problems(client, auth, docs, fire):
     fire.calls.clear()
     assert client.post("/api/sessions", json=body, headers=auth).status_code == 201
     prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
-    assert "already practised these problems" in prompt
+    assert "already practised these" in prompt
     assert "- Reverse a list." in prompt and "- Find duplicates." in prompt
     # Résumé questions aren't hands-on, so they aren't listed.
     assert "- Walk me through Acme." not in prompt
@@ -515,3 +518,48 @@ def test_single_interview_type_without_hands_on_stays_single(client, auth, docs,
     assert (
         '"coding"' not in prompt.split("Format modules you may use:")[1].split("\n")[0]
     )
+
+
+def test_coding_only_plan_asks_for_just_the_chosen_problems(client, auth, docs, fire):
+    # 15 minutes, one problem: "about 4 questions" contradicted "exactly 1" (T-102).
+    fire.plan = {
+        "sections": [
+            {
+                "name": "Coding",
+                "module": "coding",
+                "minutes": 15,
+                "questions": ["Merge two sorted lists."],
+            }
+        ],
+        "reserve": [],
+    }
+    r = client.post(
+        "/api/sessions",
+        json={**docs, "duration_min": 15, "focus": "coding", "coding_problems": 1},
+        headers=auth,
+    )
+    assert r.status_code == 201, r.get_json()
+    prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
+    assert "About 1 main questions in total" in prompt
+
+
+def test_each_coding_problem_gets_a_technique_for_its_level(client, auth, docs, fire):
+    # A list of techniques alone still got one-loop problems (T-101).
+    session, _ = coding_session(client, auth, docs, fire)
+    prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
+    line = next(l for l in prompt.splitlines() if l.startswith("Coding problems, in"))
+    picks = [p.split(" needs ")[1] for p in line.split(". Set each")[0].split("; ")]
+    assert picks and set(picks) <= set(planning.CODING_TECHNIQUES["mid"])
+    assert "Never name the technique" in line
+
+
+def test_earlier_problems_are_listed_by_their_gist():
+    # Full texts with examples were copied into the new plan (T-101).
+    long = (
+        "Write a Python function that takes a list of refund requests and returns "
+        "the total amount per status. For example, given [...] return {...}."
+    )
+    assert planning.gist(long) == (
+        "Write a Python function that takes a list of refund requests and returns the ..."
+    )
+    assert planning.gist("Reverse a list.") == "Reverse a list."

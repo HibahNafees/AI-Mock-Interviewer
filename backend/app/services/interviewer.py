@@ -817,9 +817,10 @@ class IcebreakerReply(BaseModel):
     message: str = Field(min_length=1, max_length=300)
 
 
-# The app adds its own "Let's get started." after the reply (T-98).
+# The app adds its own "Let's get started." after the reply; any "let's ..." in small
+# talk is a transition to the questions (T-98).
 INTO_PLAN_RE = re.compile(
-    r"\s*(now,?\s*)?let'?s\s+(get started|get to it|begin|start|dive in|jump in)\b",
+    r"\s*((now|so|okay|ok|alright),?\s*)?let'?s\b",
     re.IGNORECASE,
 )
 

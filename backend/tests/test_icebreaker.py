@@ -108,7 +108,7 @@ def test_small_talk_reply_drops_questions_and_its_own_transition(
     sid = planned["id"]
     started(client, auth, sid)
     fire.small_talk_reply = (
-        "Glad to hear it. Coffee helps, doesn't it? Let's get started."
+        "Glad to hear it. Coffee helps, doesn't it? Let's dive into your experience."
     )
     r = answer(client, auth, sid, "Good, just had coffee.").get_json()
     planned_q = PLAN["sections"][0]["questions"][0]

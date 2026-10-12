@@ -120,6 +120,8 @@ def test_full_interview(client, auth, planned, fire):
     assert "Time left in the interview: about 10 minutes" in turn_prompt
     assert '"follow_up": null' in turn_prompt
     assert '"next_question": "How would you design a rate limiter?"' in turn_prompt
+    # An off-topic answer is steered back to the question asked (T-100).
+    assert "must not mention or ask about the different topic" in turn_prompt
 
 
 def test_disallowed_move_falls_back_to_plan(client, auth, planned, fire):
