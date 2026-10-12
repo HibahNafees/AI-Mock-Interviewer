@@ -16,5 +16,10 @@ Work through each point in four steps, reading EVERY candidate answer in the exc
 3. "covered": true only if the quote itself gives the thing in "needs", in any wording. Concrete instances count when the point asks for examples, and a described approach counts when the point asks how they would do something. It is false when the quote only names the topic ("identifying the bottlenecks" doesn't name a bottleneck), describes a different part of the story, or gives a plan or effort where the point asks for what actually happened.
 4. "fits": true if a strong answer to the main question (the first item) would cover this point; false if the point belongs to a different question or skill than the one asked.
 
+Then decide whether the candidate talked about what the main question asks about:
+- "named_subject": the specific thing the main question names, such as a project, product, system, employer or item from their résumé (for instance "building the refunds API"), or null when the question names nothing specific ("Tell me about a time you faced a challenge").
+- "story_subject": in a few words, what the candidate's story or answer is actually about.
+- "on_subject": false only when "named_subject" is not null and the candidate's story is about something else; true otherwise, including when the story is part of that subject.
+
 Return JSON with exactly this shape, one item per point, in the same order:
-{"points": [{"n": 1, "needs": "...", "quote": "exact words from the candidate", "covered": true, "fits": true}, {"n": 2, "needs": "...", "quote": null, "covered": false, "fits": true}]}
+{"points": [{"n": 1, "needs": "...", "quote": "exact words from the candidate", "covered": true, "fits": true}, {"n": 2, "needs": "...", "quote": null, "covered": false, "fits": true}], "named_subject": "... or null", "story_subject": "...", "on_subject": true | false}

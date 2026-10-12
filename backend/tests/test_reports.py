@@ -1325,6 +1325,62 @@ def test_failed_gap_check_keeps_the_scorers_verdicts(client, auth, planned, fire
     assert [p["point"] for p in points] == ["A measurable result", "Their own role"]
 
 
+def _relevant(score):
+    return {
+        **SCORE,
+        "criteria": [
+            {**c, "score": 4, "comment": "On topic."} if c["name"] == "Relevance" else c
+            for c in SCORE["criteria"]
+        ],
+    }
+
+
+def test_story_about_another_subject_caps_relevance(client, auth, planned, fire):
+    # T-114: asked about building the refunds API, they told a migration story.
+    fire.scores = [_relevant(SCORE)]
+    fire.gap_checks = [
+        {
+            "points": [],
+            "named_subject": "building the billing API",
+            "story_subject": "a table-locking migration",
+            "on_subject": False,
+        }
+    ]
+    e = _report_for(
+        client,
+        auth,
+        planned["id"],
+        "A migration I reviewed locked a table in production, so I rolled it back and wrote a runbook.",
+    )
+    relevance = next(c for c in e["criteria"] if c["name"] == "Relevance")
+    assert relevance["score"] == 2
+    assert "building the billing API" in relevance["comment"]
+    assert "table-locking migration" in relevance["comment"]
+    assert e["tips"][0].startswith("Tell a story about what the question names")
+    prompt = next(
+        c["prompt"] for c in fire.calls if "Check which points" in c["prompt"]
+    )
+    assert '"named_subject"' in prompt and '"on_subject"' in prompt
+
+
+@pytest.mark.parametrize(
+    "check",
+    [
+        {"points": [], "named_subject": None, "on_subject": False},
+        {"points": [], "named_subject": "the billing API", "on_subject": True},
+    ],
+)
+def test_relevance_stands_without_a_named_subject_mismatch(
+    client, auth, planned, fire, check
+):
+    fire.scores = [_relevant(SCORE)]
+    fire.gap_checks = [check]
+    e = _report_for(
+        client, auth, planned["id"], "My answer is about the billing API at Acme work."
+    )
+    assert next(c for c in e["criteria"] if c["name"] == "Relevance")["score"] == 4
+
+
 def test_gap_check_drops_gaps_that_dont_fit_the_question(client, auth, planned, fire):
     # T-108: advice for a different question isn't listed as a missing point.
     sid = planned["id"]

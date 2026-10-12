@@ -810,6 +810,19 @@ class GapVerdict(BaseModel):
 
 class GapCheckOut(BaseModel):
     points: list[GapVerdict] = Field(default_factory=list, max_length=12)
+    # T-114: the specific thing the main question asks about (a project, product or
+    # résumé item), what their story was about, and whether those are the same.
+    named_subject: str | None = Field(default=None, max_length=200)
+    story_subject: str | None = Field(default=None, max_length=200)
+    on_subject: bool = True
+
+
+# Relevance for a real story about something other than what the question named.
+OFF_SUBJECT_RELEVANCE = 2
+OFF_SUBJECT_TIP = (
+    "Tell a story about what the question names ({subject}); if you don't have "
+    "one, say so and offer the closest example."
+)
 
 
 # A gap-check quote must match the answers more closely than the scorer's.
@@ -818,14 +831,15 @@ GAP_QUOTE_MATCH = 0.8
 
 def check_gaps(
     user_id: int, exchange: list[dict], points: list[MissingPoint], answers: list[str]
-) -> None:
+) -> GapCheckOut | None:
     """Re-decide each missing point in a call of its own (T-72): the scorer, doing
     ten jobs at once, listed points the candidate made as gaps and credited others
     with unrelated quotes. A point counts as covered only with a quote that is
     really in the answers; if this call fails, the scorer's verdicts stand. A gap
-    that doesn't fit the main question is dropped, keeping at least one point."""
+    that doesn't fit the main question is dropped, keeping at least one point.
+    Returns the check (None if it didn't run) for its subject verdict (T-114)."""
     if not points:
-        return
+        return None
     prompt = render(
         "gap_check",
         exchange=[
@@ -840,7 +854,7 @@ def check_gaps(
         )
     except FireError as err:
         log.warning("Gap check failed, keeping the scorer's verdicts: %s", err)
-        return
+        return None
     verdicts = {v.n: v for v in out.points}
     for i, m in enumerate(points, 1):
         v = verdicts.get(i)
@@ -863,6 +877,26 @@ def check_gaps(
     }
     if unfit and len(unfit) < len(points):
         points[:] = [m for i, m in enumerate(points, 1) if i not in unfit]
+    return out
+
+
+def cap_off_subject(criteria: list[CriterionScore], check: GapCheckOut | None) -> bool:
+    """A real story about something other than what the question named (T-114: asked
+    about building the refunds API, they told a migration story; it scored 3.67)
+    gets Relevance at most 2. Only when the question names a specific subject."""
+    if check is None or check.on_subject or not (check.named_subject or "").strip():
+        return False
+    note = (
+        f"The question asked about {check.named_subject.strip().rstrip('.')}, "
+        f"but the story was about {(check.story_subject or 'something else').strip().rstrip('.')}."
+    )
+    for c in criteria:
+        if _norm(c.name) == "relevance" and c.score is not None:
+            if c.score > OFF_SUBJECT_RELEVANCE:
+                c.score = OFF_SUBJECT_RELEVANCE
+                c.comment = note
+            return True
+    return False
 
 
 def states_outcome(quote: str | None) -> bool:
@@ -1157,7 +1191,8 @@ def _evaluate(
             module=module,
         )
     verify_coverage(out, answers)
-    check_gaps(user_id, exchange, out.missing_points, answers)
+    gaps = check_gaps(user_id, exchange, out.missing_points, answers)
+    off_subject = not scenario and cap_off_subject(out.criteria, gaps)
     if not criteria:  # "Try again" must score the same criteria as before
         drop_untested(out.criteria, rubric, question or exchange[0]["interviewer"])
     score, rows = weighted_score(out.criteria, rubric)
@@ -1226,7 +1261,12 @@ def _evaluate(
             "summary": out.summary,
             "weak_moments": weak,
             "star": out.star.model_dump() if out.star else None,
-            "tips": [t for t in out.tips if t.strip()][:2],
+            "tips": (
+                [OFF_SUBJECT_TIP.format(subject=gaps.named_subject.strip().rstrip("."))]
+                if off_subject
+                else []
+            )
+            + [t for t in out.tips if t.strip()][: 1 if off_subject else 2],
             "strengths": [s for s in out.strengths if s.strip()][:3],
             "confidence": out.confidence,
             "confidence_note": out.confidence_note.strip(),

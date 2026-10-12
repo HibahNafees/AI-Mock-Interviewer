@@ -90,6 +90,8 @@ class TestConfig(Config):
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     SQLALCHEMY_ENGINE_OPTIONS: dict = {}
     FIRE_API_KEY = None
+    # Pinned: a raised budget in the dev .env must not change the tests (T-115).
+    FIRE_MONTHLY_BUDGET_USD = 1.0
     REPORTS_INLINE = True
     # Most tests start straight at the first planned question.
     ICEBREAKER = False
