@@ -211,6 +211,51 @@ def recent_hands_on(user_id: int) -> list[str]:
     return out[:RECENT_HANDS_ON]
 
 
+# The role-play parts of the plan prompt, shown only when role-play is allowed:
+# an always-shown role-play example made the planner write "Roleplay Scenario"
+# sections for nurses, teachers and electricians (T-92).
+ROLEPLAY_EXAMPLE = (
+    ',\n    {"name": "Role-play", "module": "roleplay", "minutes": 5, "questions": '
+    '["the character\'s first line, spoken in character"], "scenario": '
+    '{"character": "who you play", "setting": "where", "goal": "what the candidate '
+    'must achieve"}}'
+)
+ROLEPLAY_RULE = '- scenario: null for every module except roleplay. A roleplay section needs {"character": "...", "setting": "...", "goal": "..."} and "questions" holds exactly one plain string: the character\'s opening line, in character (the conversation continues live). The candidate plays their own job role (the support agent, the salesperson, the nurse); the character is the OTHER person (the customer, the buyer, the patient\'s relative). The opening line is what that other person says first to the candidate, e.g. "I ordered a blue jacket and got shoes. What are you going to do about it?". Never write the candidate\'s line, and never use the candidate\'s name or employer for the character. Never put the scenario object inside "questions". Give a roleplay section at least 4 minutes.'
+NO_ROLEPLAY_RULE = (
+    "- scenario: always null. Don't write role-plays or lines spoken in character; "
+    "ask every question as the interviewer."
+)
+ROLEPLAY_NAME_RE = re.compile(r"role[- ]?play", re.IGNORECASE)
+
+
+def fit_module(section: "PlanSectionOut", allowed: list[str]) -> None:
+    """Put a section the planner gave a module this job doesn't use into the
+    closest allowed one. A role-play becomes a "what would you do" scenario
+    question when scenarios fit the job (T-92)."""
+    if section.module in allowed:
+        return
+    if section.module == "roleplay" and "scenario" in allowed:
+        who = section.scenario.character if section.scenario else "someone"
+        line = section.questions[0].strip().strip('"')
+        section.module = "scenario"
+        section.scenario = None
+        section.questions = [
+            f'Imagine {who[:1].lower() + who[1:]} says to you: "{line}" '
+            "What would you do, and what would you say?"
+        ]
+        section.name = ROLEPLAY_NAME_RE.sub("", section.name).strip() or "Scenario"
+        return
+    by_name = [
+        m
+        for m in allowed
+        if m.replace("_", " ") in section.name.lower()
+        or modules.MODULES[m].label.lower() in section.name.lower()
+    ]
+    section.module = by_name[0] if by_name else allowed[0]
+    if section.module == "roleplay" and section.scenario is None:
+        section.module = modules.DEFAULT
+
+
 class BonusOut(BaseModel):
     section: str
     text: str = Field(min_length=1)
@@ -500,6 +545,8 @@ def build_plan(
         max_sections=str(section_limit(duration_min)),
         question_count=str(question_target(duration_min)),
         hands_on="\n".join(rules) or "",
+        roleplay_example=ROLEPLAY_EXAMPLE if "roleplay" in allowed else "",
+        roleplay_rule=ROLEPLAY_RULE if "roleplay" in allowed else NO_ROLEPLAY_RULE,
     )
     # Warmer than the default so the same résumé and job don't always get the same
     # problems (T-90).
@@ -520,10 +567,7 @@ def build_plan(
     user = db.session.get(User, user_id)
     names = candidate_names(resume.raw_text, user.name if user else "")
     for section in plan.sections:
-        if section.module not in allowed:
-            section.module = allowed[0]
-            if section.module == "roleplay" and section.scenario is None:
-                section.module = modules.DEFAULT
+        fit_module(section, allowed)
         fix_reversed_opener(section, names)
     plan.sections = normalize_minutes(plan.sections, duration_min)
     if focus == MIXED:
@@ -546,6 +590,9 @@ def build_rubric(
     )
     rubric = chat_json(user_id, prompt, RubricOut, SYSTEM)
     rubric.criteria = dedupe_criteria(rubric.criteria)
+    for c in rubric.criteria:
+        # "storytelling" -> "Storytelling" (T-94)
+        c.name = c.name[:1].upper() + c.name[1:]
     for c, w in zip(rubric.criteria, share_weights(rubric.criteria)):
         c.weight = round(w, 3)
     return rubric

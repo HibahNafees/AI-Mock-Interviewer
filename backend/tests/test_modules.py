@@ -377,3 +377,109 @@ def test_roleplay_only_plan_never_asks_a_reserve_question_in_character(
     assert turn["action"] == "wrap_up"
     assert turn["message"].startswith("Deal. Bye.")
     assert "Walk me through a deal." not in turn["message"]
+
+
+# ---- role-play for jobs that only use scenarios (T-92) ----------------------
+
+TEACHER_ANALYSIS = {
+    "role_title": "Grade 4 Classroom Teacher",
+    "field": "education",
+    "seniority": "mid",
+    "competencies": [
+        {"name": "Parent communication", "description": "Keeps families informed"}
+    ],
+    "formats": ["behavioral", "resume_deepdive", "scenario"],
+    "licensed_field": False,
+}
+
+
+def test_roleplay_section_becomes_a_scenario_question_when_roleplay_doesnt_fit(
+    client, auth, docs, fire
+):
+    fire.analysis = TEACHER_ANALYSIS
+    fire.plan = {
+        "sections": [
+            {**PLAN["sections"][0], "minutes": 5},
+            {
+                "name": "Scenario Roleplay",
+                "module": "roleplay",
+                "minutes": 5,
+                "questions": [
+                    "I'm concerned my child is falling behind. What can you do?"
+                ],
+                "scenario": {
+                    "character": "A worried parent",
+                    "setting": "Parent-teacher meeting",
+                    "goal": "agree on a plan",
+                },
+            },
+        ],
+        "reserve": [],
+    }
+    res = create(client, auth, docs)
+    assert res.status_code == 201, res.get_json()
+    section = res.get_json()["session"]["plan"]["sections"][1]
+    assert section["module"] == "scenario" and section["scenario"] is None
+    assert section["name"] == "Scenario"
+    assert section["questions"] == [
+        "Imagine a worried parent says to you: \"I'm concerned my child is falling "
+        'behind. What can you do?" What would you do, and what would you say?'
+    ]
+    # The plan prompt didn't offer a role-play to a teacher.
+    prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
+    assert '"module": "roleplay"' not in prompt and "always null" in prompt
+
+
+def test_sales_plan_prompt_still_explains_roleplay(client, auth, docs, fire):
+    fire.analysis = SALES_ANALYSIS
+    fire.plan = SALES_PLAN
+    assert create(client, auth, docs).status_code == 201
+    prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
+    assert '"module": "roleplay"' in prompt and "character's opening line" in prompt
+
+
+def test_unknown_section_module_matches_by_name():
+    from app.services.planning import fit_module
+
+    s = PlanSectionOut(
+        name="Case Question", module="portfolio", minutes=5, questions=["Q?"]
+    )
+    fit_module(s, ["behavioral", "resume_deepdive", "case"])
+    assert s.module == "case"
+
+
+def test_score_with_overlong_lists_is_trimmed_not_rejected():
+    # One long list failed a whole report twice (T-93).
+    from app.services.scoring import ScoreOut
+
+    out = ScoreOut.model_validate(
+        {
+            "criteria": [{"name": "Clarity", "kind": "universal", "score": 4}],
+            "summary": "s" * 700,
+            "stronger_version": [{"text": "Hi."}],
+            "tips": ["a", "b", "c", "d"],
+            "strengths": ["a", "b", "c", "d", "e"],
+        }
+    )
+    assert len(out.summary) == 600 and len(out.tips) == 3 and len(out.strengths) == 3
+
+
+def test_rubric_criterion_names_are_capitalised(client, auth, docs, fire, monkeypatch):
+    import tests.fakes
+
+    rubric = {
+        "criteria": [
+            {"name": "storytelling", "kind": "role", "weight": 0.5, "description": "d"},
+            {
+                "name": "business judgment",
+                "kind": "role",
+                "weight": 0.5,
+                "description": "d",
+            },
+            {"name": "Clarity", "kind": "universal", "weight": 0.1, "description": "d"},
+        ]
+    }
+    monkeypatch.setattr(tests.fakes, "RUBRIC", rubric)
+    res = create(client, auth, docs)
+    names = [c["name"] for c in res.get_json()["session"]["rubric"]["criteria"]]
+    assert "Storytelling" in names and "Business judgment" in names
