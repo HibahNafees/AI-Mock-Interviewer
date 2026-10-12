@@ -454,6 +454,14 @@ def test_fill_result_only_replaces_result_placeholders():
     assert (
         fill_result("I did it. [add the result]", None) == "I did it. [add the result]"
     )
+    # T-126 (live): score.txt's own example placeholder counts as a result one.
+    live = "As a result, p95 fell from 1.8 seconds to 300 milliseconds"
+    told = f"I moved the queries to an ETL. {live}. [add what changed because of your work]"
+    assert fill_result(told, live) == f"I moved the queries to an ETL. {live}."
+    notes = "[Add: Mentioning collaboration.] [Add: Broader context.]"
+    assert fill_result(f"{told} {notes}", live) == (
+        f"I moved the queries to an ETL. {live}. {notes}"
+    )
     # T-123: no result placeholder and no result: it goes at the end.
     assert (
         fill_result("At [add the company].", quote)

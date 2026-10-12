@@ -470,8 +470,9 @@ def _resume_facts(resume: str) -> list[tuple[str, str]]:
     return facts
 
 
+# "[add what changed because of your work]" is score.txt's own example (T-126).
 RESULT_PLACEHOLDER_RE = re.compile(
-    r"\[[^\]]*\b(?:result|outcome|impact)s?\b[^\]]*\]", re.I
+    r"\[[^\]]*\b(?:(?:result|outcome|impact)s?|what changed)\b[^\]]*\]", re.I
 )
 
 
@@ -508,6 +509,11 @@ def fill_result(stronger: str, result_quote: str | None) -> str:
             if not used:
                 out.append(sentence)
                 used = True
+            # Other placeholders next to it ("[Add: …]" gap notes, T-46) stay.
+            others = RESULT_PLACEHOLDER_RE.sub(" ", part)
+            if not WORD_RE.search(PLACEHOLDER_RE.sub(" ", others).lower()):
+                if kept := " ".join(PLACEHOLDER_RE.findall(others)):
+                    out.append(kept)
             continue
         out.append(part)
     return " ".join(out)
