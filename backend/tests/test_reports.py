@@ -210,6 +210,42 @@ def test_grounding_flags_invented_sentences(text, source, problem):
     ]
 
 
+MIGRATION = (
+    "When a junior engineer I mentored shipped a migration that locked a table in "
+    "production, I rolled it back within ten minutes and paired with him on a "
+    "runbook for online migrations."
+)
+
+
+def test_grounding_flags_a_story_tied_to_an_unrelated_resume_fact():
+    # T-111: asked about building the refunds API, they told the migration story;
+    # the rewrite claimed it happened while building the refunds API.
+    stitched = Sentence(
+        text="During the development of the refunds API, I faced a challenge when a "
+        "junior engineer I mentored shipped a migration that locked a table."
+    )
+    told = Sentence(
+        text="At Acme Payments, a junior engineer I mentored shipped a migration "
+        "that locked a table in production."
+    )
+    resume_only = Sentence(text="I built the refunds API in Python and Flask.")
+    problems = grounding_problems(
+        [stitched, told, resume_only], [LIVE_RESUME, MIGRATION], LIVE_RESUME
+    )
+    assert "ties what the candidate said" in problems[0]
+    assert "refunds" in problems[0]
+    # Their employer, or a résumé fact on its own, is fine.
+    assert problems[1:] == ["", ""]
+
+
+def test_stitch_check_needs_the_resume():
+    stitched = Sentence(
+        text="During the development of the refunds API, a junior engineer I "
+        "mentored shipped a migration that locked a table."
+    )
+    assert grounding_problems([stitched], [LIVE_RESUME, MIGRATION]) == [""]
+
+
 def test_verdicts():
     assert [verdict_for(s) for s in (4.2, 3.0, 2.9)] == ["hire", "lean hire", "no hire"]
 
@@ -1072,6 +1108,43 @@ def test_scorer_flagged_non_answer_scores_1(client, auth, planned, fire):
         c["prompt"] for c in fire.calls if "Score one question" in c["prompt"]
     )
     assert '"answers_question"' in prompt
+
+
+def test_false_non_answer_verdict_is_overruled_by_the_answer_check(
+    client, auth, planned, fire
+):
+    # T-112: an answer listing the steps asked for was scored 1 once, 4.2 on a re-run.
+    fire.scores = [{**SCORE, "answers_question": False, "answer_quote": None}]
+    fire.answer_checks = [{"attempts": True, "quote": "the billing API at Acme"}]
+    e = _report_for(
+        client, auth, planned["id"], "My answer is about the billing API at Acme work."
+    )
+    assert e["score"] > 1
+    scores = [c["prompt"] for c in fire.calls if "Score one question" in c["prompt"]]
+    assert len(scores) == 2
+    assert "A separate check found" not in scores[0]
+    assert 'their words: "the billing API at Acme"' in scores[1]
+
+
+def test_answer_check_quote_must_be_in_the_answer(client, auth, planned, fire):
+    fire.scores = [{**SCORE, "answers_question": False, "answer_quote": None}]
+    fire.answer_checks = [
+        {"attempts": True, "quote": "I scaled the Kafka cluster to ten brokers"}
+    ]
+    e = _report_for(
+        client, auth, planned["id"], "I really enjoy hiking on weekends with my dog."
+    )
+    assert e["score"] == 1
+    assert sum("Score one question" in c["prompt"] for c in fire.calls) == 1
+
+
+def test_failed_answer_check_keeps_the_scorers_verdict(client, auth, planned, fire):
+    fire.scores = [{**SCORE, "answers_question": False, "answer_quote": None}]
+    fire.answer_checks = [FireError("The AI service is busy", 429)] * 2
+    e = _report_for(
+        client, auth, planned["id"], "I really enjoy hiking on weekends with my dog."
+    )
+    assert e["score"] == 1
 
 
 def test_score_prompt_does_not_anchor_on_false_or_null(client, auth, planned, fire):

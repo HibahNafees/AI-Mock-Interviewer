@@ -266,6 +266,14 @@ def test_praise_is_removed_from_live_turns(client, auth, planned, fire):
     assert turn["message"] == "Thanks. What was your role?"
 
 
+def test_section_name_is_not_read_out_as_a_heading(client, auth, planned, fire):
+    # T-113: "Learning from Failure. Describe a situation where…"
+    started(client, auth, planned["id"])
+    fire.turns = [{"action": "follow_up", "message": "Technical. What was your role?"}]
+    turn = answer(client, auth, planned["id"]).get_json()["turn"]
+    assert turn["message"] == "What was your role?"
+
+
 def test_a_repeated_follow_up_moves_on_instead(client, auth, planned, fire):
     # Live re-check (T-44): the same follow-up was asked twice in a row.
     sid = planned["id"]

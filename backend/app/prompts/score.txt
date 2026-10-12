@@ -34,7 +34,7 @@ Return JSON with exactly this shape:
   "confidence_note": "why your judgment may be off, or empty"
 }
 
-First decide "answers_question": does the candidate attempt THIS question at all? Greetings or small talk ("Hi, I'm doing well, how are you?"), "I don't know" with nothing else, or an answer to a different question → false. If false, use "answer_quote": null and judge only what was actually said. If true, "answer_quote" must be copied word for word from the candidate's answers. Never describe content the candidate didn't say.
+${attempt_note}First decide "answers_question": does the candidate attempt THIS question at all? Greetings or small talk ("Hi, I'm doing well, how are you?"), "I don't know" with nothing else, or an answer to a different question → false. If false, use "answer_quote": null and judge only what was actually said. If true, "answer_quote" must be copied word for word from the candidate's answers. Never describe content the candidate didn't say.
 
 Next fill "said": before judging anything, read EVERY candidate answer in the exchange, follow-up answers included, and copy their own words (5 to 25 each, word for word) for the situation, the task, each action, the result and any other key point. The result is anything they say happened because of their work: a number ("churn fell from 8% to 5%"), an outcome ("the client renewed for two more years", "she was running releases on her own within a month"), or a decision that followed ("leadership approved it"). Use null or [] only for parts they truly never said. Judge everything below from "said".
 

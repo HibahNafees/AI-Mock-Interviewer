@@ -226,6 +226,20 @@ def neutralize(message: str, plain: bool = False) -> str:
     return out if starts_with_ack or plain else f"Thanks. {out}"
 
 
+def drop_heading(message: str, session: Session) -> str:
+    """Cut a plan section name read out like a heading ("Learning from Failure.
+    Describe a time…", T-113)."""
+    for sec in (session.plan_json or {}).get("sections", []):
+        name = (sec.get("name") or "").strip()
+        if not name:
+            continue
+        m = re.match(rf"\s*{re.escape(name)}\s*[.:–—-]\s+", message, re.IGNORECASE)
+        if m and message[m.end() :].strip():
+            rest = message[m.end() :]
+            return rest[:1].upper() + rest[1:]
+    return message
+
+
 ROLEPLAY_EXIT = "Let's step out of the role-play there."
 
 
@@ -703,6 +717,7 @@ def take_turn(
                 out.message = (
                     ACK_RE.sub("", out.message, count=1).strip() or out.message
                 )
+            out.message = drop_heading(out.message, session)
         if out.action not in opts:
             log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
             out = _fallback(opts, sign_off())

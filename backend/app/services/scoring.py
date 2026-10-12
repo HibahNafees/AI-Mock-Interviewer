@@ -380,14 +380,42 @@ def _factual(sources: list[str]) -> str:
     )
 
 
-def grounding_problems(sentences: list[Sentence], sources: list[str]) -> list[str]:
+def _stems(text: str) -> set[str]:
+    return {_stem(w) for w in _content_words(text)}
+
+
+def stitched(sentence: str, resume: str, said: str) -> list[str]:
+    """Résumé-only words in a sentence that also tells what the candidate said: a
+    story from the answer tied to a résumé project, result or context they never
+    connected it to (T-111: "During the development of the refunds API, I faced a
+    challenge when a junior engineer I mentored shipped a migration…"). Employer
+    names don't count: placing a story at their employer is not a new claim."""
+    employers = set().union(*(_stems(e) for e, _ in _resume_facts(resume)), set())
+    words = _content_words(PLACEHOLDER_RE.sub(" ", sentence))
+    resume_stems, said_stems = _stems(resume) - employers, _stems(said)
+    from_resume = sorted({w for w in words if _stem(w) in resume_stems - said_stems})
+    from_answer = {_stem(w) for w in words} & (said_stems - _stems(resume))
+    if len(from_resume) >= STITCH_WORDS and len(from_answer) >= STITCH_WORDS:
+        return from_resume
+    return []
+
+
+# Résumé-only and answer-only words a sentence needs to count as stitched.
+STITCH_WORDS = 2
+
+
+def grounding_problems(
+    sentences: list[Sentence], sources: list[str], resume: str = ""
+) -> list[str]:
     """One message per sentence that isn't backed by the résumé or answers ("" if ok).
 
     The model's cited `source` is only a prompt for it to stay grounded (it often
     leaves it out for faithful sentences); the check is on the sentence itself. A
     sentence stated as fact must be backed by facts, not only by what the candidate
-    said they would do.
+    said they would do. With `resume` (one of `sources`), a sentence may not tie
+    what they said to a résumé fact they never connected it to.
     """
+    answered = " ".join(src for src in sources if src is not resume) if resume else ""
     stems = {_stem(w) for w in WORD_RE.findall(" ".join(sources).lower())}
     factual = {_stem(w) for w in WORD_RE.findall(_factual(sources).lower())}
     digits = set(DIGITS_RE.findall(" ".join(sources)))
@@ -415,6 +443,12 @@ def grounding_problems(sentences: list[Sentence], sources: list[str]) -> list[st
         elif not HYPOTHETICAL_RE.search(s.text) and _adds_details(s.text, factual):
             problems.append(
                 "it presents what the candidate said they would do as something they did"
+            )
+        elif resume and (linked := stitched(s.text, resume, answered)):
+            problems.append(
+                "it ties what the candidate said to something from their résumé "
+                f"({', '.join(linked)}) that they never connected it to; tell their "
+                "story as they told it"
             )
         else:
             problems.append("")
@@ -559,7 +593,7 @@ def grounded_rewrite(
     otherwise it would describe text the user never sees.
     """
     sentences = split_sentences(sentences)
-    problems = grounding_problems(sentences, sources)
+    problems = grounding_problems(sentences, sources, resume)
     if any(problems):
         numbered = [f"Sentence {i}: {p}." for i, p in enumerate(problems, start=1) if p]
         prompt = render(
@@ -576,7 +610,7 @@ def grounded_rewrite(
         )
         sentences = split_sentences(repaired.stronger_version)
         changes = []
-        problems = grounding_problems(sentences, sources)
+        problems = grounding_problems(sentences, sources, resume)
     kept = _keep(sentences, problems)
     if not any(WORD_RE.search(PLACEHOLDER_RE.sub(" ", s.text).lower()) for s in kept):
         # Nothing but bare placeholders left: start from the résumé instead.
@@ -637,7 +671,7 @@ def not_a_copy(
             user_id, prompt, RewriteOut, SYSTEM, max_tokens=1200, temperature=0.2
         )
         sentences = split_sentences(repaired.stronger_version)
-        kept = _keep(sentences, grounding_problems(sentences, sources))
+        kept = _keep(sentences, grounding_problems(sentences, sources, resume))
         text = _join(kept)
         if kept and copy_ratio(text, answers) < COPY_RATIO:
             return text, []
@@ -723,6 +757,44 @@ def quote_found(quote: str, answers: list[str]) -> bool:
     if not quoted:
         return False
     return sum(w in said for w in quoted) / len(quoted) >= QUOTE_MATCH
+
+
+class AnswerCheckOut(BaseModel):
+    attempts: bool
+    quote: str | None = Field(default=None, max_length=600)
+
+
+ATTEMPT_NOTE = (
+    "A separate check found that the candidate does attempt this question "
+    '(their words: "$quote"). Set "answers_question": true and judge the answer '
+    "on its merits.\n\n"
+)
+
+
+def attempts_question(
+    user_id: int, exchange: list[dict], answers: list[str]
+) -> str | None:
+    """Second opinion on the scorer's "didn't answer the question" (T-112: an answer
+    that listed the steps asked for was scored 1 once, 4.2 on a re-run). Returns the
+    candidate's words that address the question, or None: if the check fails or
+    its quote isn't really in the answers, the scorer's verdict stands."""
+    prompt = render(
+        "answer_check",
+        exchange=[
+            {k: e[k] for k in ("interviewer", "candidate", "spoken") if k in e}
+            for e in exchange
+        ],
+    )
+    try:
+        out = chat_json(
+            user_id, prompt, AnswerCheckOut, SYSTEM, max_tokens=200, temperature=0
+        )
+    except FireError as err:
+        log.warning("Answer check failed, keeping the scorer's verdict: %s", err)
+        return None
+    if out.attempts and out.quote and quote_found(out.quote, answers):
+        return out.quote.strip()
+    return None
 
 
 class GapVerdict(BaseModel):
@@ -1020,8 +1092,7 @@ def _evaluate(
                 c for c in rubric.get("criteria", []) if _norm(c["name"]) in wanted
             ],
         }
-    prompt = render(
-        "score",
+    score_values = dict(
         role=(session.plan_json or {}).get("role_title") or "the role",
         difficulty=session.difficulty or "mid",
         module=modules.MODULES.get(module, modules.MODULES[modules.DEFAULT]).label,
@@ -1040,21 +1111,34 @@ def _evaluate(
         exchange=exchange,
         target_words=str(words),
     )
-    # Temperature 0: the same answer should get the same score (T-29).
-    out = chat_json(
-        user_id,
-        prompt,
-        ScoreOut,
-        SYSTEM,
-        max_tokens=2000,
-        temperature=0,
-        context={"required": criteria or []},
-    )
+
+    def score_call(attempt_note: str = "") -> ScoreOut:
+        # Temperature 0: the same answer should get the same score (T-29).
+        return chat_json(
+            user_id,
+            render("score", attempt_note=attempt_note, **score_values),
+            ScoreOut,
+            SYSTEM,
+            max_tokens=2000,
+            temperature=0,
+            context={"required": criteria or []},
+        )
+
+    out = score_call()
     answers = [e["candidate"] for e in exchange]
-    if not scenario and (
-        not out.answers_question
-        or (out.answer_quote is not None and not quote_found(out.answer_quote, answers))
-    ):
+    invented = out.answer_quote is not None and not quote_found(
+        out.answer_quote, answers
+    )
+    if not scenario and not out.answers_question and not invented:
+        # A false "no" costs the whole question: confirm it first (T-112).
+        quote = attempts_question(user_id, exchange, answers)
+        if quote is not None:
+            log.info("Answer %s does attempt the question; scoring again", answer_id)
+            out = score_call(Template(ATTEMPT_NOTE).substitute(quote=quote))
+            invented = out.answer_quote is not None and not quote_found(
+                out.answer_quote, answers
+            )
+    if not scenario and (not out.answers_question or invented):
         # The scorer says it wasn't an answer, or "quoted" words the candidate never
         # said (T-61: a greeting scored 3.56 with invented content). Score it 1.
         log.info("Answer %s didn't address the question; scoring 1", answer_id)
