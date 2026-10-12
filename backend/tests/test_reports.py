@@ -319,6 +319,16 @@ def test_long_nested_texts_are_trimmed_not_rejected(client, auth, planned, fire)
     assert fire.kinds().count("score") == 2  # no invalid-JSON retries
 
 
+def test_empty_rewrite_falls_back_instead_of_failing(client, auth, planned, fire):
+    # T-105: the scorer had nothing to rewrite and returned [], failing every time.
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    fire.scores = [{**SCORE, "stronger_version": []}]
+    report = build(client, auth, sid).get_json()["report"]
+    assert report["status"] == "ready"
+    assert report["questions"][0]["evaluation"]["stronger_version"]
+
+
 def test_unscorable_question_is_set_aside_so_the_report_finishes(
     client, auth, planned, fire
 ):

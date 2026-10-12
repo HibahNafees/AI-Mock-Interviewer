@@ -298,7 +298,9 @@ class ScoreOut(Lenient):
     weak_moments: list[WeakMoment] = Field(default_factory=list, max_length=5)
     missing_points: list[MissingPoint] = Field(default_factory=list, max_length=8)
     star: Star | None = None
-    stronger_version: list[Sentence] = Field(min_length=1, max_length=25)
+    # May be empty (e.g. "Any questions for us?" has nothing to rewrite): the
+    # rewrite then starts from the résumé instead of failing the score (T-105).
+    stronger_version: list[Sentence] = Field(default_factory=list, max_length=25)
     changes: list[Change] = Field(default_factory=list, max_length=8)
     tips: list[str] = Field(default_factory=list, max_length=3)
     # What the candidate did well, each tied to something they said.

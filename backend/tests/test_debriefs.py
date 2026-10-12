@@ -191,3 +191,24 @@ def test_eleven_recalled_questions_finish_even_if_one_cant_be_scored(
     r = client.post(f"/api/sessions/{sid}/report", headers=auth).get_json()["report"]
     assert r["status"] == "ready"
     assert r["progress"] == {"scored": 10, "total": 11, "set_aside": 1}
+
+
+def test_their_questions_at_the_end_are_rated_not_scored(app, client, auth, fire):
+    """Live 2026-10-12: "Do you have any questions for us?" got an empty rewrite every
+    time, so it could never be scored (T-105)."""
+    app.config["REPORTS_INLINE"] = True
+    items = ITEMS + [
+        {
+            "question": "Do you have any questions for us?",
+            "answer": "Yes. What does a typical week look like? And how is on-call shared?",
+        }
+    ]
+    d = debrief(client, auth, items=items).get_json()["debrief"]
+    assert d["items"] == 3
+    report = client.get(
+        f"/api/sessions/{d['session_id']}/report", headers=auth
+    ).get_json()["report"]
+    assert report["status"] == "ready"
+    assert report["progress"]["total"] == 2  # only real answers are scored
+    asked = [q["asked"] for q in report["their_questions"]["questions"]]
+    assert asked == ["What does a typical week look like?"]

@@ -7,6 +7,7 @@ next round, which can be practiced as a new interview.
 """
 
 import logging
+import re
 
 from pydantic import BaseModel, Field
 
@@ -83,6 +84,15 @@ class PredictionsOut(BaseModel):
     questions: list[Prediction] = Field(min_length=1, max_length=8)
 
 
+# "Do you have any questions for us?" and the like.
+THEIR_QUESTIONS_RE = re.compile(
+    r"\bquestions?\b[^.?!]*\bfor (?:us|me|the team|our team|them)\b"
+    r"|\banything (?:you'?d like|you want|else) to ask\b"
+    r"|\bwhat (?:would you like|do you want) to (?:ask|know)\b",
+    re.IGNORECASE,
+)
+
+
 def create(
     user_id: int,
     role: str,
@@ -140,6 +150,9 @@ def create(
             session_id=session.id,
             section=SECTION,
             order_no=n,
+            # Their questions at the end are rated as questions, not scored as an
+            # answer (T-105: the scorer had nothing to grade or rewrite).
+            is_candidate_qa=bool(THEIR_QUESTIONS_RE.search(item["question"])),
             text=item["question"],
             budget_sec=budget,
             is_bonus=False,
