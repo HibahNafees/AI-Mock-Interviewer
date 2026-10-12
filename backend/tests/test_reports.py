@@ -12,6 +12,7 @@ from app.services.scoring import (
     CriterionScore,
     _detach,
     _keep,
+    fill_result,
     Sentence,
     grounding_problems,
     resume_fallback,
@@ -367,6 +368,51 @@ def test_a_crash_while_scoring_doesnt_stop_the_other_questions(
     assert report["progress"]["scored"] == 1  # the other one was still scored
     fire.scores = [RuntimeError("bug")]
     assert build(client, auth, sid).get_json()["report"]["status"] == "ready"
+
+
+def test_result_placeholder_is_filled_with_the_result_they_gave(
+    client, auth, planned, fire
+):
+    # T-107: the answer said what happened, the rewrite asked them to add it.
+    sid = planned["id"]
+    started(client, auth, sid)
+    fire.turns = [{"action": "wrap_up", "message": "Thanks, that's all."}]
+    answer(
+        client,
+        auth,
+        sid,
+        "I built the billing API at Acme, and failed payments fell from 4% to 1%.",
+        60_000,
+    )
+    client.post(f"/api/sessions/{sid}/end", headers=auth)
+    fire.scores = [
+        {
+            **SCORE,
+            "star": {
+                **SCORE["star"],
+                "result": True,
+                "result_quote": "failed payments fell from 4% to 1%",
+            },
+        }
+    ]
+    report = build(client, auth, sid).get_json()["report"]
+    rewrite = report["questions"][0]["evaluation"]["stronger_version"]
+    assert "[add the result" not in rewrite
+    assert rewrite.endswith("Failed payments fell from 4% to 1%.")
+
+
+def test_fill_result_only_replaces_result_placeholders():
+    quote = "we haven't had a locking incident since"
+    assert (
+        fill_result(
+            "I rolled it back. Since then, [add the result you achieved].", quote
+        )
+        == "I rolled it back. We haven't had a locking incident since."
+    )
+    assert (
+        fill_result("I did it. [add the result]", None) == "I did it. [add the result]"
+    )
+    assert fill_result("At [add the company].", quote) == "At [add the company]."
 
 
 def test_paragraph_items_are_checked_sentence_by_sentence():

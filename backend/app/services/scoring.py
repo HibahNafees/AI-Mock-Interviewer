@@ -436,6 +436,32 @@ def _resume_facts(resume: str) -> list[tuple[str, str]]:
     return facts
 
 
+RESULT_PLACEHOLDER_RE = re.compile(
+    r"\[[^\]]*\b(?:result|outcome|impact)s?\b[^\]]*\]", re.I
+)
+
+
+def fill_result(stronger: str, result_quote: str | None) -> str:
+    """Put the candidate's own, verified result where the rewrite asks them to
+    add one: it sometimes left the result they gave out (T-107)."""
+    if not result_quote or not RESULT_PLACEHOLDER_RE.search(stronger):
+        return stronger
+    quote = result_quote.strip().rstrip(".!?,;:")
+    if not quote:
+        return stronger
+    sentence = quote[0].upper() + quote[1:] + "."
+    parts = re.split(r"(?<=[.!?])\s+", stronger.strip())
+    out, used = [], False
+    for part in parts:
+        if RESULT_PLACEHOLDER_RE.search(part):
+            if not used:
+                out.append(sentence)
+                used = True
+            continue
+        out.append(part)
+    return " ".join(out)
+
+
 def resume_fallback(question: str, resume: str) -> str:
     """Rewrite skeleton for an answer with nothing usable: the résumé line that fits
     the question (no Fire call), plus a placeholder for the story."""
@@ -1060,6 +1086,8 @@ def evaluate(
             words,
         )
 
+    if not (off_topic and not scenario):
+        stronger = fill_result(stronger, out.star.result_quote if out.star else None)
     said = _norm(" ".join(e["candidate"] for e in exchange))
     weak = [
         w.model_dump()
