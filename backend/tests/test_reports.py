@@ -223,7 +223,7 @@ def test_report_scores_each_question_then_summarizes(client, auth, planned, fire
     res = build(client, auth, sid)
     assert res.status_code == 202, res.get_json()
     report = res.get_json()["report"]
-    assert fire.kinds()[before:] == ["score", "score", "summary"]
+    assert fire.kinds()[before:] == ["score", "gap", "score", "gap", "summary"]
 
     assert report["status"] == "ready"
     assert report["progress"] == {"scored": 2, "total": 2}
@@ -267,7 +267,7 @@ def test_report_scores_each_question_then_summarizes(client, auth, planned, fire
 
     # Asking again doesn't pay twice.
     again = build(client, auth, sid)
-    assert again.status_code == 202 and len(fire.calls) == before + 3
+    assert again.status_code == 202 and len(fire.calls) == before + 5
     got = client.get(f"/api/sessions/{sid}/report", headers=auth)
     assert got.get_json()["report"]["overall_score"] == pytest.approx(3.7)
 
@@ -288,7 +288,7 @@ def test_failed_question_is_resumed_without_rescoring(client, auth, planned, fir
     before = len(fire.calls)
     report = build(client, auth, sid).get_json()["report"]
     assert report["status"] == "ready"
-    assert fire.kinds()[before:] == ["score", "summary"]
+    assert fire.kinds()[before:] == ["score", "gap", "summary"]
     assert Evaluation.query.count() == 2
 
 
@@ -400,8 +400,15 @@ def test_invented_rewrite_is_repaired_once(client, auth, planned, fire):
     fire.scores = [invented(GOOD, MADE_UP), invented(GOOD)]
     before = len(fire.calls)
     report = build(client, auth, sid).get_json()["report"]
-    assert fire.kinds()[before:] == ["score", "repair", "score", "summary"]
-    repair = fire.calls[before + 1]["prompt"]
+    assert fire.kinds()[before:] == [
+        "score",
+        "gap",
+        "repair",
+        "score",
+        "gap",
+        "summary",
+    ]
+    repair = fire.calls[before + 2]["prompt"]
     assert "Sentence 2: it uses numbers the candidate never gave (9)." in repair
     assert "Sentence 1:" not in repair
     first = report["questions"][0]["evaluation"]["stronger_version"]
@@ -1084,3 +1091,48 @@ def test_invented_said_quotes_are_not_credited(client, auth, planned, fire):
     )
     assert e["missing_points"][0]["covered"] is False
     assert e["star"]["result"] is False
+
+
+# ---- gap check (T-72) ---------------------------------------------------------
+
+
+def test_gap_check_decides_covered_points_from_real_quotes(client, auth, planned, fire):
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    fire.gap_checks = [
+        {
+            "points": [
+                # The scorer called this a gap; the candidate said it.
+                {"n": 1, "covered": True, "quote": "I built the billing API at Acme"},
+                # The scorer credited it; the check says it was never said.
+                {"n": 2, "covered": False, "quote": None},
+            ]
+        },
+        {
+            "points": [
+                # "Covered" with words the candidate never said: still a gap.
+                {"n": 1, "covered": True, "quote": "revenue grew forty percent"},
+            ]
+        },
+    ]
+    report = build(client, auth, sid).get_json()["report"]
+    first, second = (q["evaluation"]["missing_points"] for q in report["questions"])
+    assert first[0]["covered"] is True
+    assert first[0]["evidence"] == "I built the billing API at Acme"
+    assert first[1]["covered"] is False and first[1]["evidence"] is None
+    assert second[0]["covered"] is False and second[0]["evidence"] is None
+    # The check sees the follow-up answers too.
+    gap_prompt = next(
+        c["prompt"] for c in fire.calls if "Check which points" in c["prompt"]
+    )
+    assert "I owned the schema." in gap_prompt and "2. Their own role" in gap_prompt
+
+
+def test_failed_gap_check_keeps_the_scorers_verdicts(client, auth, planned, fire):
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    fire.gap_checks = [FireError("The AI service is busy", 429)] * 2
+    report = build(client, auth, sid).get_json()["report"]
+    assert report["status"] == "ready"
+    points = report["questions"][0]["evaluation"]["missing_points"]
+    assert [p["point"] for p in points] == ["A measurable result", "Their own role"]

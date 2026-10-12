@@ -248,6 +248,8 @@ class FakeFire:
         }
         # Story-extraction replies (default: no stories).
         self.stories: list[dict | Exception] = []
+        # Gap-check replies (T-72).
+        self.gap_checks: list[dict | Exception] = []
         # Replies to "Do you have any questions for me?" turns.
         self.candidate_replies: list[dict | Exception] = []
 
@@ -271,6 +273,11 @@ class FakeFire:
             body = RUBRIC
         elif "Score one question" in prompt:
             body = self.scores.pop(0) if self.scores else SCORE
+            if isinstance(body, Exception):
+                raise body
+        elif "Check which points a candidate covered" in prompt:
+            # Default: no verdicts, so the scorer's own stand (T-72).
+            body = self.gap_checks.pop(0) if self.gap_checks else {"points": []}
             if isinstance(body, Exception):
                 raise body
         elif "summary for a practice-interview" in prompt:
@@ -380,6 +387,7 @@ class FakeFire:
                 ("question plan", "plan"),
                 ("scoring rubric", "rubric"),
                 ("Score one question", "score"),
+                ("Check which points a candidate covered", "gap"),
                 ("summary for a practice-interview", "summary"),
                 ('Fix a "stronger version"', "repair"),
             ):

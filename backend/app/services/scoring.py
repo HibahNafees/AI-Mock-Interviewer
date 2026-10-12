@@ -664,6 +664,63 @@ def quote_found(quote: str, answers: list[str]) -> bool:
     return sum(w in said for w in quoted) / len(quoted) >= QUOTE_MATCH
 
 
+class GapVerdict(BaseModel):
+    n: int
+    # What exactly the point asks for, written before judging (T-72).
+    needs: str = Field(default="", max_length=300)
+    quote: str | None = Field(default=None, max_length=600)
+    covered: bool
+
+
+class GapCheckOut(BaseModel):
+    points: list[GapVerdict] = Field(default_factory=list, max_length=12)
+
+
+# A gap-check quote must match the answers more closely than the scorer's.
+GAP_QUOTE_MATCH = 0.8
+
+
+def check_gaps(
+    user_id: int, exchange: list[dict], points: list[MissingPoint], answers: list[str]
+) -> None:
+    """Re-decide each missing point in a call of its own (T-72): the scorer, doing
+    ten jobs at once, listed points the candidate made as gaps and credited others
+    with unrelated quotes. A point counts as covered only with a quote that is
+    really in the answers; if this call fails, the scorer's verdicts stand."""
+    if not points:
+        return
+    prompt = render(
+        "gap_check",
+        exchange=[
+            {k: e[k] for k in ("interviewer", "candidate", "spoken") if k in e}
+            for e in exchange
+        ],
+        points="\n".join(f"{i}. {m.point}" for i, m in enumerate(points, 1)),
+    )
+    try:
+        out = chat_json(
+            user_id, prompt, GapCheckOut, SYSTEM, max_tokens=900, temperature=0
+        )
+    except FireError as err:
+        log.warning("Gap check failed, keeping the scorer's verdicts: %s", err)
+        return
+    verdicts = {v.n: v for v in out.points}
+    for i, m in enumerate(points, 1):
+        v = verdicts.get(i)
+        if v is None:
+            continue
+        words = [_stem(w) for w in _content_words(v.quote or "")]
+        said = {_stem(w) for w in _content_words(" ".join(answers))}
+        real = (
+            bool(words)
+            and sum(w in said for w in words) / len(words) >= GAP_QUOTE_MATCH
+        )
+        if v.covered and real:
+            m.covered, m.evidence = True, v.quote
+        else:
+            m.covered, m.evidence = False, None
+
+
 def states_outcome(quote: str | None) -> bool:
     """The quote says what happened: a number, or wording that isn't a non-result."""
     if not quote:
@@ -919,6 +976,7 @@ def evaluate(
             module=module,
         )
     verify_coverage(out, answers)
+    check_gaps(user_id, exchange, out.missing_points, answers)
     if not criteria:  # "Try again" must score the same criteria as before
         drop_untested(out.criteria, rubric, question or exchange[0]["interviewer"])
     score, rows = weighted_score(out.criteria, rubric)
