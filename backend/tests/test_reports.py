@@ -1511,6 +1511,42 @@ def test_naming_the_metric_is_on_subject():
     assert off[0].score == 2
 
 
+def test_word_endings_and_percentages_count_as_naming_the_subject():
+    # T-128: "the retry rate went from 4% to 1%" answers "reducing failed payment
+    # retries"; five-letter stems (retry/retri) and single digits kept them apart.
+    from app.services.scoring import CriterionScore, GapCheckOut, cap_off_subject
+
+    resume = "Reduced failed payment retries from 4% to 1% with idempotency keys."
+    said = "I added backoff, and the retry rate went from 4% to 1%."
+    for subject in ("reducing failed payment retries", "payment retries from 4% to 1%"):
+        on = [CriterionScore(name="Relevance", score=4)]
+        check = GapCheckOut(named_subject=subject, story_subject="x")
+        assert cap_off_subject(on, check, [said], resume) is None, subject
+        assert on[0].score == 4
+
+
+def test_off_subject_rewrite_keeps_to_their_story():
+    # T-129 (live): the rewrite claimed a role on the named subject and added a
+    # résumé result they never tied to the story.
+    from app.services.scoring import drop_named_subject, subject_item
+
+    resume = (
+        "Acme (2021–now): Built the refunds API; reduced failed payment retries "
+        "from 4% to 1% with idempotency keys; mentored two junior engineers."
+    )
+    said = ["A junior engineer I mentored shipped a migration that locked a table."]
+    story = "A junior engineer I mentored shipped a migration that locked a table."
+    rewrite = (
+        "At Acme, I was responsible for the reliability of the refunds API. "
+        f"{story} I also added idempotency keys that reduced payment retries to 1%."
+    )
+    item = subject_item("building the refunds API", resume)
+    assert drop_named_subject(rewrite, item, resume, said) == story
+    assert drop_named_subject(story, item, resume, said) == story
+    only = "I was responsible for the refunds API."
+    assert drop_named_subject(only, item, resume, said) == ""
+
+
 def test_gap_check_drops_gaps_that_dont_fit_the_question(client, auth, planned, fire):
     # T-108: advice for a different question isn't listed as a missing point.
     sid = planned["id"]

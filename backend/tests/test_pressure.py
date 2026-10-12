@@ -6,7 +6,7 @@ from app.services.interviewer import INTERRUPTIONS, NO_ANSWER_IN_TIME
 from app.services.pressure import LEVEL_NOTES, RESPECT
 from app.services.scoring import CUT_OFF_SILENT, CUT_OFF_TIP
 
-from tests.fakes import PLAN
+from tests.fakes import PLAN, SCORE
 from tests.test_modules import SALES_ANALYSIS, SALES_PLAN, create
 from tests.test_reports import build, finished
 from tests.test_sessions import answer, started
@@ -233,6 +233,30 @@ def test_no_thanks_when_a_follow_up_after_a_cut_off_is_replaced(
     turn = turn.get_json()["turn"]
     assert turn["action"] == "next_question"
     assert "Thanks" not in turn["message"] and "Let's move on." in turn["message"]
+
+
+def test_cut_off_answer_is_not_treated_as_off_topic(client, auth, docs, fire):
+    # T-130 (live): an unfinished but relevant start scored Relevance 2, so the
+    # rewrite became the generic "answer the question" placeholder.
+    s = pressured(client, auth, docs, 3)
+    started(client, auth, s["id"])
+    fire.turns = [{"action": "next_question", "message": "Next one."}]
+    cut_off(client, auth, s["id"], "I led the billing API move at Acme and the first")
+    client.post(f"/api/sessions/{s['id']}/end", headers=auth)
+    fire.scores = [
+        {
+            **SCORE,
+            "criteria": [
+                {**c, "score": 2} if c["score"] is not None else c
+                for c in SCORE["criteria"]
+            ],
+        }
+    ]
+    report = build(client, auth, s["id"]).get_json()["report"]
+    rewrite = report["questions"][0]["evaluation"]["stronger_version"]
+    # Built from the scorer's rewrite of what they said, not the résumé skeleton.
+    assert rewrite.startswith("At Acme I built the billing API."), rewrite
+    assert "[Describe one specific time" not in rewrite
 
 
 def test_time_up_with_nothing_said_is_saved_and_scored_as_no_answer(

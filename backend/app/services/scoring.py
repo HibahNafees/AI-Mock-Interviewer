@@ -944,10 +944,8 @@ def cap_off_subject(
     "optimizing a backend process") and none of those appear in their answers.
     Returns (named subject, story subject) when it capped Relevance."""
     subject = ((check.named_subject or "") if check else "").strip().rstrip(".")
-    item = {_stem(w) for w in _content_words(subject)} & _stems(resume) - {
-        _stem(w) for w in QUESTION_WORDS
-    }
-    said = _stems(" ".join(answers)) | _metrics(" ".join(answers))
+    item = subject_item(subject, resume)
+    said = _roots(" ".join(answers)) | _metrics(" ".join(answers))
     if len(item) < SUBJECT_WORDS or (item | _metrics(subject)) & said:
         return None
     story = (check.story_subject or "something else").strip().rstrip(".")
@@ -983,13 +981,56 @@ def off_subject_summary(summary: str, subject: str, story: str) -> str:
     return " ".join([lead, *kept])
 
 
-# "p95", "1.8", "300": WORD_RE splits or drops them, but naming the metric the
-# question asked about is being on subject (T-120: "p95 dropped from 1.8 seconds").
-METRIC_RE = re.compile(r"\b[a-z]+\d+\b|\d+\.\d+|\d{2,}")
+# "p95", "1.8", "300", "4%": WORD_RE splits or drops them, but naming the metric the
+# question asked about is being on subject (T-120: "p95 dropped from 1.8 seconds";
+# T-128: "the retry rate went from 4% to 1%").
+METRIC_RE = re.compile(r"\b[a-z]+\d+\b|\d+(?:\.\d+)?%|\d+\.\d+|\d{2,}")
+
+# Endings dropped before comparing subject words, so "retry" matches "retries" and
+# "fails" matches "failed" (T-128: five-letter stems kept them apart).
+ENDINGS = (("ies", "y"), ("ing", ""), ("ed", ""), ("es", ""), ("s", ""))
+
+
+def _root(word: str) -> str:
+    for end, repl in ENDINGS:
+        if word.endswith(end) and len(word) - len(end) >= 3:
+            word = word[: -len(end)] + repl
+            break
+    return word[:5]
+
+
+def _roots(text: str) -> set[str]:
+    return {_root(w) for w in _content_words(text)}
+
+
+def subject_item(subject: str, resume: str) -> set[str]:
+    """The named subject's words that are in the résumé, minus generic question words."""
+    return _roots(subject) & _roots(resume) - {_root(w) for w in QUESTION_WORDS}
 
 
 def _metrics(text: str) -> set[str]:
     return set(METRIC_RE.findall(text.lower()))
+
+
+def drop_named_subject(
+    stronger: str, item: set[str], resume: str = "", answers: list[str] = ()
+) -> str:
+    """An off-subject story's rewrite tells the story they told; sentences about the
+    résumé item the question named go, and so do résumé facts they never tied to
+    this story (T-129: "I was responsible for the reliability of the refunds API…"
+    and "I also implemented idempotency keys…" were added to a migration story).
+    Employer names don't count. "" when nothing of their story is left."""
+    employers = set().union(*(_roots(e) for e, _ in _resume_facts(resume)), set())
+    resume_only = _roots(resume) - _roots(" ".join(answers)) - employers
+
+    def grafted(part: str) -> bool:
+        return len(_roots(part) & resume_only) >= STITCH_WORDS
+
+    parts = re.split(r"(?<=[.!?])\s+", stronger.strip())
+    kept = [p for p in parts if p and not _roots(p) & item and not grafted(p)]
+    if not any(WORD_RE.search(PLACEHOLDER_RE.sub(" ", p).lower()) for p in kept):
+        return ""
+    return " ".join(kept)
 
 
 # Résumé words a named subject needs to count as a résumé item (T-114).
@@ -1300,8 +1341,13 @@ def _evaluate(
     relevance = next(
         (r["score"] for r in rows if _norm(r["name"]) == "relevance"), None
     )
+    # A cut-off answer is unfinished, not off topic: its rewrite builds on what they
+    # did say (T-130: a real failure story got the generic "answer the question").
     off_topic = (
-        relevance is not None and relevance <= OFF_TOPIC and score < OFF_TOPIC_SCORE
+        relevance is not None
+        and relevance <= OFF_TOPIC
+        and score < OFF_TOPIC_SCORE
+        and not any(e.get("cut_off") for e in exchange)
     )
     if off_topic and not scenario:
         # The answer missed the question: the AI would have to stitch résumé facts
@@ -1341,6 +1387,21 @@ def _evaluate(
             answers,
             words,
         )
+        if off_subject:
+            kept = drop_named_subject(
+                stronger,
+                subject_item(off_subject[0], resume_text),
+                resume_text,
+                answers,
+            )
+            if kept != stronger:
+                stronger, changes = (
+                    kept
+                    or resume_fallback(
+                        question or exchange[0]["interviewer"], resume_text
+                    ),
+                    [],
+                )
 
     if not (off_topic and not scenario):
         stronger = fill_result(stronger, out.star.result_quote if out.star else None)
