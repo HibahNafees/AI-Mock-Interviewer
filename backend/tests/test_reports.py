@@ -412,6 +412,56 @@ def test_a_crash_while_scoring_doesnt_stop_the_other_questions(
     assert build(client, auth, sid).get_json()["report"]["status"] == "ready"
 
 
+def test_rewrite_keeps_the_sentence_a_back_reference_needs(client, auth, planned, fire):
+    # T-127 (live): the rewrite opened "I moved those queries…" without the
+    # sentence that said which queries.
+    sid = planned["id"]
+    started(client, auth, sid)
+    fire.turns = [{"action": "wrap_up", "message": "Thanks, that's all."}]
+    first = "Checkout got slow at peak because reporting queries hit the main database."
+    answer(
+        client,
+        auth,
+        sid,
+        f"{first} I moved those queries to a nightly ETL at Acme on the billing API.",
+        60_000,
+    )
+    client.post(f"/api/sessions/{sid}/end", headers=auth)
+    fire.scores = [
+        {
+            **SCORE,
+            "stronger_version": [
+                {
+                    "text": "On the Acme billing API, I moved those queries to a nightly ETL.",
+                    "source": None,
+                },
+                {"text": "That led to [add the result you achieved].", "source": None},
+            ],
+        }
+    ]
+    report = build(client, auth, sid).get_json()["report"]
+    rewrite = report["questions"][0]["evaluation"]["stronger_version"]
+    assert rewrite.startswith(first), rewrite
+
+
+def test_restore_context_only_adds_a_missing_antecedent():
+    from app.services.scoring import restore_context
+
+    said = [
+        "Checkout got slow because reporting queries ran on the replicas. "
+        "I moved those queries to an ETL."
+    ]
+    whole = "Reporting queries slowed checkout, so I moved those queries to an ETL."
+    assert restore_context(whole, said) == whole  # introduced in the same sentence
+    assert restore_context("Those changes helped.", ["I shipped it."]) == (
+        "Those changes helped."
+    )  # nothing to bring back
+    assert restore_context("I moved those queries to an ETL.", said) == (
+        "Checkout got slow because reporting queries ran on the replicas. "
+        "I moved those queries to an ETL."
+    )
+
+
 def test_result_placeholder_is_filled_with_the_result_they_gave(
     client, auth, planned, fire
 ):

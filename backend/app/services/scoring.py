@@ -519,6 +519,34 @@ def fill_result(stronger: str, result_quote: str | None) -> str:
     return " ".join(out)
 
 
+# "those queries" / "these changes": a back-reference that needs something before it.
+BACK_REF_RE = re.compile(r"\b(?:those|these)\s+([a-z]{3,})", re.I)
+
+
+def restore_context(stronger: str, answers: list[str]) -> str:
+    """The rewrite opened with "I moved those queries…" after leaving out the
+    sentence that said which queries (T-127): put the candidate's own sentence that
+    introduced them back in front."""
+    parts = re.split(r"(?<=[.!?])\s+", stronger.strip())
+    if not parts or not parts[0]:
+        return stronger
+    m = BACK_REF_RE.search(parts[0])
+    if m is None:
+        return stronger
+    noun = _stem(m[1].lower())
+    if noun in _stems(parts[0][: m.start()]):
+        return stronger  # introduced earlier in the same sentence
+    said = [x for a in answers for x in re.split(r"(?<=[.!?])\s+", a.strip()) if x]
+    for sentence in said:
+        if BACK_REF_RE.search(sentence) and _norm(m[0]) in _norm(sentence):
+            return stronger  # reached their own back-reference first: nothing to add
+        if noun in _stems(sentence):
+            if _norm(sentence) in _norm(stronger):
+                return stronger
+            return f"{sentence.strip()} {stronger.strip()}"
+    return stronger
+
+
 def resume_fallback(question: str, resume: str) -> str:
     """Rewrite skeleton for an answer with nothing usable: the résumé line that fits
     the question (no Fire call), plus a placeholder for the story."""
@@ -1316,6 +1344,7 @@ def _evaluate(
 
     if not (off_topic and not scenario):
         stronger = fill_result(stronger, out.star.result_quote if out.star else None)
+        stronger = restore_context(stronger, answers)
     said = _norm(" ".join(e["candidate"] for e in exchange))
     weak = [
         w.model_dump()
