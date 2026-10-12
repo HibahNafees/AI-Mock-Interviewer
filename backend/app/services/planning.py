@@ -143,19 +143,31 @@ def fix_reversed_opener(section: PlanSectionOut, names: set[str]) -> None:
         section.questions[0] = neutral_opener(section.scenario)
 
 
+# Words every coding or design question shares ("Write a function in Python that
+# takes a list of integers and returns..."): two different problems worded alike
+# must not count as the same one (T-90).
 STOPWORDS = frozenset(
     "a an and are as at be by can could do does for from given how i in into is it "
     "its me of on or should that the this to tell us was we what when where which "
-    "who why will with would write you your design implement build function".split()
+    "who why will with would write you your design implement build function create "
+    "python javascript java typescript list integer number array string return take "
+    "example output input simple system user handle consider component include "
+    "accommodate scalability scale considering check count true false place new "
+    "sketch basic architecture".split()
 )
+EXAMPLE_RE = re.compile(r"\b(?:for example|for instance|e\.g\.)", re.IGNORECASE)
 
 
 def _words(text: str) -> set[str]:
-    return {
-        w
-        for w in re.findall(r"[a-z0-9]+", text.lower())
-        if len(w) > 2 and w not in STOPWORDS
-    }
+    """Content words of a question, without its example and plural endings."""
+    text = EXAMPLE_RE.split(text, 1)[0].lower()
+    out = set()
+    for w in re.findall(r"[a-z0-9]+", text):
+        if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+            w = w[:-1]
+        if len(w) > 2 and w not in STOPWORDS:
+            out.add(w)
+    return out
 
 
 def similar(a: str, b: str, threshold: float = 0.6) -> bool:

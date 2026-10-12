@@ -365,6 +365,16 @@ def test_similar_questions():
         "Reverse a linked list.", "Find duplicates in an array."
     )
     assert not planning.similar("A.", "B.")
+    # Different problems in the same boilerplate (seen live, T-90).
+    stem = "Write a function in Python that takes a list of integers and returns the"
+    assert not planning.similar(
+        f"{stem} maximum sum of any two numbers. For example, [1, 3] gives 4.",
+        f"{stem} second largest number. For example, [1, 3] gives 1.",
+    )
+    assert planning.similar(
+        "Design an ordering system for a campus cafe with 400 users.",
+        "How would you design a simple online ordering system for campus cafes?",
+    )
 
 
 def test_coding_count_is_capped_by_the_length(client, auth, docs, fire):
