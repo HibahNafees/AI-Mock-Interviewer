@@ -222,6 +222,19 @@ def test_time_up_interrupts_politely_saves_the_partial_answer_and_moves_on(
     assert transcript[1]["segments"][0]["text"] == INTERRUPTIONS[0]
 
 
+def test_no_thanks_when_a_follow_up_after_a_cut_off_is_replaced(
+    client, auth, docs, fire
+):
+    # T-119: the model asked a follow-up anyway; the fixed move-on line said thanks.
+    s = pressured(client, auth, docs, 3)
+    started(client, auth, s["id"])
+    fire.turns = [{"action": "follow_up", "message": "What happened next?"}]
+    turn = cut_off(client, auth, s["id"], "I led the billing API rebuild and we")
+    turn = turn.get_json()["turn"]
+    assert turn["action"] == "next_question"
+    assert "Thanks" not in turn["message"] and "Let's move on." in turn["message"]
+
+
 def test_time_up_with_nothing_said_is_saved_and_scored_as_no_answer(
     client, auth, docs, fire
 ):

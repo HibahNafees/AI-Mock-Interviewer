@@ -485,7 +485,9 @@ def fill_result(stronger: str, result_quote: str | None) -> str:
         return stronger
     sentence = quote[0].upper() + quote[1:] + "."
     parts = re.split(r"(?<=[.!?])\s+", stronger.strip())
-    out, used = [], False
+    # The rewrite already tells it elsewhere: just drop the placeholder (T-121).
+    rest = " ".join(p for p in parts if not RESULT_PLACEHOLDER_RE.search(p))
+    out, used = [], _norm(quote) in _norm(rest)
     for part in parts:
         if RESULT_PLACEHOLDER_RE.search(part):
             if not used:
@@ -896,7 +898,8 @@ def cap_off_subject(
     item = {_stem(w) for w in _content_words(subject)} & _stems(resume) - {
         _stem(w) for w in QUESTION_WORDS
     }
-    if len(item) < SUBJECT_WORDS or item & _stems(" ".join(answers)):
+    said = _stems(" ".join(answers)) | _metrics(" ".join(answers))
+    if len(item) < SUBJECT_WORDS or (item | _metrics(subject)) & said:
         return None
     story = (check.story_subject or "something else").strip().rstrip(".")
     for c in criteria:
@@ -929,6 +932,15 @@ def off_subject_summary(summary: str, subject: str, story: str) -> str:
     ]
     lead = f"The story was about {story}, but the question asked about {subject}."
     return " ".join([lead, *kept])
+
+
+# "p95", "1.8", "300": WORD_RE splits or drops them, but naming the metric the
+# question asked about is being on subject (T-120: "p95 dropped from 1.8 seconds").
+METRIC_RE = re.compile(r"\b[a-z]+\d+\b|\d+\.\d+|\d{2,}")
+
+
+def _metrics(text: str) -> set[str]:
+    return set(METRIC_RE.findall(text.lower()))
 
 
 # Résumé words a named subject needs to count as a résumé item (T-114).

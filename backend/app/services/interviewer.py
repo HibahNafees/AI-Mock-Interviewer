@@ -738,14 +738,12 @@ def take_turn(
             if out.action == "follow_up" or out.action not in opts:
                 # options() always offers next_question or wrap_up.
                 out.action = next(a for a in EXITS if a in opts)
+        # A tough or pressure interviewer doesn't say thanks (T-97), nor right after
+        # cutting them off (T-109); that goes for the fallback line too (T-119).
+        plain = session.persona == "tough" or bool(session.pressure_level) or cut_off
         if scenario is None:
             # In character, praise or agreement is part of the role-play.
-            out.message = neutralize(
-                out.message,
-                plain=session.persona == "tough"
-                or bool(session.pressure_level)
-                or cut_off,
-            )
+            out.message = neutralize(out.message, plain=plain)
             if cut_off:
                 # They were just interrupted: thanking them for it sounds odd.
                 out.message = (
@@ -754,7 +752,7 @@ def take_turn(
             out.message = drop_heading(out.message, session)
         if out.action not in opts:
             log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
-            out = _fallback(opts, sign_off())
+            out = _fallback(opts, sign_off(), plain)
             fell_back = True
         elif scenario is None and out.action == "follow_up":
             root_id = current.follow_up_of_id or current.id
@@ -765,7 +763,9 @@ def take_turn(
                 # The candidate didn't answer it the first time: move on (T-44).
                 log.info("Repeated follow-up; moving on")
                 out = _fallback(
-                    {k: v for k, v in opts.items() if k != "follow_up"}, sign_off()
+                    {k: v for k, v in opts.items() if k != "follow_up"},
+                    sign_off(),
+                    plain,
                 )
                 fell_back = True
         in_character = scenario is not None and not fell_back
@@ -1261,12 +1261,13 @@ def _same_question(a: str, b: str) -> bool:
     return len(wa & wb) / min(len(wa), len(wb)) >= SAME_QUESTION
 
 
-def _fallback(opts: dict, sign_off: str) -> TurnOut:
+def _fallback(opts: dict, sign_off: str, plain: bool = False) -> TurnOut:
     """Used when the model picks a move the clock doesn't allow."""
     for action in ("next_question", "bonus"):
         q = opts.get(action)
         if q is not None:
-            return TurnOut(action=action, message=f"Thanks. Let's move on. {q.text}")
+            lead = "Let's move on." if plain else "Thanks. Let's move on."
+            return TurnOut(action=action, message=f"{lead} {q.text}")
     return TurnOut(action="wrap_up", message=sign_off)
 
 

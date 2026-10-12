@@ -455,6 +455,15 @@ def test_fill_result_only_replaces_result_placeholders():
         fill_result("I did it. [add the result]", None) == "I did it. [add the result]"
     )
     assert fill_result("At [add the company].", quote) == "At [add the company]."
+    # T-121: already in the rewrite, so the placeholder just goes.
+    assert (
+        fill_result(
+            "I paired with him. [add the result you achieved]. And we haven't had "
+            "a locking incident since.",
+            quote,
+        )
+        == "I paired with him. And we haven't had a locking incident since."
+    )
 
 
 def test_paragraph_items_are_checked_sentence_by_sentence():
@@ -1406,6 +1415,30 @@ def test_relevance_stands_without_a_named_subject_mismatch(
     )
     assert next(c for c in e["criteria"] if c["name"] == "Relevance")["score"] == 4
     assert e["summary"] == SCORE["summary"]
+
+
+def test_naming_the_metric_is_on_subject():
+    # T-120 (live): "cutting p95 latency" was asked; "p95 dropped from 1.8 seconds"
+    # was flagged off-subject because WORD_RE split p95 into p / 95.
+    from app.services.scoring import CriterionScore, GapCheckOut, cap_off_subject
+
+    resume = "Moved reporting to a nightly ETL, cutting p95 latency from 1.8s to 300ms."
+    check = GapCheckOut(named_subject="cutting p95 latency", story_subject="queries")
+
+    def criteria():
+        return [CriterionScore(name="Relevance", score=4, comment="On topic.")]
+
+    on = criteria()
+    said = "I compared outputs for a week; p95 dropped from 1.8 seconds to 300 ms."
+    assert cap_off_subject(on, check, [said], resume) is None
+    assert on[0].score == 4
+    off = criteria()
+    other = "I mentored a junior engineer through a migration rollback."
+    assert cap_off_subject(off, check, [other], resume) == (
+        "cutting p95 latency",
+        "queries",
+    )
+    assert off[0].score == 2
 
 
 def test_gap_check_drops_gaps_that_dont_fit_the_question(client, auth, planned, fire):
