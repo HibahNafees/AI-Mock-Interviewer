@@ -54,6 +54,7 @@ class Thread:
     asked: list[Question]
     answers: dict[int, Answer]  # question id → first-attempt answer
     retries: list[Answer] = field(default_factory=list)
+    timed: bool = False  # pressure mode with a per-answer time limit
 
     @property
     def main_answer(self) -> Answer | None:
@@ -82,7 +83,7 @@ class Thread:
 
     def clips(self) -> list[Clip]:
         return [
-            Clip(a.transcript, a.duration_ms, a.input_mode)
+            Clip(a.transcript, a.duration_ms, a.input_mode, self.timed or a.cut_off)
             for q in self.asked
             if (a := self.answers.get(q.id)) is not None
         ]
@@ -113,6 +114,7 @@ def threads(session: Session) -> list[Thread]:
                 asked=group,
                 answers={g.id: first[g.id] for g in group if g.id in first},
                 retries=[a for a in rows if a.question_id == q.id and a.attempt_no > 1],
+                timed=pressure.timed(session),
             )
         )
     return out
@@ -425,7 +427,7 @@ def retry(
             question.section,
             question.budget_sec,
             exchange,
-            [Clip(text, duration_ms, input_mode)],
+            [Clip(text, duration_ms, input_mode, pressure.timed(session))],
             question=question.text,
             criteria=criteria or None,
             previous=previous,

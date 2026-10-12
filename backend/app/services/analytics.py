@@ -30,6 +30,9 @@ class Clip:
     text: str
     duration_ms: int | None
     input_mode: str
+    # Answered under a per-answer time limit (pressure mode) or cut off by one: the
+    # question's minute budget can't be used, so "too short" is no advice (T-116).
+    timed: bool = False
 
 
 def word_count(text: str) -> int:
@@ -68,11 +71,11 @@ def delivery(clips: list[Clip], budget_sec: int | None) -> dict:
         "filler_total": filler_total,
         "fillers_per_min": fillers_per_min,
     }
-    data["tips"] = delivery_tips(data)
+    data["tips"] = delivery_tips(data, timed=any(c.timed for c in clips))
     return data
 
 
-def delivery_tips(d: dict) -> list[str]:
+def delivery_tips(d: dict, timed: bool = False) -> list[str]:
     tips = []
     wpm, budget, secs = d["wpm"], d["budget_sec"], d["duration_sec"]
     if wpm is not None and wpm > FAST_WPM:
@@ -96,7 +99,7 @@ def delivery_tips(d: dict) -> list[str]:
             f"This took about {_mins(secs)} against a {_mins(budget)} budget; "
             "lead with the headline and cut background detail."
         )
-    elif budget and budget >= 120 and 0 < secs < budget * SHORT_RATIO:
+    elif not timed and budget and budget >= 120 and 0 < secs < budget * SHORT_RATIO:
         tips.append(
             f"This was short ({_mins(secs)} of a {_mins(budget)} budget); "
             "add a concrete example and the result."

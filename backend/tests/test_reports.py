@@ -76,6 +76,12 @@ def test_typed_answers_have_no_pace_or_fillers():
     assert any("short" in t for t in d["tips"])  # 60 s of a 4-minute budget
 
 
+def test_no_short_tip_under_a_time_limit():
+    # Pressure mode's 30 s limit or a cut-off answer: the budget can't be used (T-116).
+    d = delivery([Clip("I profiled the ledger queries and", 30_000, "text", True)], 300)
+    assert not any("short" in t for t in d["tips"])
+
+
 def test_long_answer_tip_and_summary():
     long = delivery([Clip("x " * 300, 400_000, "voice")], budget_sec=180)
     assert any("against a 3.0 min budget" in t for t in long["tips"])

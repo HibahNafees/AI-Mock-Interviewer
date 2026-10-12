@@ -258,6 +258,9 @@ def test_cut_off_answer_is_scored_on_what_was_said_with_a_time_tip(
     e = report["questions"][0]["evaluation"]
     assert e["cut_off"] is True and e["score"] > 1
     assert e["tips"][0] == CUT_OFF_TIP and len(e["tips"]) <= 3
+    # No "too short for the budget" tip next to the time limit (T-116).
+    tips = report["questions"][0]["delivery"]["tips"]
+    assert not any("short" in t for t in tips)
     score_prompt = next(
         c["prompt"] for c in fire.calls if "Score one question" in c["prompt"]
     )

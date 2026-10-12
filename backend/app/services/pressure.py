@@ -67,6 +67,14 @@ def time_line(level: int | None) -> str:
     return f"You have {limit} seconds for this one." if limit else ""
 
 
+def timed(session: Session) -> bool:
+    """Whether answers had a time limit at any point (it can only be eased)."""
+    if session.mode != "pressure":
+        return False
+    start = (session.plan_json or {}).get("pressure_start", session.pressure_level)
+    return time_limit(start) is not None
+
+
 def info(session: Session) -> dict | None:
     if session.mode != "pressure":
         return None
