@@ -243,6 +243,17 @@ def test_fire_errors_reach_the_user(client, auth, planned, fire):
         ),
         ("Great answer. Next: why MySQL?", "Thanks. Next: why MySQL?"),
         ("Okay. Tell me about a strong result you achieved.", None),
+        # T-117: praise of a résumé item keeps the item "that project" refers to.
+        (
+            "The latency reduction project in your résumé is impressive. "
+            "What was your specific role in that project?",
+            "Thanks. Let's talk about the latency reduction project in your résumé. "
+            "What was your specific role in that project?",
+        ),
+        (
+            "Your answer was really impressive. What was your role?",
+            "Thanks. What was your role?",
+        ),
         (
             "Great. Give me an example of a solid design you shipped.",
             "Thanks. Give me an example of a solid design you shipped.",

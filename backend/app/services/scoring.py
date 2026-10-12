@@ -884,19 +884,20 @@ def cap_off_subject(
     check: GapCheckOut | None,
     answers: list[str],
     resume: str,
-) -> bool:
+) -> tuple[str, str] | None:
     """A real story about something other than the résumé item the question named
     (T-114: asked about building the refunds API, they told a migration story; it
     scored 3.67) gets Relevance at most 2. The model names the subject well but
     judges a match leniently, so the match is decided in code: at least two of the
     subject's words are in the résumé (a résumé item, not a category like
-    "optimizing a backend process") and none of those appear in their answers."""
+    "optimizing a backend process") and none of those appear in their answers.
+    Returns (named subject, story subject) when it capped Relevance."""
     subject = ((check.named_subject or "") if check else "").strip().rstrip(".")
     item = {_stem(w) for w in _content_words(subject)} & _stems(resume) - {
         _stem(w) for w in QUESTION_WORDS
     }
     if len(item) < SUBJECT_WORDS or item & _stems(" ".join(answers)):
-        return False
+        return None
     story = (check.story_subject or "something else").strip().rstrip(".")
     for c in criteria:
         if _norm(c.name) == "relevance" and c.score is not None:
@@ -906,8 +907,28 @@ def cap_off_subject(
                     f"The question asked about {subject}, but the story was about "
                     f"{story}."
                 )
-            return True
-    return False
+            return subject, story
+    return None
+
+
+# A summary sentence that calls the answer relevant or on topic.
+RELEVANT_CLAIM_RE = re.compile(
+    r"\b(?:relevant|on[- ]topic|(?:directly |clearly )?(?:address|answer)(?:s|ed)? "
+    r"the question)\b",
+    re.IGNORECASE,
+)
+
+
+def off_subject_summary(summary: str, subject: str, story: str) -> str:
+    """T-118: Relevance was capped in code, so the model's summary may still call the
+    story relevant; such sentences go and the summary says what happened."""
+    kept = [
+        x
+        for x in re.split(r"(?<=[.!?])\s+", summary.strip())
+        if x and not RELEVANT_CLAIM_RE.search(x)
+    ]
+    lead = f"The story was about {story}, but the question asked about {subject}."
+    return " ".join([lead, *kept])
 
 
 # Résumé words a named subject needs to count as a résumé item (T-114).
@@ -1207,8 +1228,10 @@ def _evaluate(
         )
     verify_coverage(out, answers)
     gaps = check_gaps(user_id, exchange, out.missing_points, answers)
-    off_subject = not scenario and cap_off_subject(
-        out.criteria, gaps, answers, resume_text
+    off_subject = (
+        cap_off_subject(out.criteria, gaps, answers, resume_text)
+        if not scenario
+        else None
     )
     if not criteria:  # "Try again" must score the same criteria as before
         drop_untested(out.criteria, rubric, question or exchange[0]["interviewer"])
@@ -1275,13 +1298,15 @@ def _evaluate(
         changes_json=[c.model_dump() for c in changes],
         delivery_json=delivery(clips, budget_sec),
         feedback_json={
-            "summary": out.summary,
+            "summary": (
+                off_subject_summary(out.summary, *off_subject)
+                if off_subject
+                else out.summary
+            ),
             "weak_moments": weak,
             "star": out.star.model_dump() if out.star else None,
             "tips": (
-                [OFF_SUBJECT_TIP.format(subject=gaps.named_subject.strip().rstrip("."))]
-                if off_subject
-                else []
+                [OFF_SUBJECT_TIP.format(subject=off_subject[0])] if off_subject else []
             )
             + [t for t in out.tips if t.strip()][: 1 if off_subject else 2],
             "strengths": [s for s in out.strengths if s.strip()][:3],

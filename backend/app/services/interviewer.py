@@ -199,6 +199,38 @@ def _is_question(sentence: str) -> bool:
     return "?" in sentence or bool(PROMPT_RE.match(sentence))
 
 
+# "<subject> is impressive." about something other than their answer: the subject is
+# kept, since the question after it often says "that project" (T-117).
+PRAISED_SUBJECT_RE = re.compile(
+    r"^\s*(?P<subject>.+?)\s+(?:is|was|sounds|looks|seems)\s+"
+    r"(?:really |very |quite |particularly |truly |so )?"
+    r"(?:great|good|solid|interesting|impressive|excellent|nice|fantastic|"
+    r"awesome|wonderful|insightful|strong|perfect)\s*[.!]*\s*$",
+    re.IGNORECASE,
+)
+ABOUT_THE_ANSWER_RE = re.compile(
+    r"^(?:that|this|it|what you|your (?:answer|response|example|story|point|"
+    r"approach|explanation|thinking|reasoning))\b",
+    re.IGNORECASE,
+)
+
+
+def _keep_subject(sentence: str) -> str | None:
+    """'The latency project in your résumé is impressive.' → "Let's talk about the
+    latency project in your résumé." None when it praises the answer itself."""
+    m = PRAISED_SUBJECT_RE.match(sentence)
+    if not m:
+        return None
+    subject = m["subject"].strip()
+    if len(subject.split()) < 3 or ABOUT_THE_ANSWER_RE.match(subject):
+        return None
+    first, _, rest = subject.partition(" ")
+    if first.lower() in ("the", "your", "a", "an"):
+        subject = f"{first.lower()} {rest}"
+    trail = sentence[len(sentence.rstrip()) :]
+    return f"Let's talk about {subject}.{trail or ' '}"
+
+
 def neutralize(message: str, plain: bool = False) -> str:
     """Drop statements that praise or grade the answer; keep the question(s)."""
     sentences = SENTENCE_RE.findall(message)
@@ -207,6 +239,8 @@ def neutralize(message: str, plain: bool = False) -> str:
         last = i == len(sentences) - 1
         if not last and not _is_question(sentence) and PRAISE_RE.search(sentence):
             dropped = True
+            if about := _keep_subject(sentence):
+                kept.append(about)
             continue
         kept.append(sentence)
     if not dropped:

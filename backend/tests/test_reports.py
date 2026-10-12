@@ -1343,7 +1343,13 @@ def _relevant(score):
 
 def test_story_about_another_subject_caps_relevance(client, auth, planned, fire):
     # T-114: asked about building the refunds API, they told a migration story.
-    fire.scores = [_relevant(SCORE)]
+    fire.scores = [
+        {
+            **_relevant(SCORE),
+            "summary": "The candidate described a relevant challenge clearly. "
+            "They did not state the result.",
+        }
+    ]
     fire.gap_checks = [
         {
             "points": [],
@@ -1363,6 +1369,11 @@ def test_story_about_another_subject_caps_relevance(client, auth, planned, fire)
     assert "table-locking migration" in relevance["comment"]
     assert e["tips"][0].startswith("Tell a story about what the question names")
     assert "(building the billing API)" in e["tips"][0]
+    # T-118: the summary doesn't call the story relevant.
+    assert e["summary"] == (
+        "The story was about a table-locking migration, but the question asked "
+        "about building the billing API. They did not state the result."
+    )
     prompt = next(
         c["prompt"] for c in fire.calls if "Check which points" in c["prompt"]
     )
@@ -1394,6 +1405,7 @@ def test_relevance_stands_without_a_named_subject_mismatch(
         client, auth, planned["id"], "My answer is about the billing API at Acme work."
     )
     assert next(c for c in e["criteria"] if c["name"] == "Relevance")["score"] == 4
+    assert e["summary"] == SCORE["summary"]
 
 
 def test_gap_check_drops_gaps_that_dont_fit_the_question(client, auth, planned, fire):
