@@ -1,6 +1,5 @@
 """Pressure mode: levels, time limits, ease-off control, composure score."""
 
-
 from app.extensions import db
 from app.models import Report
 from app.services.pressure import LEVEL_NOTES, RESPECT

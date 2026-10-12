@@ -99,3 +99,27 @@ def test_tough_interviewer_signs_off_briefly(client, auth, docs, fire):
             client, auth, sid, "An answer with enough words in it."
         ).get_json()
     assert turn["turn"]["message"] == TOUGH_CLOSING.format(name="Ada")
+
+
+def test_small_talk_reply_drops_questions_and_its_own_transition(
+    icebreaker, client, auth, planned, fire
+):
+    """T-98: the app adds "Let's get started." itself."""
+    sid = planned["id"]
+    started(client, auth, sid)
+    fire.small_talk_reply = (
+        "Glad to hear it. Coffee helps, doesn't it? Let's get started."
+    )
+    r = answer(client, auth, sid, "Good, just had coffee.").get_json()
+    planned_q = PLAN["sections"][0]["questions"][0]
+    assert r["turn"]["message"] == f"Glad to hear it. Let's get started. {planned_q}"
+
+
+def test_small_talk_reply_that_is_only_a_question_falls_back(
+    icebreaker, client, auth, planned, fire
+):
+    sid = planned["id"]
+    started(client, auth, sid)
+    fire.small_talk_reply = "Ready to begin?"
+    r = answer(client, auth, sid, "Sure.").get_json()
+    assert r["turn"]["message"].startswith("Thanks for sharing. Let's get started. ")

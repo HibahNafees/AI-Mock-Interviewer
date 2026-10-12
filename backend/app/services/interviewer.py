@@ -817,6 +817,25 @@ class IcebreakerReply(BaseModel):
     message: str = Field(min_length=1, max_length=300)
 
 
+# The app adds its own "Let's get started." after the reply (T-98).
+INTO_PLAN_RE = re.compile(
+    r"\s*(now,?\s*)?let'?s\s+(get started|get to it|begin|start|dive in|jump in)\b",
+    re.IGNORECASE,
+)
+
+
+def tidy_small_talk(reply: str) -> str:
+    """Drop questions and "let's get started" lines from the ice-breaker reply,
+    which the model adds despite the prompt; the first question follows it (T-98).
+    """
+    kept = [
+        s
+        for s in SENTENCE_RE.findall(reply)
+        if "?" not in s and not INTO_PLAN_RE.match(s)
+    ]
+    return "".join(kept).strip() or ICEBREAKER_FALLBACK
+
+
 def _after_icebreaker(
     session: Session,
     user_id: int,
@@ -849,6 +868,7 @@ def _after_icebreaker(
             max_tokens=120,
             temperature=0.7,
         ).message
+        reply = tidy_small_talk(reply)
     except (FireError, LimitReached) as err:
         # Small talk isn't worth failing the turn over.
         log.warning("Ice-breaker reply failed: %s", err)

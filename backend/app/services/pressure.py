@@ -15,7 +15,7 @@ RESPECT = (
 )
 LEVEL_NOTES = {
     1: 'Be noticeably more skeptical than usual: after most answers, question one claim and ask them to back it up ("How do you know it was your change that fixed it?").',
-    2: 'When an answer is vague, drifts or says "we", push back before your question ("That\'s not quite what I asked.", "What did you do, specifically?"). While follow_up is in the list, prefer a challenging follow-up to moving on, even after a good answer.',
+    2: 'When an answer is vague, drifts or says "we", push back before your question ("That\'s not quite what I asked.", "What did you do, specifically?"). While follow_up is in the list, prefer a challenging follow-up to moving on, even after a good answer. When you move on after a vague answer, first say in a few words what was missing ("That didn\'t answer it. Moving on."), then ask the next question.',
     3: "Keep your turns short and brisk, under 30 words; don't reassure.",
     4: "Now and then (not every turn) use a curveball follow-up: an unexpected but fair angle on the same topic, e.g. what they'd do if a key assumption were wrong.",
     5: "Be demanding: challenge weak reasoning directly and expect precise, quantified answers.",

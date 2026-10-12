@@ -223,6 +223,7 @@ class FakeFire:
         self.speech_models: list[str | None] = []
         self.speech_error: Exception | None = None
         self.small_talk_error: Exception | None = None
+        self.small_talk_reply = "Doing well, thanks for asking!"
         self.decode: dict = DECODE
         self.reverse_candidate: dict = REVERSE_CANDIDATE
         self.gaps: dict = GAPS
@@ -358,7 +359,7 @@ class FakeFire:
         elif "moment of small talk" in prompt:
             if self.small_talk_error:
                 raise self.small_talk_error
-            body = {"message": "Doing well, thanks for asking!"}
+            body = {"message": self.small_talk_reply}
         elif self.turns:
             body = self.turns.pop(0)
         else:
