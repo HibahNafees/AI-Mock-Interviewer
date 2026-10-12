@@ -67,8 +67,19 @@ def test_delete_my_data_removes_everything_but_keeps_the_spend(
     # The budget still counts what this account spent.
     assert abs(month_spend_usd() - spend) < 1e-9
     assert db.session.query(AnonSpend).count() == 1
-    # The old token no longer reaches an account.
-    assert client.get("/api/auth/me", headers=auth).status_code == 404
+    # The old token is refused everywhere, before any Fire work (T-125: it was
+    # still accepted, and Fire spend for a missing user went unrecorded).
+    calls = len(fire.calls)
+    for path in ("/api/auth/me", "/api/sessions", "/api/documents", "/api/stats"):
+        assert client.get(path, headers=auth).status_code == 401, path
+    r = client.post("/api/company/research", json={"url": "acme.com"}, headers=auth)
+    assert r.status_code == 401
+    r = client.post(
+        "/api/decoder", json={"text": "Backend engineer. " * 20}, headers=auth
+    )
+    assert r.status_code == 401
+    assert "no longer exists" in r.get_json()["error"]
+    assert len(fire.calls) == calls
 
 
 def test_share_link_is_read_only_and_revocable(client, auth, fire, planned, signup):

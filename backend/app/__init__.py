@@ -107,6 +107,18 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     def expired_token(_header, _payload):
         return jsonify(error="Your session expired; please log in again"), 401
 
+    # A token outlives a deleted account (Delete my data) unless the user is looked
+    # up on every request: it was still accepted and could start Fire work (T-125).
+    @jwt.user_lookup_loader
+    def load_user(_header, payload):
+        from .models import User
+
+        return db.session.get(User, int(payload["sub"]))
+
+    @jwt.user_lookup_error_loader
+    def missing_user(_header, _payload):
+        return jsonify(error="Your account no longer exists; please log in again"), 401
+
     @app.errorhandler(404)
     def not_found(_err):
         return jsonify(error="Not found"), 404
