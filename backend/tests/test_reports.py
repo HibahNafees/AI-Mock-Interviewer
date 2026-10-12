@@ -226,7 +226,7 @@ def test_report_scores_each_question_then_summarizes(client, auth, planned, fire
     assert fire.kinds()[before:] == ["score", "gap", "score", "gap", "summary"]
 
     assert report["status"] == "ready"
-    assert report["progress"] == {"scored": 2, "total": 2}
+    assert report["progress"] == {"scored": 2, "total": 2, "set_aside": 0}
     # Role 70% (API design 4) + communication 30% split equally (3, 4, 2) → 3.7,
     # computed here, not by the AI.
     assert report["overall_score"] == pytest.approx(3.7)
@@ -281,7 +281,7 @@ def test_failed_question_is_resumed_without_rescoring(client, auth, planned, fir
     fire.scores = [FireError("The AI service is busy", 429)]
     report = build(client, auth, sid).get_json()["report"]
     assert report["status"] == "failed"
-    assert report["progress"] == {"scored": 1, "total": 2}
+    assert report["progress"] == {"scored": 1, "total": 2, "set_aside": 0}
     assert report["questions"][0]["evaluation"] is None
     assert report["questions"][0]["delivery"]["words"] == 12  # analytics still shown
 
@@ -299,6 +299,64 @@ def test_invalid_scorer_json_is_retried_once(client, auth, planned, fire):
     report = build(client, auth, sid).get_json()["report"]
     assert report["status"] == "ready"
     assert fire.kinds().count("score") == 3
+
+
+def test_long_nested_texts_are_trimmed_not_rejected(client, auth, planned, fire):
+    # T-105: a long recalled answer overflowed a nested quote on every retry.
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    long = {
+        **SCORE,
+        "said": {"situation": "x " * 500, "actions": ["did it"] * 12},
+        "weak_moments": [{"quote": "", "why": "empty quote"}],
+        "missing_points": [
+            {"point": "A result", "covered": False, "evidence": "y " * 400}
+        ],
+    }
+    fire.scores = [long, long]
+    report = build(client, auth, sid).get_json()["report"]
+    assert report["status"] == "ready"
+    assert fire.kinds().count("score") == 2  # no invalid-JSON retries
+
+
+def test_unscorable_question_is_set_aside_so_the_report_finishes(
+    client, auth, planned, fire
+):
+    # T-105: at temperature 0 the same answer got the same unusable reply, so
+    # "Finish the report" failed again every time.
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    bad = '{"criteria": []}'
+    fire.scores = [bad, bad]
+    report = build(client, auth, sid).get_json()["report"]
+    assert report["status"] == "failed"
+    assert report["progress"] == {"scored": 1, "total": 2, "set_aside": 0}
+
+    fire.scores = [bad, bad]
+    report = build(client, auth, sid).get_json()["report"]
+    assert report["status"] == "ready"
+    assert report["progress"] == {"scored": 1, "total": 2, "set_aside": 1}
+    assert report["questions"][0]["set_aside"] is True
+    assert report["questions"][1]["set_aside"] is False
+    assert report["takeaways"] and report["overall_score"] is not None
+
+    # Asking again doesn't spend anything on it.
+    before = len(fire.calls)
+    assert build(client, auth, sid).get_json()["report"]["status"] == "ready"
+    assert "score" not in fire.kinds()[before:]
+
+
+def test_a_crash_while_scoring_doesnt_stop_the_other_questions(
+    client, auth, planned, fire
+):
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    fire.scores = [RuntimeError("bug")]
+    report = build(client, auth, sid).get_json()["report"]
+    assert report["status"] == "failed"
+    assert report["progress"]["scored"] == 1  # the other one was still scored
+    fire.scores = [RuntimeError("bug")]
+    assert build(client, auth, sid).get_json()["report"]["status"] == "ready"
 
 
 def test_paragraph_items_are_checked_sentence_by_sentence():

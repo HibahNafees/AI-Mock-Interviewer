@@ -304,6 +304,22 @@ describe('report', () => {
     expect(posted).toBe(1)
   })
 
+  it('finishes without a question the AI could not score, and says so', async () => {
+    // T-105: "Finish the report" used to fail again on the same question forever.
+    const second = { ...QUESTION, question_id: 4, text: 'Tell me about Beta.', evaluation: null, set_aside: true }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7/report': [
+        200,
+        { report: { ...READY, progress: { scored: 1, total: 2, set_aside: 1 }, questions: [QUESTION, second] } },
+      ],
+    })
+    renderAt('/report/7')
+    expect(await screen.findByText(/1 question couldn't be scored, so the report covers the other/)).toBeInTheDocument()
+    expect(screen.getByText(/The AI couldn't score this answer/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Finish the report' })).not.toBeInTheDocument()
+  })
+
   it('shows the budget error when the report cannot start', async () => {
     respond({
       'GET /api/auth/me': [200, { user: ADA }],

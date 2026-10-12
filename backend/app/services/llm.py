@@ -13,6 +13,12 @@ from pydantic import BaseModel, ValidationError
 from .fire import FireError, get_fire
 from .limits import record_fire_call
 
+
+class UnusableReply(FireError):
+    """Fire answered, but twice not in the required shape. At temperature 0 asking
+    again gives the same reply, so callers shouldn't retry forever (T-105)."""
+
+
 log = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
@@ -84,4 +90,4 @@ def chat_json(
                     "Reply again with only the corrected JSON object.",
                 },
             ]
-    raise FireError("The AI returned an unusable answer; please try again")
+    raise UnusableReply("The AI returned an unusable answer; please try again")

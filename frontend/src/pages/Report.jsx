@@ -520,7 +520,7 @@ function QuestionCard({ q, index, sessionId, onAttempt, failed, shared }) {
         </div>
         {e ? (
           <Score value={e.score} />
-        ) : failed ? (
+        ) : failed || q.set_aside ? (
           <span className="chip bg-brand-100 text-brand-700">Couldn't be scored</span>
         ) : (
           <span className="text-sm text-slate-500">Scoring…</span>
@@ -531,6 +531,11 @@ function QuestionCard({ q, index, sessionId, onAttempt, failed, shared }) {
         <Evaluation e={e} said={q.exchange} roleplay={Boolean(q.scenario)} />
       ) : (
         <div className="space-y-2">
+          {q.set_aside && (
+            <p className="text-sm text-slate-500">
+              The AI couldn't score this answer, so the overall score and summary leave it out.
+            </p>
+          )}
           {q.exchange.map((s, i) => (
             <div key={i}>
               <p className="whitespace-pre-wrap text-slate-700">{s.answer}</p>
@@ -1102,7 +1107,7 @@ export default function Report() {
 }
 
 function ReportView({ report, id, onAttempt, build, busy, error, shared = false }) {
-  const { scored, total } = report.progress
+  const { scored, total, set_aside: setAside = 0 } = report.progress
   const generating = report.status === 'generating'
   return (
     <section className="space-y-6">
@@ -1163,6 +1168,12 @@ function ReportView({ report, id, onAttempt, build, busy, error, shared = false 
       )}
       {report.status === 'ready' && total > 0 && !shared && (
         <ShareReport sessionId={report.session_id} token={report.share_token} />
+      )}
+      {report.status === 'ready' && setAside > 0 && (
+        <p role="note" className="rounded-md bg-brand-50 p-3 text-sm text-slate-700">
+          {setAside === 1 ? '1 question' : `${setAside} questions`} couldn't be scored, so the report covers the other{' '}
+          {scored}.
+        </p>
       )}
       {report.status === 'failed' && !shared && (
         <div role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">

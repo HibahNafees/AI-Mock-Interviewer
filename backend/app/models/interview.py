@@ -163,6 +163,9 @@ class Report(db.Model):
     analytics_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     # When the story bank was updated from this session (one Fire call, once).
     stories_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # {question id: runs whose score came back unusable}; at 2 the question is set
+    # aside so the report can finish (T-105).
+    scoring_failures_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     # Public share link; set to null to revoke.
     share_token: Mapped[str | None] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = created_at_column()

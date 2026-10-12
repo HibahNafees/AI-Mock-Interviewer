@@ -5,6 +5,8 @@ from app.models import Debrief, QuestionBankItem, Session
 from app.services.debriefs import DEFAULT_RUBRIC
 from app.services.fire import FireError
 
+from tests.fakes import SCORE
+
 ITEMS = [
     {
         "question": "Tell me about yourself.",
@@ -163,3 +165,29 @@ def test_debrief_can_be_deleted(client, auth, fire):
     assert client.delete(f"/api/debriefs/{d['id']}", headers=auth).status_code == 200
     assert client.get("/api/debriefs", headers=auth).get_json()["debriefs"] == []
     assert db.session.get(Session, d["session_id"]) is None
+
+
+def test_eleven_recalled_questions_finish_even_if_one_cant_be_scored(
+    app, client, auth, fire
+):
+    """User report 2026-10-12: 10 of 11 scored and "Finish the report" never fixed it
+    (T-105)."""
+    app.config["REPORTS_INLINE"] = True
+    items = [
+        {"question": f"Question number {n}?", "answer": f"My recalled answer {n}. " * 6}
+        for n in range(1, 12)
+    ]
+    bad = '{"criteria": []}'
+    fire.scores = [SCORE] * 10 + [bad, bad]  # the 11th never comes back usable
+    d = debrief(client, auth, items=items).get_json()["debrief"]
+    sid = d["session_id"]
+    report = client.get(f"/api/sessions/{sid}/report", headers=auth).get_json()[
+        "report"
+    ]
+    assert report["status"] == "failed"
+    assert report["progress"] == {"scored": 10, "total": 11, "set_aside": 0}
+
+    fire.scores = [bad, bad]
+    r = client.post(f"/api/sessions/{sid}/report", headers=auth).get_json()["report"]
+    assert r["status"] == "ready"
+    assert r["progress"] == {"scored": 10, "total": 11, "set_aside": 1}

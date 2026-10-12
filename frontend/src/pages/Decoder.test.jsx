@@ -20,6 +20,13 @@ const DECODE = {
 }
 const POSTING = 'We want a backend engineer who will work closely with stakeholders. '.repeat(5)
 
+// Paste, as people do: typing 340 characters key by key ran past the 5 s test
+// timeout on a busy machine (T-104).
+async function paste(field, text) {
+  await userEvent.click(field)
+  await userEvent.paste(text)
+}
+
 function respond(routes) {
   const calls = []
   vi.stubGlobal(
@@ -55,7 +62,7 @@ describe('job description decoder', () => {
       'GET /api/decoder/abc123': [200, { decode: DECODE }],
     })
     renderAt('/decode')
-    await userEvent.type(await screen.findByLabelText('Job description'), POSTING)
+    await paste(await screen.findByLabelText('Job description'), POSTING)
     await userEvent.click(screen.getByRole('button', { name: 'Decode this job' }))
     expect(await screen.findByText('Interpretation, not fact.')).toBeInTheDocument()
     expect(screen.getByText('Keeping stakeholders aligned')).toBeInTheDocument()
@@ -82,7 +89,7 @@ describe('job description decoder', () => {
       'POST /api/decoder': [200, { decode: DECODE }],
     })
     renderAt('/decoder')
-    await userEvent.type(await screen.findByLabelText('Job description'), POSTING)
+    await paste(await screen.findByLabelText('Job description'), POSTING)
     await userEvent.click(screen.getByRole('button', { name: 'Decode this job' }))
     expect(await screen.findByRole('link', { name: 'Practice for this job' })).toHaveAttribute('href', '/setup')
   })
@@ -114,7 +121,7 @@ describe('job description decoder', () => {
   it('shows the daily-cap message', async () => {
     respond({ 'POST /api/decoder': [429, { error: "That's today's free decodes. Sign up (free) to decode more job descriptions." }] })
     renderAt('/decode')
-    await userEvent.type(await screen.findByLabelText('Job description'), POSTING)
+    await paste(await screen.findByLabelText('Job description'), POSTING)
     await userEvent.click(screen.getByRole('button', { name: 'Decode this job' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Sign up (free)')
   })

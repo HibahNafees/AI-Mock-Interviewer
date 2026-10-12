@@ -33,7 +33,7 @@ from . import body as body_language
 from .work import with_work
 from .fire import FireError
 from .limits import LimitReached, check_budget
-from .llm import chat_json, render
+from .llm import UnusableReply, chat_json, render
 
 log = logging.getLogger(__name__)
 
@@ -177,14 +177,31 @@ def _launch(report_id: int, user_id: int) -> None:
     threading.Thread(target=run, name=f"report-{report_id}", daemon=True).start()
 
 
+# Runs in which one question's score came back unusable before it is set aside.
+GIVE_UP_AFTER = 2
+
+
+def set_aside(report: Report) -> set[int]:
+    """Questions that couldn't be scored in GIVE_UP_AFTER runs (T-105)."""
+    return {
+        int(q)
+        for q, n in (report.scoring_failures_json or {}).items()
+        if n >= GIVE_UP_AFTER
+    }
+
+
 def generate(report_id: int, user_id: int) -> None:
     report = db.session.get(Report, report_id)
     session = db.session.get(Session, report.session_id)
     items = threads(session)
     done = evaluations_for([t.main_answer.id for t in items])
     failed = False
+    failures = dict(report.scoring_failures_json or {})
+    # A run before this one already tried (and failed) these questions, including
+    # reports that failed before failures were counted.
+    again = report.analytics_json is not None
     for t in items:
-        if t.main_answer.id in done:
+        if t.main_answer.id in done or t.root.id in set_aside(report):
             continue
         try:
             done[t.main_answer.id] = scoring.evaluate(
@@ -197,19 +214,37 @@ def generate(report_id: int, user_id: int) -> None:
                 t.clips(),
                 question=t.root.text,
             )
-        except (FireError, LimitReached) as err:
-            log.warning("Scoring question %s failed: %s", t.root.id, err)
+        except Exception as err:
+            if isinstance(err, (FireError, LimitReached)) and not isinstance(
+                err, UnusableReply
+            ):
+                # Fire down or the budget reached: a later retry can work.
+                log.warning("Scoring question %s failed: %s", t.root.id, err)
+                db.session.rollback()
+                failed = True
+                continue
+            # The same answer gives the same unusable reply at temperature 0, so
+            # "Finish the report" would fail forever: after GIVE_UP_AFTER runs the
+            # question is set aside and the report finishes without it (T-105).
+            log.exception("Scoring question %s gave no usable score", t.root.id)
             db.session.rollback()
-            failed = True
+            key = str(t.root.id)
+            failures[key] = GIVE_UP_AFTER if again else failures.get(key, 0) + 1
+            report.scoring_failures_json = dict(failures)
+            db.session.commit()
+            if failures[key] < GIVE_UP_AFTER:
+                failed = True
 
     per_question = [delivery(t.clips(), t.root.budget_sec) for t in items]
     report.analytics_json = session_summary(per_question)
     scored = [done[t.main_answer.id] for t in items if t.main_answer.id in done]
+    # The summary, story bank and next-round prediction use only scored questions.
+    items = [t for t in items if t.main_answer.id in done]
     if scored:
         report.overall_score = round(sum(e.score for e in scored) / len(scored), 2)
         report.verdict = scoring.verdict_for(report.overall_score)
     if failed or not scored:
-        report.status = "failed" if items else "ready"
+        report.status = "failed" if failed else "ready"
         db.session.commit()
         return
 
@@ -502,6 +537,7 @@ def report_dict(session: Session, report: Report) -> dict:
                     e.delivery_json if e else delivery(t.clips(), t.root.budget_sec)
                 ),
                 "evaluation": scoring.evaluation_dict(e),
+                "set_aside": e is None and t.root.id in set_aside(report),
                 "attempts": [
                     {
                         "attempt_no": a.attempt_no,
@@ -554,6 +590,11 @@ def report_dict(session: Session, report: Report) -> dict:
         "progress": {
             "scored": sum(1 for t in items if t.main_answer.id in evals),
             "total": len(items),
+            "set_aside": sum(
+                1
+                for t in items
+                if t.main_answer.id not in evals and t.root.id in set_aside(report)
+            ),
         },
         "questions": questions,
     }

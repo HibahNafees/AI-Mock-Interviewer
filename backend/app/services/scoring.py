@@ -11,9 +11,15 @@ import logging
 import re
 from difflib import SequenceMatcher
 from string import Template
-from typing import Literal
+from typing import Literal, get_args
 
-from pydantic import BaseModel, Field, ValidationInfo, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    ValidationInfo,
+    model_validator,
+)
 
 from .. import modules
 from ..extensions import db
@@ -188,25 +194,69 @@ TOO_SHORT = (
 )
 
 
-class CriterionScore(BaseModel):
+def _item_model(annotation) -> type[BaseModel] | None:
+    """X for a list[X] field whose items are models, else None."""
+    args = get_args(annotation)
+    item = args[0] if args else None
+    return item if isinstance(item, type) and issubclass(item, BaseModel) else None
+
+
+def _fits(model: type[BaseModel], value) -> bool:
+    try:
+        model.model_validate(value)
+        return True
+    except ValidationError:
+        return False
+
+
+class Lenient(BaseModel):
+    """Cut texts and lists that run past their limits and drop list entries that
+    don't fit, at every level, instead of rejecting the whole score: one long list
+    failed a report twice (T-93), and a long recalled answer overflowed a nested
+    quote on every retry (T-105)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def trim_overlong(cls, data):
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        for name, f in cls.model_fields.items():
+            if name not in data:
+                continue
+            v = data[name]
+            item = _item_model(f.annotation)
+            if item is not None and isinstance(v, list):
+                v = [x for x in v if _fits(item, x)]
+            limit = next(
+                (m.max_length for m in f.metadata if getattr(m, "max_length", None)),
+                None,
+            )
+            if limit and isinstance(v, (list, str)) and len(v) > limit:
+                v = v[:limit]
+            data[name] = v
+        return data
+
+
+class CriterionScore(Lenient):
     name: str = Field(min_length=1, max_length=120)
     score: int | None = Field(default=None, ge=1, le=5)  # None: not tested here
     comment: str = Field(default="", max_length=400)
 
 
-class WeakMoment(BaseModel):
+class WeakMoment(Lenient):
     quote: str = Field(min_length=1, max_length=400)
     why: str = Field(min_length=1, max_length=300)
 
 
-class MissingPoint(BaseModel):
+class MissingPoint(Lenient):
     point: str = Field(min_length=1, max_length=300)
     covered: bool
     # The candidate's words that cover it; checked against the answers (T-68).
     evidence: str | None = Field(default=None, max_length=600)
 
 
-class Star(BaseModel):
+class Star(Lenient):
     situation: bool
     task: bool
     action: bool
@@ -216,7 +266,7 @@ class Star(BaseModel):
     result_quote: str | None = Field(default=None, max_length=600)
 
 
-class Said(BaseModel):
+class Said(Lenient):
     """What the candidate actually said, copied word for word before any judging:
     extracting first makes a small model notice results it otherwise misses (T-68)."""
 
@@ -227,22 +277,22 @@ class Said(BaseModel):
     other: list[str] = Field(default_factory=list, max_length=8)
 
 
-class Change(BaseModel):
+class Change(Lenient):
     kind: Literal["added", "cut", "reframed"]
     text: str = Field(min_length=1, max_length=400)
     reason: str = Field(default="", max_length=300)
 
 
-class Sentence(BaseModel):
+class Sentence(Lenient):
     text: str = Field(min_length=1, max_length=4000)
     source: str | None = Field(default=None, max_length=1000)
 
 
-class RewriteOut(BaseModel):
+class RewriteOut(Lenient):
     stronger_version: list[Sentence] = Field(min_length=1, max_length=25)
 
 
-class ScoreOut(BaseModel):
+class ScoreOut(Lenient):
     criteria: list[CriterionScore] = Field(min_length=1, max_length=12)
     summary: str = Field(min_length=1, max_length=600)
     weak_moments: list[WeakMoment] = Field(default_factory=list, max_length=5)
@@ -260,23 +310,6 @@ class ScoreOut(BaseModel):
     # How sure the AI is of this judgment, and why (e.g. a garbled transcript).
     confidence: Literal["high", "medium", "low"] = "medium"
     confidence_note: str = Field(default="", max_length=300)
-
-    @model_validator(mode="before")
-    @classmethod
-    def trim_overlong(cls, data):
-        """Cut lists and texts that run past their limits instead of rejecting the
-        whole score: one long list failed a report twice (T-93)."""
-        if not isinstance(data, dict):
-            return data
-        for name, f in cls.model_fields.items():
-            limit = next(
-                (m.max_length for m in f.metadata if getattr(m, "max_length", None)),
-                None,
-            )
-            v = data.get(name)
-            if limit and isinstance(v, (list, str)) and len(v) > limit:
-                data[name] = v[:limit]
-        return data
 
     @model_validator(mode="after")
     def some_criterion_scored(self, info: ValidationInfo) -> "ScoreOut":
