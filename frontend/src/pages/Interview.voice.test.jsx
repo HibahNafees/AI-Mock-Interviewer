@@ -7,6 +7,11 @@ import { AuthProvider } from '../lib/auth'
 import { FILLERS } from '../lib/voice'
 import { fakeSpeech } from '../test-speech'
 
+// The reply is spoken once the line before it (a filler) has finished.
+async function spokenLast(spoken, text) {
+  await vi.waitFor(() => expect(spoken.at(-1)?.text).toBe(text), { timeout: 3000 })
+}
+
 // Stand-in recorder: one click "records" a 4.2-second clip.
 vi.mock('../components/Recorder', () => ({
   default: ({ onRecorded, disabled, autoStartKey = 0 }) => (
@@ -193,6 +198,8 @@ describe('interviewer voice', () => {
     renderInterview()
     await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
     await screen.findByText('What was your part?')
+    // The reply waits for the filler to finish (T-109: never talk over itself).
+    await spokenLast(spoken, 'What was your part?')
 
     const said = spoken.map((u) => u.text)
     expect(FILLERS).toContain(said[0])
@@ -236,6 +243,7 @@ describe('interviewer voice', () => {
     spoken.at(-1).onend()
     await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
     await screen.findByText('What was your part?')
+    await spokenLast(spoken, 'Design a cache.')
     const said = spoken.map((u) => u.text)
     expect(said.filter((t) => t === 'Hello Ada, I am Priya.')).toHaveLength(1)
     expect(said.at(-1)).toBe('Design a cache.')
@@ -327,6 +335,7 @@ describe('interviewer voice', () => {
     renderInterview()
     await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
     expect(await screen.findByText(closing)).toBeInTheDocument()
+    await spokenLast(spoken, 'Thank you.')
     expect(spoken.map((u) => u.text).slice(-2)).toEqual(['That covers everything.', 'Thank you.'])
   })
 })
@@ -351,6 +360,7 @@ describe('auto-record', () => {
     renderInterview()
     await userEvent.click(await screen.findByRole('button', { name: 'Record answer' }))
     await screen.findByText('What was your part?')
+    await spokenLast(spoken, 'What was your part?')
     expect(screen.getByTestId('auto-record')).toHaveTextContent('0') // still speaking
     await act(async () => spoken.at(-1).onend())
     expect(screen.getByTestId('auto-record')).toHaveTextContent('1')
@@ -491,6 +501,72 @@ describe('pressure mode', () => {
     await user.type(box, 'Partial answer')
     await act(async () => vi.advanceTimersByTime(61_000))
     await vi.waitFor(() => expect(calls.some((c) => c.key === 'POST /api/sessions/7/turns')).toBe(true))
+    vi.useRealTimers()
+  })
+
+  // T-109: time ran out → a polite interruption, said once, and the answer goes in.
+  const LINE = "Sorry, I'm going to have to stop you there; we're out of time for this one."
+  const TIMED = { ...PRESSURED, interruptions: [LINE] }
+  const AFTER = {
+    action: 'next_question',
+    message: `${LINE} Next: tell me about a failure.`,
+    segments: [
+      { who: 'interviewer', text: LINE, interruption: true },
+      { who: 'interviewer', text: 'Next: tell me about a failure.' },
+    ],
+  }
+  const NEXT_Q = { question_id: 2, interviewer: AFTER.message, segments: AFTER.segments, answer: null }
+
+  it('sends what was typed, even nothing, marked with the interruption', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    localStorage.setItem('mi_answer_mode', 'text')
+    localStorage.setItem('mi_voice', 'off')
+    const calls = respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: TIMED }],
+      'POST /api/sessions/7/turns': [
+        200,
+        { turn: AFTER, session: { ...TIMED, transcript: [{ ...FIRST, answer: '(Time ran out before I answered.)', cut_off: true }, NEXT_Q] } },
+      ],
+    })
+    renderInterview()
+    const box = await screen.findByLabelText('Your answer')
+    await act(async () => {
+      box.focus()
+    })
+    await act(async () => vi.advanceTimersByTime(61_000))
+    await vi.waitFor(() => expect(calls.some((c) => c.key === 'POST /api/sessions/7/turns')).toBe(true))
+    const body = JSON.parse(calls.find((c) => c.key === 'POST /api/sessions/7/turns').opts.body)
+    expect(body.interruption).toBe(LINE)
+    expect(body.text).toBe('')
+    expect(await screen.findByText(/cut off by time limit/)).toBeInTheDocument()
+    vi.useRealTimers()
+  })
+
+  it('says the interruption at once and does not say it again with the reply', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    localStorage.setItem('mi_answer_mode', 'text')
+    const spoken = fakeSpeech()
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7': [200, { session: TIMED }],
+      'POST /api/sessions/7/turns': [200, { turn: AFTER, session: { ...TIMED, transcript: [{ ...FIRST, answer: 'Partial', cut_off: true }, NEXT_Q] } }],
+    })
+    renderInterview()
+    const box = await screen.findByLabelText('Your answer')
+    // The first question was spoken; let it end so the answer clock runs.
+    await act(async () => spoken.at(-1)?.onend?.())
+    await act(async () => {
+      box.focus()
+    })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.type(box, 'Partial')
+    await act(async () => vi.advanceTimersByTime(61_000))
+    await vi.waitFor(() => expect(spoken.some((u) => u.text === "Sorry, I'm going to have to stop you there; we're out of time for this one.")).toBe(true))
+    await act(async () => vi.advanceTimersByTime(9_000))
+    await vi.waitFor(() => expect(spoken.at(-1)?.text).toBe('Next: tell me about a failure.'))
+    const said = spoken.map((u) => u.text)
+    expect(said.filter((t) => t.startsWith("Sorry, I'm going to have to stop you there"))).toHaveLength(1)
     vi.useRealTimers()
   })
 })

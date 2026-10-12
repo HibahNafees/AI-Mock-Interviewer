@@ -113,6 +113,7 @@ function Transcript({ items, plan, panel }) {
               <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md bg-night p-4 text-white shadow-md shadow-navy-800/20">
                 <p className="mb-1 text-xs font-semibold tracking-wide text-white/85 uppercase">
                   You{t.input_mode === 'voice' ? ' · transcribed' : ''}
+                  {t.cut_off ? ' · cut off by time limit' : ''}
                 </p>
                 <p className="leading-relaxed whitespace-pre-wrap">{t.answer}</p>
                 <WorkView work={t.work} dark />
@@ -258,6 +259,21 @@ const CodePad = lazy(() => import('../components/CodePad'))
 const Whiteboard = lazy(() => import('../components/Whiteboard'))
 const NEW_CODE = { language: 'python', content: '' }
 // Sent as the spoken part when the answer is only in the editor or on the board.
+// Roughly how long a message takes to say aloud.
+function speakingMs(message) {
+  const words = (message.segments ?? []).reduce((n, seg) => n + seg.text.split(/\s+/).length, 0)
+  return 400 + words * 380
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Segments still to be spoken (the time-up interruption was said already).
+function unsaid(segments) {
+  return (segments ?? []).filter((s) => !s.interruption)
+}
+
 const SEE_WORK = { code: '(My answer is in the code editor.)', whiteboard: '(My answer is on the whiteboard.)' }
 
 function LiveStep({ session, setSession, greeting }) {
@@ -339,23 +355,34 @@ function LiveStep({ session, setSession, greeting }) {
   }, [resetBody])
 
   const speak = useCallback(
-    (message, { remember = true, onDone } = {}) => {
+    (message, { remember = true, onDone, queue = false } = {}) => {
       if (!message?.segments?.length) return
       if (remember) lastSaid.current = message
-      voice.current?.cancel()
       const turn = ++said.current
-      const handle = say({ ...message, persona, panel: panelRef.current })
-      voice.current = handle
-      setSpeaking(true)
-      handle.done.then((result) => {
+      // queue: let the line being said (a filler, "I'll stop you there…") finish
+      // first, so the interviewer never talks over itself (T-109).
+      const before = queue ? voice.current : null
+      if (!before) voice.current?.cancel()
+      const begin = () => {
         if (turn !== said.current) return // another message took over
-        if (voice.current === handle) voice.current = null
-        setSpeaking(false)
-        setVoiceFailed(result?.ok === false)
-        // Also after "Stop": the candidate wants to answer now.
-        if (onDone) onDone()
-        else askedAt.current = Date.now()
-      })
+        const handle = say({ ...message, persona, panel: panelRef.current })
+        handle.sayMs = speakingMs(message)
+        voice.current = handle
+        setSpeaking(true)
+        handle.done.then((result) => {
+          if (turn !== said.current) return
+          if (voice.current === handle) voice.current = null
+          setSpeaking(false)
+          setVoiceFailed(result?.ok === false)
+          // Also after "Stop": the candidate wants to answer now.
+          if (onDone) onDone()
+          else askedAt.current = Date.now()
+        })
+      }
+      // Wait for it to end, but no longer than it takes to say: some browsers never
+      // report the end of an utterance.
+      if (before) Promise.race([before.done, wait(Math.min(before.sayMs ?? 3000, 8000))]).then(begin)
+      else begin()
     },
     // Not session.panel: it's a new array after every turn, and a new speak()
     // re-ran the greeting effect below, replaying the intro over each reply (T-60).
@@ -381,18 +408,19 @@ function LiveStep({ session, setSession, greeting }) {
 
   function repeat() {
     // After a reload nothing has been said yet: read out the current question.
-    speak(lastSaid.current ?? { segments: session.transcript.at(-1)?.segments }, {
+    speak(lastSaid.current ?? { segments: unsaid(session.transcript.at(-1)?.segments) }, {
       onDone: questionReady,
     })
   }
 
   // The interviewer's next message (after an answer or a skip).
   function handleReply(data) {
-    const reply = { segments: data.turn.segments, clips: data.speech }
+    // The interruption was said the moment time ran out; it stays in the transcript.
+    const reply = { segments: unsaid(data.turn.segments), clips: data.speech }
     const next = data.session.status === 'active' ? questionReady : undefined
     if (data.turn.action === 'wrap_up') setClosing(data.turn.message)
     setSession(data.session)
-    if (voiceOn) speak(reply, { onDone: next })
+    if (voiceOn) speak(reply, { onDone: next, queue: true })
     else {
       lastSaid.current = reply
       next?.()
@@ -425,9 +453,27 @@ function LiveStep({ session, setSession, greeting }) {
     }
   }
 
+  // Time ran out mid-answer: the interviewer politely stops them at once, in one of
+  // a few phrasings, and what they had said or typed goes in as cut off (T-109).
+  const cutLine = useRef(null)
+  function interrupt() {
+    const lines = session.interruptions?.length ? session.interruptions : [null]
+    const options = lines.filter((l) => l !== cutLine.current)
+    const line = (options.length ? options : lines)[Math.floor(Math.random() * (options.length || lines.length))]
+    cutLine.current = line
+    if (line && voiceOn) speak({ segments: [{ who: 'interviewer', text: line }] }, { remember: false })
+    return line
+  }
+
   function timeUp() {
-    // Typed answer in pressure mode: send what's there when the time runs out.
-    if (text.trim() && !busy) sendTyped({ preventDefault() {} })
+    // Typed answer in pressure mode: send whatever is there, even nothing.
+    if (busy) return
+    const line = interrupt()
+    setError('')
+    const meta = spoken.current
+      ? { ...spoken.current, input_mode: 'voice' }
+      : { duration_ms: Math.min(Date.now() - askedAt.current, MAX_ANSWER_MS), input_mode: 'text' }
+    sendTurn(text, { ...meta, ...(line ? { interruption: line } : {}) })
   }
 
   async function skip() {
@@ -489,10 +535,11 @@ function LiveStep({ session, setSession, greeting }) {
     }
   }
 
-  async function onRecorded(blob, durationMs) {
+  async function onRecorded(blob, durationMs, { cutOff = false } = {}) {
     setError('')
     setPhase('transcribing')
-    if (voiceOn && !fireVoice) {
+    const line = cutOff ? cutLine.current : null
+    if (voiceOn && !fireVoice && !cutOff) {
       // A quick "Okay." covers the pause while the reply is written.
       const filler = FILLERS[Math.floor(Math.random() * FILLERS.length)]
       speak({ segments: [{ who: roleplay ? 'character' : 'interviewer', text: filler }] }, { remember: false })
@@ -511,6 +558,7 @@ function LiveStep({ session, setSession, greeting }) {
     await sendTurn(transcript, {
       duration_ms: Math.min(durationMs, MAX_ANSWER_MS),
       input_mode: 'voice',
+      ...(line ? { interruption: line } : {}),
     })
   }
 
@@ -664,6 +712,7 @@ function LiveStep({ session, setSession, greeting }) {
                 <Recorder
                   onRecorded={onRecorded}
                   onStart={stopSpeaking}
+                  onTimeUp={interrupt}
                   disabled={busy}
                   autoStartKey={recordKey}
                   limitMs={answerLimit ? answerLimit * 1000 : null}

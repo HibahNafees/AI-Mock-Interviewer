@@ -2,7 +2,13 @@ from typing import Literal
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import jwt_required
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from ..extensions import db
 from ..models import Answer, CompanyResearch, Session, User
@@ -78,7 +84,7 @@ class PlanIn(BaseModel):
 
 
 class TurnBody(BaseModel):
-    text: str = Field(min_length=1, max_length=MAX_ANSWER_CHARS)
+    text: str = Field(default="", max_length=MAX_ANSWER_CHARS)
     duration_ms: int | None = Field(
         default=None, ge=0, le=MAX_ANSWER_MS + DURATION_SLACK_MS
     )
@@ -89,14 +95,29 @@ class TurnBody(BaseModel):
     work: WorkIn | None = None
     # Opt-in camera feedback: percentages only, never video.
     body: BodyIn | None = None
+    # Time ran out mid-answer: the line the interviewer said to stop them (T-109).
+    interruption: str | None = None
 
     @field_validator("text")
     @classmethod
     def strip(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("Type an answer first")
+        return v.strip()
+
+    @field_validator("interruption")
+    @classmethod
+    def known_line(cls, v: str | None) -> str | None:
+        if v is not None and v not in interviewer.INTERRUPTIONS:
+            raise ValueError("Unknown interruption")
         return v
+
+    @model_validator(mode="after")
+    def some_answer(self) -> "TurnBody":
+        if not self.text:
+            if self.interruption is None:
+                raise ValueError("Type an answer first")
+            # Cut off before a word: saved as no answer, scored as too short.
+            self.text = interviewer.NO_ANSWER_IN_TIME
+        return self
 
 
 def owned_session(session_id: int) -> Session | None:
@@ -131,6 +152,7 @@ def _transcript(session: Session) -> list[dict]:
                 "work": a.work_json if a else None,
                 "duration_ms": a.duration_ms if a else None,
                 "input_mode": a.input_mode if a else None,
+                "cut_off": bool(a and a.cut_off),
             }
         )
     return out
@@ -164,6 +186,7 @@ def session_dict(session: Session, detail: bool = False) -> dict:
         data["panel"] = panel.info(session)
         data["negotiation"] = nego.info(session)
         data["transcript"] = _transcript(session)
+        data["interruptions"] = interviewer.INTERRUPTIONS
         data["timer"] = (
             timer_state(session, interviewer.asked_questions(session)).to_dict()
             if session.started_at
@@ -419,10 +442,11 @@ def turn(session_id: int):
         body.input_mode,
         body.work.model_dump(exclude_none=True) if body.work else None,
         body.body.model_dump() if body.body else None,
+        body.interruption,
     )
-    speech = (
-        voice.synthesize(user_id, session, result["segments"]) if body.speak else None
-    )
+    # The interruption was already said in the browser when time ran out.
+    to_say = [s for s in result["segments"] if not s.get("interruption")]
+    speech = voice.synthesize(user_id, session, to_say) if body.speak else None
     return jsonify(
         turn=result, session=session_dict(session, detail=True), speech=speech
     )

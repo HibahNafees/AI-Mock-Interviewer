@@ -320,6 +320,22 @@ describe('report', () => {
     expect(screen.queryByRole('button', { name: 'Finish the report' })).not.toBeInTheDocument()
   })
 
+  it('marks an answer cut off by the time limit, with the time tip', async () => {
+    // T-109
+    const cut = {
+      ...QUESTION,
+      exchange: QUESTION.exchange.map((x) => ({ ...x, cut_off: true })),
+      evaluation: { ...EVALUATION, cut_off: true, tips: ['You ran out of time; lead with your main point sooner.'] },
+    }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/sessions/7/report': [200, { report: { ...READY, questions: [cut] } }],
+    })
+    renderAt('/report/7')
+    expect(await screen.findByText(/Cut off by the time limit/)).toBeInTheDocument()
+    expect(screen.getByText('You ran out of time; lead with your main point sooner.')).toBeInTheDocument()
+  })
+
   it('shows the budget error when the report cannot start', async () => {
     respond({
       'GET /api/auth/me': [200, { user: ADA }],

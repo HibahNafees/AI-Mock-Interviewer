@@ -109,6 +109,11 @@ class Answer(db.Model):
     attempt_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     hints_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # "voice" (transcribed clip) or "text" (typed); pace analytics need voice.
+    # Stopped by pressure mode's answer limit or the 5-minute cap: what they had
+    # said so far was sent and scored as is (T-109).
+    cut_off: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     input_mode: Mapped[str] = mapped_column(
         String(10), nullable=False, default="text", server_default="text"
     )

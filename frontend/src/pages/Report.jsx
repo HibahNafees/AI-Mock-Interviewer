@@ -517,6 +517,11 @@ function QuestionCard({ q, index, sessionId, onAttempt, failed, shared }) {
               Role-play with {q.scenario.character}. Your goal: {q.scenario.goal}
             </p>
           )}
+          {q.exchange.some((x) => x.cut_off) && (
+            <p className="mt-2 chip bg-amber-100 text-amber-900">
+              ⏱ Cut off by the time limit: scored on what you said before time ran out
+            </p>
+          )}
         </div>
         {e ? (
           <Score value={e.score} />

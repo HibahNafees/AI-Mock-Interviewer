@@ -136,6 +136,20 @@ describe('Recorder', () => {
     expect(screen.getByRole('button', { name: 'Record answer' })).toBeInTheDocument()
   })
 
+  it('when time runs out, says so at once and sends what was said, marked cut off', async () => {
+    // T-109: pressure mode's limit (and the 5-minute cap) stop the answer politely.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const onRecorded = vi.fn()
+    const onTimeUp = vi.fn()
+    render(<Recorder onRecorded={onRecorded} onTimeUp={onTimeUp} limitMs={2000} />)
+    await act(async () => screen.getByRole('button', { name: 'Record answer' }).click())
+    level = 0.2 // still talking
+    await act(async () => vi.advanceTimersByTime(2200))
+    expect(onTimeUp).toHaveBeenCalledTimes(1)
+    expect(onRecorded).toHaveBeenCalledTimes(1) // no undo window
+    expect(onRecorded.mock.calls[0][2]).toEqual({ cutOff: true })
+  })
+
   it('an auto-stopped answer can be discarded', async () => {
     const onRecorded = vi.fn()
     await autoStop(onRecorded)

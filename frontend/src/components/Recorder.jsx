@@ -19,10 +19,12 @@ function clock(ms) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-// Records one answer. Stops on "Done", after a few seconds of silence, or at 5 minutes,
-// then calls onRecorded(blob, durationMs). The clip lives only in memory.
-// limitMs: pressure mode's answer time limit; the clip is sent the moment it's up.
-export default function Recorder({ onRecorded, onStart, disabled, autoStartKey = 0, limitMs = null }) {
+// Records one answer. Stops on "Done", after a few seconds of silence, or when time runs
+// out, then calls onRecorded(blob, durationMs, { cutOff }). The clip lives only in memory.
+// limitMs: pressure mode's answer time limit. When it (or the 5-minute cap) runs out,
+// onTimeUp() fires at once, so the interviewer can say it's stopping them, and what was
+// said so far is sent straight away, marked as cut off (T-109).
+export default function Recorder({ onRecorded, onStart, onTimeUp, disabled, autoStartKey = 0, limitMs = null }) {
   const [state, setState] = useState('idle') // idle | starting | recording | pending
   const [sendIn, setSendIn] = useState(0)
   const pending = useRef(null) // { blob, duration, timer } after an auto-stop
@@ -35,8 +37,10 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
   // the undo window), so always call the latest onRecorded: an old one sees the
   // page as it was when recording began, e.g. an empty code editor.
   const onRecordedRef = useRef(onRecorded)
+  const onTimeUpRef = useRef(onTimeUp)
   useEffect(() => {
     onRecordedRef.current = onRecorded
+    onTimeUpRef.current = onTimeUp
   })
 
   function cleanup() {
@@ -101,7 +105,7 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
     }
   }
 
-  function finish(keep, auto = false) {
+  function finish(keep, auto = false, cutOff = false) {
     const r = rec.current
     // Cancel still wins if the auto-stop began a moment earlier (T-88).
     if (r?.finishing && !keep) r.keep = false
@@ -109,6 +113,8 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
     r.finishing = true
     r.keep = keep
     r.auto = auto
+    r.cutOff = cutOff
+    if (cutOff) onTimeUpRef.current?.()
     clearInterval(r.interval)
     r.duration = Date.now() - r.startedAt
     if (r.recorder.state !== 'inactive') r.recorder.stop()
@@ -147,19 +153,21 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
       if (e.data?.size) chunks.push(e.data)
     }
     recorder.onstop = () => {
-      const { keep, duration, auto } = r
+      const { keep, duration, auto, cutOff } = r
       const type = recorder.mimeType || mimeType || 'audio/webm'
       cleanup()
       setState('idle')
       setStopIn(null)
       setLevel(0)
       if (!keep) return
-      if (duration < MIN_CLIP_MS) {
+      if (duration < MIN_CLIP_MS && !cutOff) {
         setError('That was too short to send. Tap Record answer and try again.')
         return
       }
       const blob = new Blob(chunks, { type })
-      if (auto) hold(blob, duration)
+      // Out of time: sent at once, no undo window (the interviewer already moved on).
+      if (cutOff) onRecordedRef.current(blob, duration, { cutOff: true })
+      else if (auto) hold(blob, duration)
       else onRecordedRef.current(blob, duration)
     }
 
@@ -190,8 +198,8 @@ export default function Recorder({ onRecorded, onStart, disabled, autoStartKey =
       setElapsed(ms)
       setLevel(lvl)
       setStopIn(left !== null && left <= COUNTDOWN_FROM_MS ? left : null)
-      if (limitMs && ms >= limitMs) finish(true)
-      else if (left === 0 || ms >= MAX_ANSWER_MS) finish(true, true)
+      if ((limitMs && ms >= limitMs) || ms >= MAX_ANSWER_MS) finish(true, false, true)
+      else if (left === 0) finish(true, true)
     }, 100)
 
     recorder.start(1000)

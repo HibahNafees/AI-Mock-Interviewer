@@ -921,7 +921,32 @@ def _too_short(
     return evaluation
 
 
-def evaluate(
+CUT_OFF_TIP = "You ran out of time; lead with your main point sooner."
+CUT_OFF_SILENT = (
+    "Time ran out before you answered. Under a time limit, start with your main "
+    "point in one sentence, then add detail while time allows."
+)
+
+
+def evaluate(*args, **kwargs) -> Evaluation:
+    """Score one answer (see _evaluate). An answer stopped by the time limit is
+    scored on what was said, and its feedback says it was cut off (T-109)."""
+    evaluation = _evaluate(*args, **kwargs)
+    exchange = kwargs.get("exchange", args[5] if len(args) > 5 else [])
+    if not any(e.get("cut_off") for e in exchange):
+        return evaluation
+    fb = dict(evaluation.feedback_json or {})
+    said = sum(word_count(e["candidate"]) for e in exchange if not e.get("no_answer"))
+    if said == 0:
+        fb["summary"] = CUT_OFF_SILENT
+    fb["tips"] = [CUT_OFF_TIP] + [t for t in fb.get("tips", []) if t != CUT_OFF_TIP][:2]
+    fb["cut_off"] = True
+    evaluation.feedback_json = fb
+    db.session.commit()
+    return evaluation
+
+
+def _evaluate(
     user_id: int,
     session: Session,
     answer_id: int,
@@ -1128,6 +1153,7 @@ def evaluation_dict(e: Evaluation | None) -> dict | None:
         "weak_moments": fb.get("weak_moments", []),
         "star": fb.get("star"),
         "tips": fb.get("tips", []),
+        "cut_off": bool(fb.get("cut_off")),
         "strengths": fb.get("strengths", []),
         "confidence": fb.get("confidence"),
         "confidence_note": fb.get("confidence_note", ""),

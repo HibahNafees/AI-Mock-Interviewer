@@ -2,7 +2,9 @@
 
 from app.extensions import db
 from app.models import Report
+from app.services.interviewer import INTERRUPTIONS, NO_ANSWER_IN_TIME
 from app.services.pressure import LEVEL_NOTES, RESPECT
+from app.services.scoring import CUT_OFF_SILENT, CUT_OFF_TIP
 
 from tests.fakes import PLAN
 from tests.test_modules import SALES_ANALYSIS, SALES_PLAN, create
@@ -179,3 +181,84 @@ def test_pressure_opens_like_tough_whatever_the_persona(client, auth, docs, fire
 def test_difficulty_shapes_follow_ups(client, auth, docs, fire):
     prompt, _ = turn_prompt(client, auth, docs, fire, difficulty="senior")
     assert "Senior level: probe scope, trade-offs" in prompt
+
+
+def cut_off(client, auth, sid, text, line=None):
+    return client.post(
+        f"/api/sessions/{sid}/turns",
+        json={
+            "text": text,
+            "duration_ms": 60_000,
+            "input_mode": "voice",
+            "interruption": line or INTERRUPTIONS[0],
+        },
+        headers=auth,
+    )
+
+
+def test_time_up_interrupts_politely_saves_the_partial_answer_and_moves_on(
+    client, auth, docs, fire
+):
+    # T-109: the answer was lost and the interviewer cut in abruptly.
+    s = pressured(client, auth, docs, 3)
+    assert started(client, auth, s["id"])["interruptions"] == INTERRUPTIONS
+    fire.turns = [{"action": "next_question", "message": "Thanks. Next one."}]
+    r = cut_off(client, auth, s["id"], "I led the billing API rebuild and we")
+    assert r.status_code == 200, r.get_json()
+    turn = r.get_json()["turn"]
+    assert turn["segments"][0] == {
+        "who": "interviewer",
+        "text": INTERRUPTIONS[0],
+        "interruption": True,
+    }
+    assert "Thanks" not in turn["message"]  # no thanks after cutting them off
+    prompt = fire.calls[-1]["prompt"]
+    choices = prompt.split("Choose exactly one next move")[1].splitlines()[1]
+    assert '"follow_up"' not in choices  # moves on, no follow-up on a cut answer
+    assert "already interrupted them politely" in prompt
+    transcript = r.get_json()["session"]["transcript"]
+    assert transcript[0]["answer"] == "I led the billing API rebuild and we"
+    assert transcript[0]["cut_off"] is True
+    assert transcript[1]["segments"][0]["text"] == INTERRUPTIONS[0]
+
+
+def test_time_up_with_nothing_said_is_saved_and_scored_as_no_answer(
+    client, auth, docs, fire
+):
+    s = pressured(client, auth, docs, 3)
+    started(client, auth, s["id"])
+    fire.turns = [{"action": "next_question", "message": "Next one."}]
+    assert cut_off(client, auth, s["id"], "  ").status_code == 200
+    assert answer(client, auth, s["id"], "  ").status_code == 400  # not timed out
+    assert cut_off(client, auth, s["id"], "x", line="Shut up.").status_code == 400
+    client.post(f"/api/sessions/{s['id']}/end", headers=auth)
+    report = build(client, auth, s["id"]).get_json()["report"]
+    q = report["questions"][0]
+    assert q["exchange"][0]["answer"] == NO_ANSWER_IN_TIME
+    assert q["exchange"][0]["cut_off"] is True
+    assert q["evaluation"]["score"] == 1.0
+    assert q["evaluation"]["summary"] == CUT_OFF_SILENT
+    assert q["evaluation"]["tips"][0] == CUT_OFF_TIP
+
+
+def test_cut_off_answer_is_scored_on_what_was_said_with_a_time_tip(
+    client, auth, docs, fire
+):
+    s = pressured(client, auth, docs, 3)
+    started(client, auth, s["id"])
+    fire.turns = [{"action": "next_question", "message": "Next one."}]
+    cut_off(
+        client,
+        auth,
+        s["id"],
+        "I built the billing API at Acme in Flask and owned its MySQL schema, and then",
+    )
+    client.post(f"/api/sessions/{s['id']}/end", headers=auth)
+    report = build(client, auth, s["id"]).get_json()["report"]
+    e = report["questions"][0]["evaluation"]
+    assert e["cut_off"] is True and e["score"] > 1
+    assert e["tips"][0] == CUT_OFF_TIP and len(e["tips"]) <= 3
+    score_prompt = next(
+        c["prompt"] for c in fire.calls if "Score one question" in c["prompt"]
+    )
+    assert '"cut_off": true' in score_prompt

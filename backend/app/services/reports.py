@@ -68,6 +68,13 @@ class Thread:
                 ),
                 "spoken": self.answers[q.id].input_mode == "voice",
                 **({"hint": q.hint_text} if q.hint_text else {}),
+                # Stopped by the time limit: judged on what was said (T-109).
+                **({"cut_off": True} if self.answers[q.id].cut_off else {}),
+                **(
+                    {"no_answer": True}
+                    if self.answers[q.id].transcript == interviewer.NO_ANSWER_IN_TIME
+                    else {}
+                ),
             }
             for q in self.asked
             if q.id in self.answers
@@ -529,6 +536,7 @@ def report_dict(session: Session, report: Report) -> dict:
                         "work": t.answers[q.id].work_json,
                         "is_follow_up": q.follow_up_of_id is not None,
                         "input_mode": t.answers[q.id].input_mode,
+                        "cut_off": t.answers[q.id].cut_off,
                     }
                     for q in t.asked
                     if q.id in t.answers

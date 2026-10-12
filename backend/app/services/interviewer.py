@@ -111,6 +111,27 @@ INTO_PLAN = {
     "tough": "Let's get to it.",
 }
 ICEBREAKER_FALLBACK = "Thanks for sharing."
+# What the interviewer says the moment an answer's time runs out (pressure mode's
+# limit or the 5-minute cap): short, polite, varied; the browser says one at once
+# and the reply then moves on (T-109).
+INTERRUPTIONS = [
+    "Sorry, I'm going to have to stop you there; we're out of time for this one.",
+    "I'll stop you there, as we're out of time on this question.",
+    "Let me pause you there; that's time for this one.",
+    "Sorry to cut in, but we've run out of time for this question.",
+    "I'm going to have to jump in there; we're at time for this one.",
+]
+ACK_RE = re.compile(
+    r"^\s*(?:thanks|thank you|okay|ok|got it|understood|right|great|alright)\b"
+    r"(?: for (?:that|sharing))?[.!,]?\s*",
+    re.IGNORECASE,
+)
+# Saved when time ran out before they said or typed anything.
+NO_ANSWER_IN_TIME = "(Time ran out before I answered.)"
+CUT_OFF_OPENING = (
+    "Time ran out mid-answer and you have already interrupted them politely: don't "
+    "acknowledge or judge the answer, just ask the next question"
+)
 
 # How the interviewer signs off; one is picked per session.
 CLOSINGS = [
@@ -552,8 +573,13 @@ def take_turn(
     input_mode: str = "text",
     work: dict | None = None,
     body: dict | None = None,
+    interruption: str | None = None,
 ) -> dict:
-    """Save the answer to the current question and produce the interviewer's reply."""
+    """Save the answer to the current question and produce the interviewer's reply.
+
+    `interruption`: time ran out mid-answer and the interviewer said this line (one
+    of INTERRUPTIONS); the answer is saved as cut off and the reply moves on."""
+    cut_off = interruption is not None
     asked = asked_questions(session)
     current = asked[-1]
     if current.is_icebreaker:
@@ -578,6 +604,9 @@ def take_turn(
         return closing(session, out_of_time)
 
     opts = options(session, asked, timer)
+    if cut_off and len(opts) > 1:
+        # Out of time for this one: move on, no follow-up on the cut-off answer.
+        opts = {k: v for k, v in opts.items() if k != "follow_up"}
 
     root_budget = current.budget_sec
     if current.follow_up_of_id:
@@ -623,9 +652,13 @@ def take_turn(
             prompt = render(
                 "interviewer_turn",
                 persona=_persona(session, current.section),
-                opening_rule=OPENING_RULES[
-                    "tough" if tough else session.persona or "neutral"
-                ],
+                opening_rule=(
+                    CUT_OFF_OPENING
+                    if cut_off
+                    else OPENING_RULES[
+                        "tough" if tough else session.persona or "neutral"
+                    ]
+                ),
                 difficulty_rule=DIFFICULTY_RULES.get(
                     session.difficulty or "mid", DIFFICULTY_RULES["mid"]
                 ),
@@ -661,8 +694,15 @@ def take_turn(
             # In character, praise or agreement is part of the role-play.
             out.message = neutralize(
                 out.message,
-                plain=session.persona == "tough" or bool(session.pressure_level),
+                plain=session.persona == "tough"
+                or bool(session.pressure_level)
+                or cut_off,
             )
+            if cut_off:
+                # They were just interrupted: thanking them for it sounds odd.
+                out.message = (
+                    ACK_RE.sub("", out.message, count=1).strip() or out.message
+                )
         if out.action not in opts:
             log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
             out = _fallback(opts, sign_off())
@@ -749,9 +789,17 @@ def take_turn(
                 session, panel.LEAD if out.action == "wrap_up" else cur_by, parts
             )
     segments = _segments(parts)
+    if cut_off:
+        # Already said in the browser the moment time ran out; kept for the transcript.
+        segments = [
+            {"who": INTERVIEWER, "text": interruption, "interruption": True},
+            *segments,
+        ]
     out.message = " ".join(s["text"] for s in segments)
 
-    now = _save_answer(session, current, text, duration_ms, input_mode, work, body)
+    now = _save_answer(
+        session, current, text, duration_ms, input_mode, work, body, cut_off
+    )
 
     if out.action == "follow_up":
         root_id = current.follow_up_of_id or current.id
@@ -793,6 +841,7 @@ def _save_answer(
     input_mode: str,
     work: dict | None = None,
     body: dict | None = None,
+    cut_off: bool = False,
 ):
     now = utcnow()
     ended_ms = int((now - session.started_at).total_seconds() * 1000)
@@ -808,6 +857,7 @@ def _save_answer(
             input_mode=input_mode,
             work_json=work,
             body_json=body,
+            cut_off=cut_off,
         )
     )
     return now
