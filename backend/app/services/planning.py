@@ -239,10 +239,15 @@ def offered_modules(analysis: JdAnalysis) -> list[str]:
     """Modules that fit this job."""
     summary = analysis_summary(analysis)
     fit = [f for f in summary["formats"] if modules.known(f)]
-    if "technical" in fit and SOFTWARE_RE.search(
-        f"{summary['field']} {summary['role_title']}"
+    # A software field is enough on its own: the analysis sometimes leaves
+    # "technical" out, e.g. for an intern posting (T-89). A software word in the
+    # title alone (a software sales rep) still needs "technical".
+    software_field = SOFTWARE_RE.search(summary["field"])
+    if software_field or (
+        "technical" in fit
+        and SOFTWARE_RE.search(f"{summary['field']} {summary['role_title']}")
     ):
-        fit += [m for m in ("coding", "system_design") if m not in fit]
+        fit += [m for m in ("technical", "coding", "system_design") if m not in fit]
     return fit or ["behavioral", "resume_deepdive"]
 
 

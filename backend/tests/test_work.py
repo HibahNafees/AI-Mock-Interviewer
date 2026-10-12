@@ -226,6 +226,31 @@ def test_software_roles_always_offer_coding_and_design(client, auth, docs, fire)
     assert "coding" in names and "system_design" in names
 
 
+def test_software_field_offers_coding_without_technical(client, auth, docs, fire):
+    # The analysis left "technical" out for an intern posting (T-89).
+    fire.analysis = {
+        **fire.analysis,
+        "role_title": "Software Engineering Intern",
+        "field": "software engineering",
+        "seniority": "entry",
+        "formats": ["behavioral", "resume_deepdive"],
+    }
+    r = client.post(f"/api/documents/{docs['jd_id']}/analysis", headers=auth)
+    names = [m["name"] for m in r.get_json()["modules"]]
+    assert {"technical", "coding", "system_design"} <= set(names)
+
+
+def test_software_sales_title_doesnt_get_coding(client, auth, docs, fire):
+    fire.analysis = {
+        **fire.analysis,
+        "role_title": "Software Sales Representative",
+        "field": "sales",
+        "formats": ["behavioral", "resume_deepdive", "roleplay"],
+    }
+    r = client.post(f"/api/documents/{docs['jd_id']}/analysis", headers=auth)
+    assert "coding" not in [m["name"] for m in r.get_json()["modules"]]
+
+
 def test_non_software_technical_roles_dont_get_coding(client, auth, docs, fire):
     fire.analysis = {
         **fire.analysis,
