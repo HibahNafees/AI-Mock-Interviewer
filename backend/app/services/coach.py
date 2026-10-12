@@ -1,6 +1,7 @@
 """Questions-for-them coach: questions to ask at the end, and ratings for the ones
 asked in the interview's "Do you have any questions for me?" step."""
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -79,6 +80,13 @@ def their_turns(session: Session) -> list[str]:
     ]
 
 
+ASKED_WORDS = 6
+
+
+def _words(text: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9']+", text.lower().replace("’", "'")))
+
+
 def rate_their_questions(user_id: int, session: Session) -> dict | None:
     """Ratings for the questions they asked (one Fire call; none if they asked none)."""
     turns = [t for t in their_turns(session) if "?" in t]
@@ -96,10 +104,13 @@ def rate_their_questions(user_id: int, session: Session) -> dict | None:
         max_tokens=900,
         temperature=0,
     )
-    said = " ".join(turns).lower()
+    said = f" {_words(' '.join(turns))} "
     rated = [
         q.model_dump()
         for q in out.questions
-        if q.asked.strip().lower()[:40] in said  # only questions they really asked
+        # Only questions they really asked: their first words, in order, whatever
+        # the punctuation (T-106: "load, and" split into "load?" was dropped).
+        if _words(q.asked)
+        and f" {' '.join(_words(q.asked).split()[:ASKED_WORDS])} " in said
     ]
     return {"questions": rated, "summary": out.summary.strip()} if rated else None

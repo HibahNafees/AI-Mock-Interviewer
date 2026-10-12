@@ -47,3 +47,26 @@ def test_no_questions_no_rating_call(qa, client, auth, planned, fire):  # noqa: 
     report = build(client, auth, sid).get_json()["report"]
     assert report["their_questions"] is None
     assert not any("Rate the candidate's questions" in c["prompt"] for c in fire.calls)
+
+
+def test_a_question_split_from_a_longer_sentence_is_still_rated(
+    qa, client, auth, planned, fire
+):  # noqa: F811
+    # T-106: "...look like, and is on-call shared?" was rated as "...look like?"
+    # and dropped because the punctuation differed.
+    sid = planned["id"]
+    reach_the_end(client, auth, fire, sid)
+    fire.candidate_replies = [
+        {"has_question": True, "answer": "Mostly API work."},
+        {"has_question": False, "answer": "Great."},
+    ]
+    answer(
+        client,
+        auth,
+        sid,
+        "Yes, what does a typical week look like, and is on-call shared?",
+    )
+    answer(client, auth, sid, "No, that's all.")
+    report = build(client, auth, sid).get_json()["report"]
+    asked = [q["asked"] for q in report["their_questions"]["questions"]]
+    assert asked == ["What does a typical week look like?"]
