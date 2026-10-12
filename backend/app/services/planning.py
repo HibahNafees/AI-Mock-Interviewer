@@ -223,9 +223,10 @@ class PlanOut(BaseModel):
                 raise ValueError(
                     f'use exactly {wanted} question(s) in "{module}" sections (got {got})'
                 )
-        # Repeated coding problems or design questions (T-90).
+        # Repeated coding problems or design questions (T-90). Only for generated
+        # plans (they pass a context); the candidate's own edits aren't second-guessed.
         seen: list[str] = []
-        for s in self.sections:
+        for s in self.sections if info.context is not None else []:
             if s.module not in HANDS_ON_MIN:
                 continue
             for q in s.questions:
