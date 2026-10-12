@@ -11,3 +11,5 @@ dist/
 .pytest_cache/
 coverage/
 evals/results/
+# Scratch test drivers write tokens here; never commit them (T-124).
+live*.json
