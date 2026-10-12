@@ -231,6 +231,7 @@ def create():
             body.focus,
             coding=body.coding_problems,
             system_design=body.system_design,
+            pressure_level=body.pressure_level,
         )
         rubric = planning.build_rubric(user_id, analysis, body.difficulty, body.focus)
         research = (

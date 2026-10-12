@@ -32,10 +32,41 @@ HISTORY_TURNS = 8
 BONUS_MIN_SEC = 3 * 60
 MAX_JD_CHARS = 4000
 
+# How each interviewer sounds (T-97: one short phrase each made all three alike).
 PERSONAS = {
-    "friendly": "warm and encouraging; you put the candidate at ease",
-    "neutral": "professional and even-toned",
-    "tough": "direct and demanding; you probe hard but always stay respectful",
+    "friendly": (
+        "warm and encouraging; you put the candidate at ease. Sound like a kind "
+        'colleague: frame follow-ups gently ("I\'d love to hear a bit more about..."), '
+        'and if they struggle, reassure them ("Take your time.") before asking'
+    ),
+    "neutral": "professional and even-toned: plain questions, no warmth and no pressure",
+    "tough": (
+        "direct and demanding, but always respectful. No pleasantries. Probe hard: "
+        "ask for the exact number, their own part rather than the team's, why they "
+        "chose that over an alternative, or what went wrong. When an answer is vague, "
+        'say so in a few words before your question ("That\'s still general.")'
+    ),
+}
+# How a reply may open, per persona; pressure mode opens like "tough".
+OPENING_RULES = {
+    "friendly": (
+        "Start with a short, warm acknowledgement that doesn't judge the answer, such "
+        'as "Thanks for walking me through that." or "Okay, that helps."'
+    ),
+    "neutral": (
+        'Start with at most a neutral acknowledgement such as "Thanks.", '
+        '"Okay.", "Got it." or "Understood."'
+    ),
+    "tough": (
+        "Don't thank them or acknowledge the answer: go straight to your question, or "
+        "first say in a few words what was missing (\"You said 'we'. What did you do?\")"
+    ),
+}
+# What the level means for follow-ups (T-97: difficulty only shaped the plan).
+DIFFICULTY_RULES = {
+    "entry": "Entry level: keep follow-ups plain and one step at a time, about fundamentals and how they learn; don't expect senior-level scope.",
+    "mid": "Mid level: probe ownership and depth: what they did themselves, how, and what came of it.",
+    "senior": "Senior level: probe scope, trade-offs, scale, risk and how they led others; expect precise reasoning.",
 }
 
 OPENINGS = {
@@ -147,7 +178,7 @@ def _is_question(sentence: str) -> bool:
     return "?" in sentence or bool(PROMPT_RE.match(sentence))
 
 
-def neutralize(message: str) -> str:
+def neutralize(message: str, plain: bool = False) -> str:
     """Drop statements that praise or grade the answer; keep the question(s)."""
     sentences = SENTENCE_RE.findall(message)
     kept, dropped = [], False
@@ -170,7 +201,8 @@ def neutralize(message: str) -> str:
     starts_with_ack = re.match(
         r"(thanks|thank you|okay|ok|got it|understood|right)\b", out, re.I
     )
-    return out if starts_with_ack else f"Thanks. {out}"
+    # A tough or pressure interviewer doesn't say thanks (T-97).
+    return out if starts_with_ack or plain else f"Thanks. {out}"
 
 
 ROLEPLAY_EXIT = "Let's step out of the role-play there."
@@ -587,9 +619,23 @@ def take_turn(
                 **common,
             )
         else:
+            tough = session.persona == "tough" or bool(session.pressure_level)
             prompt = render(
                 "interviewer_turn",
                 persona=_persona(session, current.section),
+                opening_rule=OPENING_RULES[
+                    "tough" if tough else session.persona or "neutral"
+                ],
+                difficulty_rule=DIFFICULTY_RULES.get(
+                    session.difficulty or "mid", DIFFICULTY_RULES["mid"]
+                ),
+                pressure=(
+                    "\n".join(
+                        f"- {n}" for n in pressure.notes(session.pressure_level or 0)
+                    )
+                    if session.pressure_level
+                    else "none"
+                ),
                 history=_history(asked[:-1]),
                 asked_follow_ups=[
                     q.asked_text or q.text
@@ -598,11 +644,7 @@ def take_turn(
                 ]
                 or "none",
                 section=timer.section or "",
-                nudges=(
-                    nudges(timer, opts, root_budget, answer_sec)
-                    + pressure.notes(session.pressure_level or 0)
-                )
-                or ["none"],
+                nudges=nudges(timer, opts, root_budget, answer_sec) or ["none"],
                 **common,
             )
         schema = TurnOut if scenario is None else RoleplayTurnOut
@@ -617,7 +659,10 @@ def take_turn(
                 out.action = next(a for a in EXITS if a in opts)
         if scenario is None:
             # In character, praise or agreement is part of the role-play.
-            out.message = neutralize(out.message)
+            out.message = neutralize(
+                out.message,
+                plain=session.persona == "tough" or bool(session.pressure_level),
+            )
         if out.action not in opts:
             log.info("Interviewer chose %s; allowed %s", out.action, list(opts))
             out = _fallback(opts, sign_off())

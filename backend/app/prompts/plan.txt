@@ -5,6 +5,7 @@ Difficulty: $difficulty
 Format modules you may use: $modules
 $focus_rule
 $hands_on
+$pressure_rule
 
 How to write questions for each module:
 $module_guidance

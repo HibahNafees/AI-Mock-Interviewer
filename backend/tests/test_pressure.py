@@ -1,6 +1,5 @@
 """Pressure mode: levels, time limits, ease-off control, composure score."""
 
-import json
 
 from app.extensions import db
 from app.models import Report
@@ -13,8 +12,8 @@ from tests.test_sessions import answer, started
 
 
 def encoded(note: str) -> str:
-    """Notes reach the prompt as a JSON list."""
-    return json.dumps(note)[1:-1]
+    """Notes reach the prompt as plain lines under "Pressure interview" (T-96)."""
+    return f"- {note}"
 
 
 def pressured(client, auth, docs, level):
@@ -122,3 +121,62 @@ def test_no_clock_inside_a_roleplay(client, auth, docs, fire):
     s = pressured(client, auth, docs, 5)
     first = started(client, auth, s["id"])["transcript"][0]["interviewer"]
     assert "seconds" not in first
+
+
+# ---- pressure questions in the plan, personas and difficulty (T-96, T-97) ----
+
+
+def test_pressure_level_shapes_the_planned_questions(client, auth, docs, fire):
+    pressured(client, auth, docs, 3)
+    prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
+    assert "This is a pressure interview, level 3 of 5." in prompt
+    assert "challenge a specific claim from the résumé" in prompt
+    assert "tight constraints" in prompt and "Make most of them" not in prompt
+
+
+def test_normal_plan_has_no_pressure_questions(client, auth, docs, fire):
+    assert create(client, auth, docs).status_code == 201
+    prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
+    assert "pressure interview" not in prompt
+
+
+def turn_prompt(client, auth, docs, fire, **extra):
+    r = create(client, auth, docs, **extra)
+    assert r.status_code == 201, r.get_json()
+    sid = r.get_json()["session"]["id"]
+    started(client, auth, sid)
+    fire.turns = [{"action": "follow_up", "message": "Great answer. What did you do?"}]
+    turn = answer(client, auth, sid, "An answer about the billing API at Acme.")
+    prompt = next(
+        c["prompt"]
+        for c in reversed(fire.calls)
+        if "live practice interview" in c["prompt"]
+    )
+    return prompt, turn.get_json()["turn"]["message"]
+
+
+def test_tough_interviewer_skips_thanks_and_probes(client, auth, docs, fire):
+    prompt, said = turn_prompt(client, auth, docs, fire, persona="tough")
+    assert "No pleasantries" in prompt and "Don't thank them" in prompt
+    # The praise is dropped and no "Thanks." is put in its place.
+    assert said == "What did you do?"
+
+
+def test_friendly_interviewer_is_warm(client, auth, docs, fire):
+    prompt, said = turn_prompt(client, auth, docs, fire, persona="friendly")
+    assert (
+        "warm and encouraging" in prompt and "Thanks for walking me through" in prompt
+    )
+    assert said == "Thanks. What did you do?"
+
+
+def test_pressure_opens_like_tough_whatever_the_persona(client, auth, docs, fire):
+    prompt, said = turn_prompt(
+        client, auth, docs, fire, persona="friendly", pressure_level=2
+    )
+    assert "Don't thank them" in prompt and said == "What did you do?"
+
+
+def test_difficulty_shapes_follow_ups(client, auth, docs, fire):
+    prompt, _ = turn_prompt(client, auth, docs, fire, difficulty="senior")
+    assert "Senior level: probe scope, trade-offs" in prompt

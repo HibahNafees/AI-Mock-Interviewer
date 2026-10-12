@@ -14,9 +14,9 @@ RESPECT = (
     "voice, or remarks about the person. Challenge the answer, never the candidate."
 )
 LEVEL_NOTES = {
-    1: "Be noticeably more skeptical than usual: ask them to back up claims with specifics.",
-    2: 'When an answer is vague or drifts, push back briefly before your question, e.g. "That\'s not quite what I asked." or "Can you be more specific?"',
-    3: "Keep your turns short and brisk; don't reassure.",
+    1: 'Be noticeably more skeptical than usual: after most answers, question one claim and ask them to back it up ("How do you know it was your change that fixed it?").',
+    2: 'When an answer is vague, drifts or says "we", push back before your question ("That\'s not quite what I asked.", "What did you do, specifically?"). While follow_up is in the list, prefer a challenging follow-up to moving on, even after a good answer.',
+    3: "Keep your turns short and brisk, under 30 words; don't reassure.",
     4: "Now and then (not every turn) use a curveball follow-up: an unexpected but fair angle on the same topic, e.g. what they'd do if a key assumption were wrong.",
     5: "Be demanding: challenge weak reasoning directly and expect precise, quantified answers.",
 }
@@ -35,6 +35,27 @@ def notes(level: int) -> list[str]:
     if not level:
         return []
     return [LEVEL_NOTES[n] for n in range(1, level + 1)] + [RESPECT]
+
+
+# Questions the plan adds for a pressure interview (T-96: pressure only changed
+# the interviewer's tone, so the questions themselves felt the same).
+PLAN_NOTES = {
+    1: "Make about a third of the questions pressure questions that test composure: challenge a specific claim from the résumé (\"Your résumé says you led X. What exactly was your part?\"), ask about a failure or a real weakness and what they'd do differently, or why they're a better fit than someone with more experience.",
+    3: "Make about half of them pressure questions, and give some tight constraints (little time, little budget, a deliberately ambiguous brief).",
+    5: "Make most of them pressure questions, including at least one that challenges a gap or weak spot in the résumé.",
+}
+
+
+def plan_rule(level: int | None) -> str:
+    """The plan prompt's pressure line, "" for a normal interview."""
+    if not level:
+        return ""
+    notes = [n for lv, n in PLAN_NOTES.items() if lv <= level]
+    return (
+        f"This is a pressure interview, level {level} of 5. "
+        + " ".join(notes)
+        + " Keep every question fair, job-related and respectful."
+    )
 
 
 def time_limit(level: int | None) -> int | None:
