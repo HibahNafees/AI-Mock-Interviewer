@@ -143,6 +143,62 @@ def fix_reversed_opener(section: PlanSectionOut, names: set[str]) -> None:
         section.questions[0] = neutral_opener(section.scenario)
 
 
+STOPWORDS = frozenset(
+    "a an and are as at be by can could do does for from given how i in into is it "
+    "its me of on or should that the this to tell us was we what when where which "
+    "who why will with would write you your design implement build function".split()
+)
+
+
+def _words(text: str) -> set[str]:
+    return {
+        w
+        for w in re.findall(r"[a-z0-9]+", text.lower())
+        if len(w) > 2 and w not in STOPWORDS
+    }
+
+
+def similar(a: str, b: str, threshold: float = 0.6) -> bool:
+    """Two questions ask the same thing: most of their content words match."""
+    wa, wb = _words(a), _words(b)
+    if not wa or not wb:
+        return a.strip().lower() == b.strip().lower()
+    return len(wa & wb) / min(len(wa), len(wb)) >= threshold
+
+
+# How many earlier hands-on questions the plan is told to avoid (T-90).
+RECENT_SESSIONS = 10
+RECENT_HANDS_ON = 15
+
+
+def recent_hands_on(user_id: int) -> list[str]:
+    """Coding problems and design questions from the user's recent sessions,
+    newest first, so a new plan doesn't hand out the same ones again."""
+    sessions = db.session.scalars(
+        db.select(Session)
+        .filter_by(user_id=user_id)
+        .order_by(Session.id.desc())
+        .limit(RECENT_SESSIONS)
+    ).all()
+    out: list[str] = []
+    for session in sessions:
+        names = {
+            s["name"]
+            for s in (session.plan_json or {}).get("sections", [])
+            if s.get("module") in HANDS_ON_MIN
+        }
+        if not names:
+            continue
+        rows = db.session.scalars(
+            db.select(Question.text)
+            .filter_by(session_id=session.id, is_bonus=False, follow_up_of_id=None)
+            .where(Question.section.in_(names))
+            .order_by(Question.order_no)
+        ).all()
+        out += [t for t in rows if not any(similar(t, o) for o in out)]
+    return out[:RECENT_HANDS_ON]
+
+
 class BonusOut(BaseModel):
     section: str
     text: str = Field(min_length=1)
@@ -167,6 +223,18 @@ class PlanOut(BaseModel):
                 raise ValueError(
                     f'use exactly {wanted} question(s) in "{module}" sections (got {got})'
                 )
+        # Repeated coding problems or design questions (T-90).
+        seen: list[str] = []
+        for s in self.sections:
+            if s.module not in HANDS_ON_MIN:
+                continue
+            for q in s.questions:
+                if any(similar(q, other) for other in seen):
+                    raise ValueError(
+                        f'every "{s.module}" question must be a different problem; '
+                        f"this one repeats an earlier one: {q[:80]}"
+                    )
+                seen.append(q)
         return self
 
 
@@ -389,6 +457,18 @@ def build_plan(
             if n
             else f'Don\'t use the "{module}" module.'
         )
+    avoid = recent_hands_on(user_id) if any(m in HANDS_ON_MIN for m in allowed) else []
+    if avoid:
+        rules.append(
+            "The candidate already practised these problems; give different ones "
+            "(a different task, not a reworded one):\n"
+            + "\n".join(f"- {q}" for q in avoid)
+        )
+    if any(m in HANDS_ON_MIN for m in allowed):
+        rules.append(
+            "Every coding problem and design question in this plan must be a different "
+            "problem that tests a different skill."
+        )
     focus_rule = (
         "Mix the modules to fit the role: a full interview loop."
         if focus == MIXED
@@ -408,7 +488,22 @@ def build_plan(
         question_count=str(question_target(duration_min)),
         hands_on="\n".join(rules) or "",
     )
-    plan = chat_json(user_id, prompt, PlanOut, SYSTEM, max_tokens=2000, context=ctx)
+    # Warmer than the default so the same résumé and job don't always get the same
+    # problems (T-90).
+    plan = chat_json(
+        user_id,
+        prompt,
+        PlanOut,
+        SYSTEM,
+        max_tokens=2000,
+        temperature=0.7,
+        context=ctx,
+    )
+    plan.reserve = [
+        b
+        for b in plan.reserve
+        if not any(similar(b.text, q) for sec in plan.sections for q in sec.questions)
+    ]
     user = db.session.get(User, user_id)
     names = candidate_names(resume.raw_text, user.name if user else "")
     for section in plan.sections:

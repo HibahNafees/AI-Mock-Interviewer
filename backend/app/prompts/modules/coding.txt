@@ -1,5 +1,5 @@
 [plan]
-One small, self-contained programming problem typical of this job's day-to-day work at the chosen difficulty (no trick puzzles), solvable in the section's minutes. Write the problem as one spoken question with a short example of input and expected output. The candidate writes code in an editor and talks it through. Give a coding section at least 8 minutes and only one problem; leave room for follow-ups.
+One small, self-contained programming problem typical of this job's day-to-day work at the chosen difficulty (no trick puzzles), solvable in the section's minutes. Write the problem as one spoken question with a short example of input and expected output. The candidate writes code in an editor and talks it through. Each question in a coding section is one problem, with room for follow-ups. When there are several, each is a different task that needs a different data structure or technique.
 [interview]
 The candidate writes code in an editor; their current code arrives with each answer in a [Code in the editor] block. Discuss it like a real interviewer: ask them to walk through it, then probe correctness on an edge case, time and space complexity, or how they'd test it. If there's a bug, ask a question that leads them to it (e.g. "What happens with an empty list?") instead of pointing at the fix. Never write the solution or give code.
 [score]

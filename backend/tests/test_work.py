@@ -2,6 +2,7 @@
 
 from app.extensions import db
 from app.models import Answer
+from app.services import planning
 
 from tests.fakes import PLAN
 from tests.test_sessions import answer, started
@@ -316,6 +317,56 @@ def test_asked_number_of_coding_problems_is_enforced(client, auth, docs, fire):
     assert len(coding[0]["questions"]) == 2
 
 
+def test_repeated_coding_problem_is_sent_back(client, auth, docs, fire):
+    # The same problem twice in one plan is rejected and retried (T-90).
+    same = two_problem_plan()
+    same["sections"][0]["questions"] = [
+        "Reverse a linked list.",
+        "Write a function to reverse a singly linked list.",
+    ]
+    replies = [same, two_problem_plan()]
+    plans = []
+    real_chat = fire.chat
+
+    def chat(messages, **kw):
+        if "question plan" in messages[0]["content"]:
+            plans.append(messages)
+            fire.plan = replies[len(plans) - 1]
+        return real_chat(messages, **kw)
+
+    fire.chat = chat
+    r = client.post(
+        "/api/sessions",
+        json={**docs, "duration_min": 20, "coding_problems": 2, "system_design": False},
+        headers=auth,
+    )
+    assert r.status_code == 201, r.get_json()
+    assert len(plans) == 2 and "different problem" in plans[1][-1]["content"]
+
+
+def test_next_plan_avoids_earlier_coding_problems(client, auth, docs, fire):
+    fire.plan = two_problem_plan()
+    body = {**docs, "duration_min": 20, "coding_problems": 2, "system_design": False}
+    assert client.post("/api/sessions", json=body, headers=auth).status_code == 201
+    fire.calls.clear()
+    assert client.post("/api/sessions", json=body, headers=auth).status_code == 201
+    prompt = next(c["prompt"] for c in fire.calls if "question plan" in c["prompt"])
+    assert "already practised these problems" in prompt
+    assert "- Reverse a list." in prompt and "- Find duplicates." in prompt
+    # Résumé questions aren't hands-on, so they aren't listed.
+    assert "- Walk me through Acme." not in prompt
+
+
+def test_similar_questions():
+    assert planning.similar(
+        "Reverse a linked list.", "How would you reverse a linked list?"
+    )
+    assert not planning.similar(
+        "Reverse a linked list.", "Find duplicates in an array."
+    )
+    assert not planning.similar("A.", "B.")
+
+
 def test_coding_count_is_capped_by_the_length(client, auth, docs, fire):
     fire.plan = {
         "sections": [
@@ -350,7 +401,10 @@ def test_up_to_ten_coding_and_design_questions_can_be_chosen(client, auth, docs,
                 "name": "Coding",
                 "module": "coding",
                 "minutes": 40,
-                "questions": [f"Problem {i}." for i in range(10)],
+                "questions": [
+                    f"{w} task."
+                    for w in "sort merge parse cache queue graph tree heap trie stack".split()
+                ],
             },
             {
                 "name": "Design",
