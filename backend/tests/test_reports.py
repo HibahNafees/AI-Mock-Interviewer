@@ -1250,3 +1250,27 @@ def test_failed_gap_check_keeps_the_scorers_verdicts(client, auth, planned, fire
     assert report["status"] == "ready"
     points = report["questions"][0]["evaluation"]["missing_points"]
     assert [p["point"] for p in points] == ["A measurable result", "Their own role"]
+
+
+def test_gap_check_drops_gaps_that_dont_fit_the_question(client, auth, planned, fire):
+    # T-108: advice for a different question isn't listed as a missing point.
+    sid = planned["id"]
+    finished(client, auth, fire, sid)
+    fire.gap_checks = [
+        {
+            "points": [
+                {"n": 1, "covered": False, "quote": None, "fits": True},
+                {"n": 2, "covered": False, "quote": None, "fits": False},
+            ]
+        },
+        # Never drop every point.
+        {"points": [{"n": 1, "covered": False, "quote": None, "fits": False}]},
+    ]
+    report = build(client, auth, sid).get_json()["report"]
+    first, second = (q["evaluation"]["missing_points"] for q in report["questions"])
+    assert [p["point"] for p in first] == ["A measurable result"]
+    assert len(second) == 1
+    gap_prompt = next(
+        c["prompt"] for c in fire.calls if "Check which points" in c["prompt"]
+    )
+    assert '"fits"' in gap_prompt

@@ -731,6 +731,9 @@ class GapVerdict(BaseModel):
     needs: str = Field(default="", max_length=300)
     quote: str | None = Field(default=None, max_length=600)
     covered: bool
+    # Part of a strong answer to the main question; advice that doesn't fit the
+    # question ("how they handled objections" on a setback question) is dropped (T-108).
+    fits: bool = True
 
 
 class GapCheckOut(BaseModel):
@@ -747,7 +750,8 @@ def check_gaps(
     """Re-decide each missing point in a call of its own (T-72): the scorer, doing
     ten jobs at once, listed points the candidate made as gaps and credited others
     with unrelated quotes. A point counts as covered only with a quote that is
-    really in the answers; if this call fails, the scorer's verdicts stand."""
+    really in the answers; if this call fails, the scorer's verdicts stand. A gap
+    that doesn't fit the main question is dropped, keeping at least one point."""
     if not points:
         return
     prompt = render(
@@ -780,6 +784,13 @@ def check_gaps(
             m.covered, m.evidence = True, v.quote
         else:
             m.covered, m.evidence = False, None
+    unfit = {
+        i
+        for i, m in enumerate(points, 1)
+        if not m.covered and i in verdicts and not verdicts[i].fits
+    }
+    if unfit and len(unfit) < len(points):
+        points[:] = [m for i, m in enumerate(points, 1) if i not in unfit]
 
 
 def states_outcome(quote: str | None) -> bool:
