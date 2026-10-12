@@ -811,10 +811,9 @@ class GapVerdict(BaseModel):
 class GapCheckOut(BaseModel):
     points: list[GapVerdict] = Field(default_factory=list, max_length=12)
     # T-114: the specific thing the main question asks about (a project, product or
-    # résumé item), what their story was about, and whether those are the same.
+    # résumé item) and what their story was about.
     named_subject: str | None = Field(default=None, max_length=200)
     story_subject: str | None = Field(default=None, max_length=200)
-    on_subject: bool = True
 
 
 # Relevance for a real story about something other than what the question named.
@@ -880,23 +879,39 @@ def check_gaps(
     return out
 
 
-def cap_off_subject(criteria: list[CriterionScore], check: GapCheckOut | None) -> bool:
-    """A real story about something other than what the question named (T-114: asked
-    about building the refunds API, they told a migration story; it scored 3.67)
-    gets Relevance at most 2. Only when the question names a specific subject."""
-    if check is None or check.on_subject or not (check.named_subject or "").strip():
+def cap_off_subject(
+    criteria: list[CriterionScore],
+    check: GapCheckOut | None,
+    answers: list[str],
+    resume: str,
+) -> bool:
+    """A real story about something other than the résumé item the question named
+    (T-114: asked about building the refunds API, they told a migration story; it
+    scored 3.67) gets Relevance at most 2. The model names the subject well but
+    judges a match leniently, so the match is decided in code: at least two of the
+    subject's words are in the résumé (a résumé item, not a category like
+    "optimizing a backend process") and none of those appear in their answers."""
+    subject = ((check.named_subject or "") if check else "").strip().rstrip(".")
+    item = {_stem(w) for w in _content_words(subject)} & _stems(resume) - {
+        _stem(w) for w in QUESTION_WORDS
+    }
+    if len(item) < SUBJECT_WORDS or item & _stems(" ".join(answers)):
         return False
-    note = (
-        f"The question asked about {check.named_subject.strip().rstrip('.')}, "
-        f"but the story was about {(check.story_subject or 'something else').strip().rstrip('.')}."
-    )
+    story = (check.story_subject or "something else").strip().rstrip(".")
     for c in criteria:
         if _norm(c.name) == "relevance" and c.score is not None:
             if c.score > OFF_SUBJECT_RELEVANCE:
                 c.score = OFF_SUBJECT_RELEVANCE
-                c.comment = note
+                c.comment = (
+                    f"The question asked about {subject}, but the story was about "
+                    f"{story}."
+                )
             return True
     return False
+
+
+# Résumé words a named subject needs to count as a résumé item (T-114).
+SUBJECT_WORDS = 2
 
 
 def states_outcome(quote: str | None) -> bool:
@@ -1192,7 +1207,9 @@ def _evaluate(
         )
     verify_coverage(out, answers)
     gaps = check_gaps(user_id, exchange, out.missing_points, answers)
-    off_subject = not scenario and cap_off_subject(out.criteria, gaps)
+    off_subject = not scenario and cap_off_subject(
+        out.criteria, gaps, answers, resume_text
+    )
     if not criteria:  # "Try again" must score the same criteria as before
         drop_untested(out.criteria, rubric, question or exchange[0]["interviewer"])
     score, rows = weighted_score(out.criteria, rubric)

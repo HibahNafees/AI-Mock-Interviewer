@@ -1343,7 +1343,6 @@ def test_story_about_another_subject_caps_relevance(client, auth, planned, fire)
             "points": [],
             "named_subject": "building the billing API",
             "story_subject": "a table-locking migration",
-            "on_subject": False,
         }
     ]
     e = _report_for(
@@ -1357,17 +1356,27 @@ def test_story_about_another_subject_caps_relevance(client, auth, planned, fire)
     assert "building the billing API" in relevance["comment"]
     assert "table-locking migration" in relevance["comment"]
     assert e["tips"][0].startswith("Tell a story about what the question names")
+    assert "(building the billing API)" in e["tips"][0]
     prompt = next(
         c["prompt"] for c in fire.calls if "Check which points" in c["prompt"]
     )
-    assert '"named_subject"' in prompt and '"on_subject"' in prompt
+    assert '"named_subject"' in prompt and '"story_subject"' in prompt
 
 
 @pytest.mark.parametrize(
     "check",
     [
-        {"points": [], "named_subject": None, "on_subject": False},
-        {"points": [], "named_subject": "the billing API", "on_subject": True},
+        {"points": [], "named_subject": None},
+        # Their answer mentions it: on subject, whatever the story was.
+        {"points": [], "named_subject": "the billing API", "story_subject": "x"},
+        # A category, not a résumé item (live: "optimizing a backend process").
+        {
+            "points": [],
+            "named_subject": "optimizing a backend process",
+            "story_subject": "x",
+        },
+        # Only generic question words are named.
+        {"points": [], "named_subject": "a challenging project", "story_subject": "x"},
     ],
 )
 def test_relevance_stands_without_a_named_subject_mismatch(
