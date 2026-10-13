@@ -112,6 +112,28 @@ def test_panel_works_with_pressure(client, auth, docs, fire):
     assert eased.get_json()["session"]["pressure"]["level"] == 1
 
 
+def test_handover_says_no_thanks_under_pressure_or_after_a_skip(
+    client, auth, docs, fire
+):
+    # T-135 (live): "No problem, let's move on. Thanks. I'll hand over to Marcus now."
+    def bye(data):
+        return next(
+            s["text"] for s in data["turn"]["segments"] if "hand over" in s["text"]
+        )
+
+    pressed = create(client, auth, docs, format="panel", pressure_level=2)
+    sid = pressed.get_json()["session"]["id"]
+    started(client, auth, sid)
+    fire.turns = [{"action": "next_question", "message": "Okay."}]
+    data = answer(client, auth, sid, "I built the billing API at Acme.").get_json()
+    assert bye(data) == "I'll hand over to Marcus now."
+
+    calm = create(client, auth, docs, format="panel").get_json()["session"]["id"]
+    started(client, auth, calm)
+    data = client.post(f"/api/sessions/{calm}/skip", headers=auth).get_json()
+    assert bye(data) == "No problem, let's move on. I'll hand over to Marcus now."
+
+
 def test_negotiation_has_no_pressure(client, auth, docs, fire):
     r = create(
         client, auth, docs, format="negotiation", negotiation=TERMS, pressure_level=2

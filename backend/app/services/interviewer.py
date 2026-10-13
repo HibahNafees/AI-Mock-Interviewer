@@ -343,13 +343,17 @@ def _by(session: Session, key: str | None, parts: list[tuple]) -> list[tuple]:
 
 
 def _handover(
-    session: Session, from_key: str | None, nxt: Question | None, first: bool = False
+    session: Session,
+    from_key: str | None,
+    nxt: Question | None,
+    first: bool = False,
+    thanks: bool = True,
 ) -> list[tuple]:
     """Panel: the outgoing interviewer hands over when `nxt` belongs to someone else."""
     to_key = panel.owner(session, nxt.section) if nxt is not None else None
     if to_key is None or to_key == from_key:
         return []
-    bye, hello = panel.handover(to_key, first)
+    bye, hello = panel.handover(to_key, first, thanks)
     return [(INTERVIEWER, bye, from_key or panel.LEAD), (INTERVIEWER, hello, to_key)]
 
 
@@ -817,7 +821,16 @@ def take_turn(
     cur_by = panel.owner(session, current.section)
     if session.mode == "panel":
         nxt = opts.get(out.action) if out.action in ("next_question", "bonus") else None
-        hand = _handover(session, cur_by, nxt)
+        hand = _handover(
+            session,
+            cur_by,
+            nxt,
+            thanks=not (
+                session.persona == "tough"
+                or pressure.applies(session, current.section)
+                or cut_off
+            ),
+        )
         if hand:
             # Someone else asks next: they open with the question as planned (the
             # model worded it in the current interviewer's voice).
@@ -1169,7 +1182,8 @@ def skip(session: Session) -> dict:
         parts.append((INTERVIEWER, ROLEPLAY_EXIT))
     parts = _by(session, cur_by, parts)
     if nxt is not None:
-        parts += _handover(session, cur_by, nxt) + _by(
+        # The skip line already acknowledged them: no "Thanks." on top (T-135).
+        parts += _handover(session, cur_by, nxt, thanks=False) + _by(
             session,
             panel.owner(session, nxt.section),
             [

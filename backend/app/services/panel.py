@@ -79,13 +79,14 @@ def persona_note(key: str, session: Session) -> str:
     )
 
 
-def handover(to_key: str, first: bool = False) -> tuple[str, str]:
-    """What the outgoing panelist says, and how the next one opens."""
+def handover(to_key: str, first: bool = False, thanks: bool = True) -> tuple[str, str]:
+    """What the outgoing panelist says, and how the next one opens. No "Thanks." from
+    a tough or pressure panel, or right after a skip (T-135)."""
     p = PANELISTS[to_key]
     if first:  # right after the introductions
         return f"{p['name']} will start us off.", ""
     return (
-        f"Thanks. I'll hand over to {p['name']} now.",
+        f"{'Thanks. ' if thanks else ''}I'll hand over to {p['name']} now.",
         f"Hi, {p['name']} here, {p['title']}.",
     )
 
