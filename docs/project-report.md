@@ -2,9 +2,9 @@
 
 *How we built InterVox, an AI practice interviewer, from the first spec to the live site.*
 
-Covers 2026-10-06 (first commit) to 2026-10-13: the API and website are live at commit `0de7d62`.
+Covers 2026-10-06 (first commit) to 2026-10-13: the API is live at commit `6df2fde` and the website at `f0d404a` (later commits are docs-only).
 
-**Sources.** This report uses only the project's own records: the git history (130 commits up to `0de7d62`), `CLAUDE.md`, the `docs/` folder (`SPEC.md`, `INTERVIEWER_RULES.md`, `RULES_CHECK.md`, `DEPLOY.md`), the ticket table `orchestration.tickets` (118 InterVox tickets) and the code. A claim that comes from a ticket or commit cites it as **T-n** or `commit`. Anything the sources don't settle is marked *Unclear*.
+**Sources.** This report uses only the project's own records: the git history (136 commits up to `f0d404a`), `CLAUDE.md`, the `docs/` folder (`SPEC.md`, `INTERVIEWER_RULES.md`, `RULES_CHECK.md`, `DEPLOY.md`), the ticket table `orchestration.tickets` (120 InterVox tickets) and the code. A claim that comes from a ticket or commit cites it as **T-n** or `commit`. Anything the sources don't settle is marked *Unclear*.
 
 ---
 
@@ -341,11 +341,11 @@ The pattern behind most fixes: **gpt-4o-mini treats prompt rules as soft** (**T-
 ## 8. What's left and future plans
 
 - **November 2026:** set the live `FIRE_MONTHLY_BUDGET_USD` back from 1.45 to 1, through a master deploy ticket (**T-76**, `CLAUDE.md`).
-- **Checked live on 2026-10-13:** panel with pressure (**T-132**), the reverse-mode voice (**T-133**), pressure-free coding questions (**T-134**), and an answer that names only the metric (**T-120/T-128**, Relevance 5). The reverse-mode voice was checked with a stand-in speech engine, so it shows the page speaks the answer, not how it sounds.
-- **Not yet seen in a live session:** T-117, T-126, T-127, T-129, T-130 and the panel handover wording (**T-135**). Their tests pass with Fire mocked, but the rewrite fixes only show up when the model words things a certain way.
+- **Checked live on 2026-10-13:** panel with pressure (**T-132**), the reverse-mode voice (**T-133**), pressure-free coding questions (**T-134**), and an answer that names only the metric (**T-120/T-128**, Relevance 5). Deleting an interview (**T-136**): the live API refuses a signed-out delete (401) and another user's interview (404); no Fire calls. The reverse-mode voice was checked with a stand-in speech engine, so it shows the page speaks the answer, not how it sounds.
+- **Not yet seen in a live session:** T-117, T-126, T-127, T-129, T-130 and the panel handover wording (**T-135**). Their tests pass with Fire mocked, but the rewrite fixes only show up when the model words things a certain way. Also not yet clicked through on the live site: deleting one of your own interviews (**T-136**) and the new confirm dialog and collapsible list (**T-137**, checked in the built site with the API mocked, and in the live bundle).
 - **Phase 11 (optional):** real-time voice with LiveKit (interruptions, peer practice). **Phase 12 (optional):** a Hume EVI emotion experiment (`CLAUDE.md`). Neither has started.
 - **Oracle:** `DEPLOY.md` notes the stack can move to Oracle later with a backup and the same `.env`, "if Oracle ever works out".
-- **Open tickets:** none as of 2026-10-13. All 118 InterVox tickets are closed (95 problems, 19 ideas, 4 run tickets).
+- **Open tickets:** none as of 2026-10-13. All 120 InterVox tickets are closed (95 problems, 21 ideas, 4 run tickets).
 - *Unclear:*
   - The sources don't record total Fire spend for October; the live database couldn't be read from this session. The rules check and run tickets log individual check costs (for example ~$0.034, ~$0.05, $0.0744, $0.0768).
   - Ticket numbers are shared across the devbox. The gaps in InterVox's list (T-1–T-11, T-28, T-50, T-59, T-67, T-110, T-131) aren't InterVox tickets in the database, and the sources don't say what happened to them.
