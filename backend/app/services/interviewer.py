@@ -1244,9 +1244,7 @@ def _stem(word: str) -> str:
 def _time_note(session: Session, question: Question | None) -> list[tuple[str, str]]:
     """Pressure mode: announce the answer time limit with each new main question
     (not in a role-play, where it would break the conversation)."""
-    line = (
-        pressure.time_line(session.pressure_level) if session.mode == "pressure" else ""
-    )
+    line = pressure.time_line(session.pressure_level) if pressure.is_on(session) else ""
     if not line or question is None or scenario_of(session, question.section):
         return []
     return [(INTERVIEWER, line)]

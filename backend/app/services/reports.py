@@ -584,7 +584,7 @@ def report_dict(session: Session, report: Report) -> dict:
         "their_questions": (session.plan_json or {}).get("their_questions"),
         "pressure": (
             {**pressure.info(session), "composure": pressure.composure(session, report)}
-            if session.mode == "pressure"
+            if pressure.is_on(session)
             else None
         ),
         "analytics": report.analytics_json,

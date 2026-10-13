@@ -67,16 +67,22 @@ def time_line(level: int | None) -> str:
     return f"You have {limit} seconds for this one." if limit else ""
 
 
+def is_on(session: Session) -> bool:
+    """A pressure interview, one-to-one (mode "pressure") or a panel with pressure
+    (T-132: the mode is "panel", so the level started at creation says it)."""
+    return session.mode == "pressure" or "pressure_start" in (session.plan_json or {})
+
+
 def timed(session: Session) -> bool:
     """Whether answers had a time limit at any point (it can only be eased)."""
-    if session.mode != "pressure":
+    if not is_on(session):
         return False
     start = (session.plan_json or {}).get("pressure_start", session.pressure_level)
     return time_limit(start) is not None
 
 
 def info(session: Session) -> dict | None:
-    if session.mode != "pressure":
+    if not is_on(session):
         return None
     level = session.pressure_level or 0
     return {
@@ -97,7 +103,7 @@ def lower(session: Session, level: int) -> None:
 
 def composure(session: Session, report: Report) -> dict | None:
     """How well answer quality held up compared with normal interviews."""
-    if session.mode != "pressure" or report.overall_score is None:
+    if not is_on(session) or report.overall_score is None:
         return None
     rows = db.session.execute(
         db.select(Report.overall_score, Session.jd_id)
@@ -106,6 +112,7 @@ def composure(session: Session, report: Report) -> dict | None:
             Session.user_id == session.user_id,
             Session.id != session.id,
             Session.mode != "pressure",
+            Session.pressure_level.is_(None),  # a panel with pressure isn't a baseline
             Report.overall_score.is_not(None),
         )
     ).all()

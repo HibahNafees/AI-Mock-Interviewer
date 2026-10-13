@@ -166,13 +166,12 @@ export default function Setup() {
 
   function choosePressure(level) {
     setPressure(level)
-    // Pressure is for a one-to-one interview.
-    if (level && format !== 'standard') setFormat('standard')
   }
 
   function chooseFormat(f) {
     setFormat(f)
-    if (f !== 'standard') setPressure(0)
+    // Pressure works one-to-one or with a panel; a negotiation has none (T-132).
+    if (f === 'negotiation') setPressure(0)
     if (f === 'negotiation' && duration > 20) {
       setDuration(10)
       setCustom(false)
@@ -470,9 +469,7 @@ export default function Setup() {
             onChange={choosePressure}
           />
           <p className="text-sm text-slate-500">
-            {format === 'panel'
-              ? 'Pressure works with one interviewer: choosing a level switches the format back to One interviewer.'
-              : pressure === 0
+            {pressure === 0
                 ? 'A normal interview.'
                 : 'Practice staying composed: the interviewer gets tougher between answers (always respectful), and higher levels add answer time limits and curveballs. Scoring stays the same, and you can ease off or stop at any time. Your report shows a composure score.'}
           </p>

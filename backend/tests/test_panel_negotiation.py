@@ -2,6 +2,7 @@
 
 from app.models import Session
 from app.services import negotiation, panel
+from app.services.pressure import LEVEL_NOTES
 
 from tests.fakes import PLAN
 from tests.test_sessions import answer, started
@@ -86,8 +87,35 @@ def test_panel_keeps_owners_when_the_plan_is_edited(client, auth, docs, fire):
     assert owners == ["peer", "peer"]
 
 
-def test_pressure_is_only_for_standard_interviews(client, auth, docs, fire):
-    r = create(client, auth, docs, format="panel", pressure_level=2)
+def test_panel_works_with_pressure(client, auth, docs, fire):
+    # T-132: picking a level switched a panel back to one interviewer, and the
+    # API refused the pair.
+    r = create(client, auth, docs, format="panel", pressure_level=4)
+    assert r.status_code == 201, r.get_json()
+    s = r.get_json()["session"]
+    assert s["mode"] == "panel" and s["panel"]
+    assert s["pressure"]["level"] == 4 and s["pressure"]["time_limit_sec"] == 45
+    first = started(client, auth, s["id"])["transcript"][0]
+    assert first["interviewer"].endswith("You have 45 seconds for this one.")
+    fire.turns = [{"action": "follow_up", "message": "Why that design?"}]
+    answer(client, auth, s["id"], "An answer about the billing API at Acme.")
+    prompt = next(
+        c["prompt"]
+        for c in reversed(fire.calls)
+        if "live practice interview" in c["prompt"]
+    )
+    assert f"- {LEVEL_NOTES[4]}" in prompt
+    eased = client.post(
+        f"/api/sessions/{s['id']}/pressure", json={"level": 1}, headers=auth
+    )
+    assert eased.status_code == 200
+    assert eased.get_json()["session"]["pressure"]["level"] == 1
+
+
+def test_negotiation_has_no_pressure(client, auth, docs, fire):
+    r = create(
+        client, auth, docs, format="negotiation", negotiation=TERMS, pressure_level=2
+    )
     assert r.status_code == 400
 
 

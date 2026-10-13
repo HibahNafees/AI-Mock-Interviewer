@@ -166,7 +166,7 @@ describe('formats', () => {
 })
 
 describe('setup choices for hands-on rounds and pressure', () => {
-  it('asks how many coding problems and keeps pressure one-to-one', async () => {
+  it('asks how many coding problems and keeps a panel with pressure', async () => {
     let created
     let nextDoc = 10
     respond({
@@ -210,14 +210,16 @@ describe('setup choices for hands-on rounds and pressure', () => {
     fireEvent.change(screen.getByLabelText('Coding problems: how many'), { target: { value: '5' } })
     expect(screen.queryByText(/need at least/)).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('radio', { name: 'Skip it' }))
-    // Pressure stays visible with a panel, and picking a level goes back to one interviewer.
+    // A panel and a pressure level go together, in either order (T-132).
+    await userEvent.click(screen.getByRole('radio', { name: '4 · 45 s + curveballs' }))
     await userEvent.click(screen.getByRole('radio', { name: '👥 Panel' }))
+    expect(screen.getByRole('radio', { name: '4 · 45 s + curveballs' })).toBeChecked()
     await userEvent.click(screen.getByRole('radio', { name: '2 · Pushback' }))
-    expect(screen.getByRole('radio', { name: 'One interviewer' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: '👥 Panel' })).toBeChecked()
     await userEvent.click(screen.getByRole('button', { name: 'Build my interview plan' }))
     await screen.findByText('stop here')
     expect(created).toMatchObject({
-      format: 'standard',
+      format: 'panel',
       pressure_level: 2,
       coding_problems: 5,
       system_design: 0,

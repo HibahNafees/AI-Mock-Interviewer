@@ -210,8 +210,9 @@ def create():
     if resume is None or jd is None:
         return jsonify(error="Choose your résumé and a job description first"), 404
 
-    if body.format != "standard" and body.pressure_level:
-        return jsonify(error="Pressure mode works with a standard interview"), 400
+    # Pressure works one-to-one or with a panel; a negotiation is its own role-play.
+    if body.format == "negotiation" and body.pressure_level:
+        return jsonify(error="Pressure mode doesn't apply to a negotiation"), 400
     if body.format == "negotiation":
         if body.negotiation is None:
             return jsonify(error="Enter the offer and what you're aiming for"), 400
@@ -558,7 +559,7 @@ def ease_pressure(session_id: int):
     session, err = _live(session_id, allow_paused=True)
     if err:
         return err
-    if session.mode != "pressure":
+    if not pressure.is_on(session):
         return jsonify(error="This isn't a pressure interview"), 409
     try:
         body = PressureBody.model_validate(request.get_json(silent=True) or {})
