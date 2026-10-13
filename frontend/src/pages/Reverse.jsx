@@ -4,6 +4,7 @@ import { IconTile, Mascot } from '../components/Art'
 import Recorder from '../components/Recorder'
 import { api } from '../lib/api'
 import { canRecord } from '../lib/recording'
+import { canSpeak, setVoicePref, speakSegments, voicePref, warmUpVoices } from '../lib/voice'
 
 const PROFILES = [
   ['surprise', 'Surprise me'],
@@ -280,6 +281,11 @@ export default function Reverse() {
   const [decision, setDecision] = useState('hire')
   const [reasons, setReasons] = useState('')
   const [error, setError] = useState('')
+  // The candidate speaks their answers in the free browser voice (T-133); the
+  // on/off choice is shared with the interviewer voice.
+  const [voiceOn, setVoiceOn] = useState(() => canSpeak() && voicePref())
+  const [speaking, setSpeaking] = useState(false)
+  const speech = useRef(null)
   const bottom = useRef(null)
   const busy = phase !== 'idle'
   const [now, setNow] = useState(() => Date.now())
@@ -288,6 +294,38 @@ export default function Reverse() {
     const t = setInterval(() => setNow(Date.now()), 15_000)
     return () => clearInterval(t)
   }, [])
+
+  useEffect(() => {
+    warmUpVoices()
+    return () => speech.current?.cancel()
+  }, [])
+
+  function stopSpeaking() {
+    speech.current?.cancel()
+    speech.current = null
+    setSpeaking(false)
+  }
+
+  function speakAnswer(answer) {
+    if (!voiceOn || !answer) return
+    stopSpeaking()
+    const s = speakSegments([{ who: 'character', text: answer }])
+    speech.current = s
+    setSpeaking(true)
+    s.done.then(() => {
+      if (speech.current === s) {
+        speech.current = null
+        setSpeaking(false)
+      }
+    })
+  }
+
+  function toggleVoice() {
+    const on = !voiceOn
+    setVoiceOn(on)
+    setVoicePref(on)
+    if (!on) stopSpeaking()
+  }
 
   useEffect(() => {
     api(`/reverse/${id}`)
@@ -303,8 +341,10 @@ export default function Reverse() {
     setError('')
     setPhase('thinking')
     try {
-      setV((await api(`/reverse/${id}/ask`, { method: 'POST', body: { text: question, input_mode } })).reverse)
+      const next = (await api(`/reverse/${id}/ask`, { method: 'POST', body: { text: question, input_mode } })).reverse
+      setV(next)
       setText('')
+      speakAnswer(next.transcript.at(-1)?.answer)
     } catch (err) {
       setError(err.message)
       setText(question)
@@ -421,7 +461,8 @@ export default function Reverse() {
       {open && !deciding && (
         <div className="card space-y-3 p-5">
           {mode === 'voice' ? (
-            <Recorder onRecorded={onRecorded} disabled={busy || asked >= v.max_questions} />
+            // Not while the candidate is talking: the mic would pick up their voice.
+            <Recorder onRecorded={onRecorded} disabled={busy || speaking || asked >= v.max_questions} />
           ) : (
             <form
               onSubmit={(e) => {
@@ -450,7 +491,26 @@ export default function Reverse() {
                 {mode === 'voice' ? 'Type instead' : 'Speak instead'}
               </button>
             )}
-            <button type="button" disabled={busy || asked === 0} onClick={() => setDeciding(true)} className="btn-link">
+            {canSpeak() && (
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input type="checkbox" checked={voiceOn} onChange={toggleVoice} className="accent-brand-600" />
+                Candidate voice
+              </label>
+            )}
+            {speaking && (
+              <button type="button" onClick={stopSpeaking} className="btn-link">
+                Stop talking
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={busy || asked === 0}
+              onClick={() => {
+                stopSpeaking()
+                setDeciding(true)
+              }}
+              className="btn-link"
+            >
               <span aria-hidden="true">⚖️ </span>Make your decision
             </button>
           </div>

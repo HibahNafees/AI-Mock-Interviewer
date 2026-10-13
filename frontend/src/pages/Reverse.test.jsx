@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { AuthProvider } from '../lib/auth'
+import { fakeSpeech } from '../test-speech'
 
 const ADA = { id: 1, name: 'Ada', email: 'ada@example.com' }
 const CANDIDATE = { name: 'Sam', headline: 'Backend engineer, 4 years', resume: ['Led the payments API rewrite'] }
@@ -90,6 +91,36 @@ describe('reverse mode', () => {
     expect(screen.getByText('Did not lead the rewrite')).toBeInTheDocument()
     expect(screen.getByText('That matches what a careful interviewer would decide.', { exact: false })).toBeInTheDocument()
     expect(screen.queryByLabelText('Your question')).not.toBeInTheDocument()
+  })
+
+  it("speaks the candidate's answers in the character voice, with an off switch (T-133)", async () => {
+    const spoken = fakeSpeech()
+    const QA2 = { question: 'What did you own?', answer: 'The retry logic, mostly.', input_mode: 'text' }
+    respond({
+      'GET /api/auth/me': [200, { user: ADA }],
+      'GET /api/reverse/9': [200, { reverse: OPEN }],
+      'POST /api/reverse/9/ask': (opts) => [
+        200,
+        { reverse: { ...OPEN, transcript: JSON.parse(opts.body).text === QA.question ? [QA] : [QA, QA2] } },
+      ],
+    })
+    renderAt('/reverse/9')
+    await userEvent.type(await screen.findByLabelText('Your question'), QA.question)
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    await screen.findByText(QA.answer)
+    // The second system voice, not the interviewer's.
+    expect(spoken.map((u) => [u.text, u.voice.name])).toEqual([['Well, I was part of the team that did it.', 'Sam']])
+    await userEvent.click(screen.getByRole('button', { name: 'Stop talking' }))
+    expect(window.speechSynthesis.cancel).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Stop talking' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Candidate voice' }))
+    expect(localStorage.getItem('mi_voice')).toBe('off')
+    await userEvent.type(screen.getByLabelText('Your question'), QA2.question)
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    await screen.findByText(QA2.answer)
+    expect(spoken).toHaveLength(1)
+    localStorage.removeItem('mi_voice')
   })
 
   it('asks for a job description first', async () => {
