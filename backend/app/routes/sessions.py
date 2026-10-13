@@ -356,6 +356,22 @@ def get_session(session_id: int):
     return jsonify(session=session_dict(session, detail=True))
 
 
+@bp.delete("/<int:session_id>")
+@jwt_required()
+def delete_session(session_id: int):
+    """Delete an interview with its questions, answers and report (T-136).
+
+    Its Fire spend and daily minutes stay counted in usage_limits, and the
+    story bank keeps any stories drawn from it.
+    """
+    session = owned_session(session_id)
+    if session is None:
+        return jsonify(error="Interview not found"), 404
+    db.session.delete(session)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
 @bp.put("/<int:session_id>/plan")
 @jwt_required()
 def edit_plan(session_id: int):

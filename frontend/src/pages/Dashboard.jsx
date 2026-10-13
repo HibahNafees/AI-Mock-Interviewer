@@ -199,17 +199,35 @@ export default function Dashboard() {
   const { user } = useAuth()
   const [sessions, setSessions] = useState([])
   const [stats, setStats] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
   const [tip] = useState(() => TIPS[Math.floor(Math.random() * TIPS.length)])
   const first = user.name.split(' ')[0]
+
+  function loadStats() {
+    api('/stats')
+      .then((data) => setStats(data.stats))
+      .catch(() => {})
+  }
 
   useEffect(() => {
     api('/sessions')
       .then((data) => setSessions(data.sessions ?? []))
       .catch(() => {})
-    api('/stats')
-      .then((data) => setStats(data.stats))
-      .catch(() => {})
+    loadStats()
   }, [])
+
+  async function removeSession(x) {
+    const what = x.role_title || 'this interview'
+    if (!window.confirm(`Delete the interview "${what}"? Its answers and report go with it. This can't be undone.`)) return
+    setDeleteError('')
+    try {
+      await api(`/sessions/${x.id}`, { method: 'DELETE' })
+      setSessions((all) => all.filter((y) => y.id !== x.id))
+      loadStats()
+    } catch (err) {
+      setDeleteError(err.message)
+    }
+  }
 
   const s = stats
   const hasScores = s?.history?.length > 0
@@ -366,11 +384,16 @@ export default function Dashboard() {
       {sessions.length > 0 && (
         <div>
           <h2 className="text-xl font-bold">Your interviews</h2>
+          {deleteError && (
+            <p role="alert" className="mt-2 text-sm text-red-600">
+              {deleteError}
+            </p>
+          )}
           <ul className="card mt-3 divide-y divide-line-soft overflow-hidden">
             {sessions.map((x) => {
               const [label, color] = MODE_LABEL[x.mode] ?? STATUS[x.status] ?? [x.status, 'bg-slate-100 text-slate-600']
               return (
-                <li key={x.id}>
+                <li key={x.id} className="flex items-center hover:bg-brand-50/60">
                   <Link
                     to={
                       x.mode === 'reverse'
@@ -379,7 +402,7 @@ export default function Dashboard() {
                           ? `/report/${x.id}`
                           : `/interview/${x.id}`
                     }
-                    className="flex items-center justify-between gap-3 px-5 py-4 transition hover:bg-brand-50/60"
+                    className="flex min-w-0 flex-1 items-center justify-between gap-3 py-4 pl-5"
                   >
                     <span className="flex min-w-0 items-center gap-3">
                       <IconTile tone="brand" className="h-10 w-10 font-bold text-brand-700">
@@ -394,6 +417,14 @@ export default function Dashboard() {
                     </span>
                     <span className={`chip ${color}`}>{label}</span>
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() => removeSession(x)}
+                    aria-label={`Delete the interview ${x.role_title || 'Interview'}`}
+                    className="btn-link shrink-0 px-5 text-sm hover:text-red-600"
+                  >
+                    Delete
+                  </button>
                 </li>
               )
             })}

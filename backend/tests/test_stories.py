@@ -3,7 +3,7 @@
 import re
 
 from app.extensions import db
-from app.models import Report, Story
+from app.models import Answer, Report, Story, UsageLimit
 from app.services.fire import FireError
 
 from tests.test_modules import SALES_ANALYSIS, SALES_PLAN, create
@@ -216,3 +216,25 @@ def test_sources_list_each_interview_once(client, auth, planned, fire):
     interview(client, auth, planned["id"], ETL, MENTOR)
     [story] = client.get("/api/stories", headers=auth).get_json()["stories"]
     assert len(story["sources"]) == 1
+
+
+def test_an_interview_can_be_deleted_but_its_spend_and_stories_stay(
+    client, auth, planned, fire, signup
+):
+    """User request: delete interviews from the dashboard (T-136)."""
+    fire.stories = [etl_story]
+    sid = planned["id"]
+    interview(client, auth, sid, ETL, MENTOR)
+    spend = db.session.scalar(db.select(db.func.sum(UsageLimit.fire_spend_usd)))
+    token = signup("bo@example.com", "correct-horse", "Bo").get_json()["access_token"]
+    other = {"Authorization": f"Bearer {token}"}
+    assert client.delete(f"/api/sessions/{sid}", headers=other).status_code == 404
+
+    assert client.delete(f"/api/sessions/{sid}", headers=auth).status_code == 200
+    assert client.get("/api/sessions", headers=auth).get_json()["sessions"] == []
+    assert client.get(f"/api/sessions/{sid}", headers=auth).status_code == 404
+    assert db.session.scalar(db.select(db.func.count()).select_from(Report)) == 0
+    assert db.session.scalar(db.select(db.func.count()).select_from(Answer)) == 0
+    assert len(client.get("/api/stories", headers=auth).get_json()["stories"]) == 1
+    assert db.session.scalar(db.select(db.func.sum(UsageLimit.fire_spend_usd))) == spend
+    assert client.delete(f"/api/sessions/{sid}", headers=auth).status_code == 404
