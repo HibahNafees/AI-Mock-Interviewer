@@ -2,9 +2,9 @@
 
 *How we built InterVox, an AI practice interviewer, from the first spec to the live site.*
 
-Covers 2026-10-06 (first commit) to 2026-10-13 (live at commit `0c71871`).
+Covers 2026-10-06 (first commit) to 2026-10-13: the API is live at commit `c84071f` and the website at `f5e2da4`.
 
-**Sources.** This report uses only the project's own records: the git history (122 commits), `CLAUDE.md`, the `docs/` folder (`SPEC.md`, `INTERVIEWER_RULES.md`, `RULES_CHECK.md`, `DEPLOY.md`), the ticket table `orchestration.tickets` (114 InterVox tickets) and the code. A claim that comes from a ticket or commit cites it as **T-n** or `commit`. Anything the sources don't settle is marked *Unclear*.
+**Sources.** This report uses only the project's own records: the git history (126 commits up to `f5e2da4`), `CLAUDE.md`, the `docs/` folder (`SPEC.md`, `INTERVIEWER_RULES.md`, `RULES_CHECK.md`, `DEPLOY.md`), the ticket table `orchestration.tickets` (116 InterVox tickets) and the code. A claim that comes from a ticket or commit cites it as **T-n** or `commit`. Anything the sources don't settle is marked *Unclear*.
 
 ---
 
@@ -44,7 +44,7 @@ Covers 2026-10-06 (first commit) to 2026-10-13 (live at commit `0c71871`).
 | Run code | **Pyodide** (Python) and a JavaScript runner, both in a Web Worker | The "Run" button runs code in the user's browser, with a 5 s limit and nothing run on the server (**T-84**). |
 | Whiteboard | **Excalidraw** | System design rounds. The sketch is sent to the AI as text (`CLAUDE.md`). |
 | Body language | **MediaPipe Tasks Vision** | Optional camera check that runs only in the browser. Only percentages are saved, never video (`RULES_CHECK.md`, Phase 9). |
-| Interviewer voice | Browser **Web Speech API** by default; Fire `POST /v1/speech` (`tts-kokoro`) when `VOICE_PROVIDER=fire` | Browser voice is free. Fire speech costs about $0.0003 per short reply and stays off by default (**T-27**). |
+| Interviewer voice | Browser **Web Speech API** by default; Fire `POST /v1/speech` (`tts-kokoro`) when `VOICE_PROVIDER=fire` | Browser voice is free. Fire speech costs about $0.0003 per short reply and stays off by default (**T-27**). The AI candidate in reverse mode uses the free browser voice too (**T-133**). |
 | Backend | **Flask 3.1**, Flask-SQLAlchemy, Flask-Migrate (Alembic), **Flask-JWT-Extended**, flask-cors, **Pydantic 2**, requests, pypdf, python-dotenv, **gunicorn** | Flask is the only component that talks to Fire (hard rule 2). JWT handles authentication. Pydantic validates every LLM reply. pypdf reads uploaded résumés. |
 | Speech-to-text | Fire `POST /v1/transcribe` (Whisper Large v3 Turbo) | Under 1 cent per minute (`SPEC.md`). It keeps "um" and "uh", so filler counts work (verified live 2026-10-09, `CLAUDE.md`). |
 | AI brain | Fire `POST /v1/chat`, model **`gpt-4o-mini`** (`FIRE_CHAT_MODEL`) | Handles every interviewer turn, plan, rubric, score and rewrite. Chosen because Fire's default model, Claude Sonnet, "is far pricier" (`CLAUDE.md`). |
@@ -52,7 +52,7 @@ Covers 2026-10-06 (first commit) to 2026-10-13 (live at commit `0c71871`).
 | Hosting (planned) | Oracle Cloud Always Free VM (2 cores / 12 GB ARM), Docker Compose, Caddy | Free tier (`SPEC.md`). Oracle refused the sign-up, so this was never used (see §7). |
 | Hosting (actual) | The **devbox** server: Docker Compose (db, api, purge) behind **nginx + certbot**; frontend on **Vercel Hobby** | Free. nginx already owned ports 80/443 on the devbox (`docs/DEPLOY.md` §2b, `commit 27501f6`). |
 | Domain / HTTPS | **DuckDNS** (`intervox.duckdns.org`), Let's Encrypt via certbot (Caddy on the Oracle path) | Free subdomain with automatic HTTPS. Microphone access requires HTTPS (`DEPLOY.md`). |
-| Testing | pytest (406 backend tests), Vitest 5 + Testing Library (131 frontend tests), black, ESLint | `CLAUDE.md` convention: every feature gets a test, and Fire is always mocked. Vitest went from version 3 to 5 to clear npm audit findings (**T-54**). |
+| Testing | pytest (407 backend tests), Vitest 5 + Testing Library (132 frontend tests), black, ESLint | `CLAUDE.md` convention: every feature gets a test, and Fire is always mocked. Vitest went from version 3 to 5 to clear npm audit findings (**T-54**). |
 | Evals | `evals/run.py`: AI candidates (strong, weak and rambling) run through the real API with a simulated clock and a budget guard | Measures whether scores separate good answers from weak ones (`commit c8cc4d4`, **T-72–T-75**). |
 | Coordination | `pm` CLI and `orchestration.tickets` on the devbox; a separate "master" agent session deploys | Every problem gets a ticket. Deploys go through a human approval gate (`/home/hibahnafees/CLAUDE.md`). |
 | Optional, not built | LiveKit Agents (real-time voice), Hume EVI (emotion experiment) | Phases 11–12 in `CLAUDE.md`; listed in the spec as optional. |
@@ -110,7 +110,7 @@ All Fire calls go through one client. It has a 60 s timeout and retries once, on
 
 ## 4. Timeline
 
-The work happened in 6 days with commits: Oct 6 (2 commits), Oct 8 (1), Oct 9 (29), Oct 10 (30), Oct 11 (29) and Oct 12 (31).
+The work happened in 7 days with commits: Oct 6 (2 commits), Oct 8 (1), Oct 9 (29), Oct 10 (30), Oct 11 (29), Oct 12 (31) and Oct 13 (4).
 
 | Date | Phase / step | What was built | Key commits | Tickets |
 |---|---|---|---|---|
@@ -134,6 +134,7 @@ The work happened in 6 days with commits: Oct 6 (2 commits), Oct 8 (1), Oct 9 (2
 | 10-12 | Quality passes | Small talk, off-topic steering, coding difficulty per level, debrief fixes, reports that always finish | `1bebc2d`…`2583cca` | T-98–T-106 |
 | 10-12 | Live checks | Results kept in rewrites, time-up cut-in, gap fit, invented links, off-subject stories, pressure tips | `5df3806`…`40c76f4` | T-107–T-116 |
 | 10-12 | Live checks | Praise filter, summaries, "Thanks" after a cut-off, metric words, leaked token, deleted-account tokens, rewrite repairs | `02e9a54`…`0c71871` | T-117–T-130 |
+| 10-13 | User reports | Project report; panel interviews with pressure mode; reverse-mode candidate voice | `7ebe5b8`, `faa5da5`, `f5e2da4` | T-132, T-133 |
 
 Every server deploy after go-live went through a ticket with a deploy plan, a human `pm approve`, and the master agent pulling and rebuilding (§7).
 
@@ -159,12 +160,12 @@ Every server deploy after go-live went through a ticket with a deploy plan, a hu
 
 **Formats and modes**
 - Behavioral, résumé deep-dive, technical, case, scenario, role-play, portfolio, coding (Monaco plus Run) and system design (Excalidraw).
-- **Pressure mode**, levels 1–5:
+- **Pressure mode**, levels 1–5, with one interviewer or a panel (**T-132**):
   - levels 3–5 give 60/45/30 seconds per answer, and the candidate can ease off;
   - the report shows a composure score;
   - when time runs out the interviewer cuts in politely and the partial answer is saved (**T-109**).
 - **Panel** (2–3 interviewers) and **salary negotiation** (a recruiter role-play).
-- **Reverse mode**: the user interviews an AI candidate with a hidden profile.
+- **Reverse mode**: the user interviews an AI candidate with a hidden profile. The candidate speaks its answers in the free browser voice, with an on/off switch (**T-133**).
 - **Debrief**: recall a real interview from memory, have it scored, and get the next round predicted. Recordings are never uploaded (hard rule 3).
 - **Body language**: opt-in, measured in the browser, only percentages saved.
 
@@ -219,6 +220,11 @@ The pattern behind most fixes: **gpt-4o-mini treats prompt rules as soft** (**T-
 - **T-116** (`40c76f4`): cut-off and time-limited answers also got *"This was short (30 s of a 5.0 min budget)"*. That tip is now skipped when an answer was under a time limit.
 - **T-119** (`bee1f17`): a fixed move-on line said *"Thanks. Let's move on."* right after the cut-in. It is used when the model asks a follow-up that isn't allowed, and it skipped the no-thanks rule.
 - **T-130** (`0c71871`): an unfinished but relevant answer scored Relevance 2, so the rewrite became a generic template. A cut-off answer is no longer treated as off-topic.
+
+### 6.2b Panel and pressure cancelled each other (T-132)
+- **Symptom** (user report, 2026-10-13): choosing Panel turned pressure off, and choosing "4 · 45 s + curveballs" switched the format back to one interviewer.
+- **Cause:** since Phase 9 (`ca9fa64`) the Setup page reset one choice when the other was picked, the API refused the pair, and the pressure features (time limit, banner, ease off, composure) checked `mode == "pressure"`, which a panel session can't have.
+- **Fix** (`faa5da5`): Setup keeps both choices, the API accepts a panel with pressure (negotiation still has none), and pressure features follow whether the session started with a pressure level. A panel with pressure isn't counted as a normal interview in the composure comparison.
 
 ### 6.3 The backup script (T-79, T-80)
 - **Symptom:** the first root cron run of `deploy/backup.sh` worked (T-79), but master noted two problems:
@@ -304,7 +310,7 @@ The pattern behind most fixes: **gpt-4o-mini treats prompt rules as soft** (**T-
 - **Frontend:** **Vercel Hobby**, from the `frontend/` folder with `vercel.json` (page routes, security headers, cached assets). It auto-deploys `main` to **https://intervox-pi.vercel.app**. `VITE_API_URL` points at the DuckDNS API.
 - **Security headers:** HSTS, `nosniff`, `X-Frame-Options: DENY`, Referrer-Policy and Permissions-Policy, on both nginx/Caddy and Vercel. The API host answers only `/api/*`; everything else gets 404.
 - **Backups:** root cron at 03:00 runs `deploy/backup.sh`, which writes to `/root/backups` and keeps 14 (**T-79/T-80**).
-- **Deploy flow:** ticket `pending_review` with a JSON `deploy_plan`, then `pm approve T-n` by the user, then master pulls, rebuilds `api` (migrations run on start), checks `/api/health` and closes the ticket.
+- **Deploy flow:** ticket `pending_review` with a JSON `deploy_plan`, then `pm approve T-n` by the user, then master pulls, rebuilds `api` (migrations run on start), checks `/api/health` and closes the ticket. Website-only changes (such as **T-133**) need no server deploy: Vercel publishes them when `main` is pushed.
 
 **Safety and budget guards** (`CLAUDE.md`, `config.py`, `services/limits.py`):
 
@@ -331,13 +337,13 @@ The pattern behind most fixes: **gpt-4o-mini treats prompt rules as soft** (**T-
 ## 8. What's left and future plans
 
 - **November 2026:** set the live `FIRE_MONTHLY_BUDGET_USD` back from 1.45 to 1, through a master deploy ticket (**T-76**, `CLAUDE.md`).
-- **Not yet seen in a live session:** T-117, T-120 and T-126–T-130. Their tests pass with Fire mocked, but they only show up when the model words things a certain way.
+- **Not yet seen in a live session:** T-117, T-120 and T-126–T-130, plus panel with pressure (**T-132**) and the reverse-mode candidate voice (**T-133**). Their tests pass with Fire and the browser's speech mocked; the rewrite fixes only show up when the model words things a certain way.
 - **Phase 11 (optional):** real-time voice with LiveKit (interruptions, peer practice). **Phase 12 (optional):** a Hume EVI emotion experiment (`CLAUDE.md`). Neither has started.
 - **Oracle:** `DEPLOY.md` notes the stack can move to Oracle later with a backup and the same `.env`, "if Oracle ever works out".
-- **Open tickets:** none as of 2026-10-13. All 114 InterVox tickets are closed.
+- **Open tickets:** none as of 2026-10-13. All 116 InterVox tickets are closed (93 problems, 19 ideas, 4 run tickets).
 - *Unclear:*
   - The sources don't record total Fire spend for October; the live database couldn't be read from this session. The rules check and run tickets log individual check costs (for example ~$0.034, ~$0.05, $0.0744, $0.0768).
-  - Ticket numbers are shared across the devbox. The gaps in InterVox's list (T-1–T-11, T-28, T-50, T-59, T-67, T-110) aren't InterVox tickets in the database, and the sources don't say what happened to them.
+  - Ticket numbers are shared across the devbox. The gaps in InterVox's list (T-1–T-11, T-28, T-50, T-59, T-67, T-110, T-131) aren't InterVox tickets in the database, and the sources don't say what happened to them.
 
 ---
 
