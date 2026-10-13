@@ -2,9 +2,9 @@
 
 *How we built InterVox, an AI practice interviewer, from the first spec to the live site.*
 
-Covers 2026-10-06 (first commit) to 2026-10-13: the API and website are live at commit `e98fdd5`.
+Covers 2026-10-06 (first commit) to 2026-10-13: the API and website are live at commit `0de7d62`.
 
-**Sources.** This report uses only the project's own records: the git history (128 commits up to `e98fdd5`), `CLAUDE.md`, the `docs/` folder (`SPEC.md`, `INTERVIEWER_RULES.md`, `RULES_CHECK.md`, `DEPLOY.md`), the ticket table `orchestration.tickets` (117 InterVox tickets) and the code. A claim that comes from a ticket or commit cites it as **T-n** or `commit`. Anything the sources don't settle is marked *Unclear*.
+**Sources.** This report uses only the project's own records: the git history (130 commits up to `0de7d62`), `CLAUDE.md`, the `docs/` folder (`SPEC.md`, `INTERVIEWER_RULES.md`, `RULES_CHECK.md`, `DEPLOY.md`), the ticket table `orchestration.tickets` (118 InterVox tickets) and the code. A claim that comes from a ticket or commit cites it as **T-n** or `commit`. Anything the sources don't settle is marked *Unclear*.
 
 ---
 
@@ -52,7 +52,7 @@ Covers 2026-10-06 (first commit) to 2026-10-13: the API and website are live at 
 | Hosting (planned) | Oracle Cloud Always Free VM (2 cores / 12 GB ARM), Docker Compose, Caddy | Free tier (`SPEC.md`). Oracle refused the sign-up, so this was never used (see §7). |
 | Hosting (actual) | The **devbox** server: Docker Compose (db, api, purge) behind **nginx + certbot**; frontend on **Vercel Hobby** | Free. nginx already owned ports 80/443 on the devbox (`docs/DEPLOY.md` §2b, `commit 27501f6`). |
 | Domain / HTTPS | **DuckDNS** (`intervox.duckdns.org`), Let's Encrypt via certbot (Caddy on the Oracle path) | Free subdomain with automatic HTTPS. Microphone access requires HTTPS (`DEPLOY.md`). |
-| Testing | pytest (408 backend tests), Vitest 5 + Testing Library (133 frontend tests), black, ESLint | `CLAUDE.md` convention: every feature gets a test, and Fire is always mocked. Vitest went from version 3 to 5 to clear npm audit findings (**T-54**). |
+| Testing | pytest (409 backend tests), Vitest 5 + Testing Library (133 frontend tests), black, ESLint | `CLAUDE.md` convention: every feature gets a test, and Fire is always mocked. Vitest went from version 3 to 5 to clear npm audit findings (**T-54**). |
 | Evals | `evals/run.py`: AI candidates (strong, weak and rambling) run through the real API with a simulated clock and a budget guard | Measures whether scores separate good answers from weak ones (`commit c8cc4d4`, **T-72–T-75**). |
 | Coordination | `pm` CLI and `orchestration.tickets` on the devbox; a separate "master" agent session deploys | Every problem gets a ticket. Deploys go through a human approval gate (`/home/hibahnafees/CLAUDE.md`). |
 | Optional, not built | LiveKit Agents (real-time voice), Hume EVI (emotion experiment) | Phases 11–12 in `CLAUDE.md`; listed in the spec as optional. |
@@ -110,7 +110,7 @@ All Fire calls go through one client. It has a 60 s timeout and retries once, on
 
 ## 4. Timeline
 
-The work happened in 7 days with commits: Oct 6 (2 commits), Oct 8 (1), Oct 9 (29), Oct 10 (30), Oct 11 (29), Oct 12 (31) and Oct 13 (6).
+The work happened in 7 days with commits: Oct 6 (2 commits), Oct 8 (1), Oct 9 (29), Oct 10 (30), Oct 11 (29), Oct 12 (31) and Oct 13 (8).
 
 | Date | Phase / step | What was built | Key commits | Tickets |
 |---|---|---|---|---|
@@ -134,7 +134,7 @@ The work happened in 7 days with commits: Oct 6 (2 commits), Oct 8 (1), Oct 9 (2
 | 10-12 | Quality passes | Small talk, off-topic steering, coding difficulty per level, debrief fixes, reports that always finish | `1bebc2d`…`2583cca` | T-98–T-106 |
 | 10-12 | Live checks | Results kept in rewrites, time-up cut-in, gap fit, invented links, off-subject stories, pressure tips | `5df3806`…`40c76f4` | T-107–T-116 |
 | 10-12 | Live checks | Praise filter, summaries, "Thanks" after a cut-off, metric words, leaked token, deleted-account tokens, rewrite repairs | `02e9a54`…`0c71871` | T-117–T-130 |
-| 10-13 | User reports | Project report; panel interviews with pressure mode; reverse-mode candidate voice; no pressure on coding and design questions | `7ebe5b8`, `faa5da5`, `f5e2da4`, `e98fdd5` | T-132–T-134 |
+| 10-13 | User reports | Project report; panel interviews with pressure mode; reverse-mode candidate voice; no pressure on coding and design questions; no "Thanks" in a pressure panel's handover | `7ebe5b8`, `faa5da5`, `f5e2da4`, `e98fdd5`, `0de7d62` | T-132–T-135 |
 
 Every server deploy after go-live went through a ticket with a deploy plan, a human `pm approve`, and the master agent pulling and rebuilding (§7).
 
@@ -221,11 +221,12 @@ The pattern behind most fixes: **gpt-4o-mini treats prompt rules as soft** (**T-
 - **T-119** (`bee1f17`): a fixed move-on line said *"Thanks. Let's move on."* right after the cut-in. It is used when the model asks a follow-up that isn't allowed, and it skipped the no-thanks rule.
 - **T-130** (`0c71871`): an unfinished but relevant answer scored Relevance 2, so the rewrite became a generic template. A cut-off answer is no longer treated as off-topic.
 
-### 6.2b Panel and pressure cancelled each other (T-132, T-134)
+### 6.2b Panel and pressure (T-132, T-134, T-135)
 - **Symptom** (user report, 2026-10-13): choosing Panel turned pressure off, and choosing "4 · 45 s + curveballs" switched the format back to one interviewer.
 - **Cause:** since Phase 9 (`ca9fa64`) the Setup page reset one choice when the other was picked, the API refused the pair, and the pressure features (time limit, banner, ease off, composure) checked `mode == "pressure"`, which a panel session can't have.
 - **Fix** (`faa5da5`): Setup keeps both choices, the API accepts a panel with pressure (negotiation still has none), and pressure features follow whether the session started with a pressure level. A panel with pressure isn't counted as a normal interview in the composure comparison.
 - **Follow-up (T-134,** `e98fdd5`): the user then reported being asked to write code or design a system in 45 seconds. Coding and system design questions are now exempt from pressure: no time limit or "You have N seconds", no pushback or curveballs, normal interviewer manner, and the plan keeps them normal.
+- **Found in the live check (T-135,** `0de7d62`): after a skip, a pressure panel said *"No problem, let's move on. Thanks. I'll hand over to Marcus now."* The handover always opened with "Thanks.". It now leaves that out for a tough or pressure panel, after a cut-off, and right after a skip.
 
 ### 6.3 The backup script (T-79, T-80)
 - **Symptom:** the first root cron run of `deploy/backup.sh` worked (T-79), but master noted two problems:
@@ -338,10 +339,11 @@ The pattern behind most fixes: **gpt-4o-mini treats prompt rules as soft** (**T-
 ## 8. What's left and future plans
 
 - **November 2026:** set the live `FIRE_MONTHLY_BUDGET_USD` back from 1.45 to 1, through a master deploy ticket (**T-76**, `CLAUDE.md`).
-- **Not yet seen in a live session:** T-117, T-120 and T-126–T-130, plus panel with pressure (**T-132**), the reverse-mode candidate voice (**T-133**) and pressure-free coding and design questions (**T-134**). Their tests pass with Fire and the browser's speech mocked; the rewrite fixes only show up when the model words things a certain way.
+- **Checked live on 2026-10-13:** panel with pressure (**T-132**), the reverse-mode voice (**T-133**), pressure-free coding questions (**T-134**), and an answer that names only the metric (**T-120/T-128**, Relevance 5). The reverse-mode voice was checked with a stand-in speech engine, so it shows the page speaks the answer, not how it sounds.
+- **Not yet seen in a live session:** T-117, T-126, T-127, T-129, T-130 and the panel handover wording (**T-135**). Their tests pass with Fire mocked, but the rewrite fixes only show up when the model words things a certain way.
 - **Phase 11 (optional):** real-time voice with LiveKit (interruptions, peer practice). **Phase 12 (optional):** a Hume EVI emotion experiment (`CLAUDE.md`). Neither has started.
 - **Oracle:** `DEPLOY.md` notes the stack can move to Oracle later with a backup and the same `.env`, "if Oracle ever works out".
-- **Open tickets:** none as of 2026-10-13. All 117 InterVox tickets are closed (94 problems, 19 ideas, 4 run tickets).
+- **Open tickets:** none as of 2026-10-13. All 118 InterVox tickets are closed (95 problems, 19 ideas, 4 run tickets).
 - *Unclear:*
   - The sources don't record total Fire spend for October; the live database couldn't be read from this session. The rules check and run tickets log individual check costs (for example ~$0.034, ~$0.05, $0.0744, $0.0768).
   - Ticket numbers are shared across the devbox. The gaps in InterVox's list (T-1–T-11, T-28, T-50, T-59, T-67, T-110, T-131) aren't InterVox tickets in the database, and the sources don't say what happened to them.
