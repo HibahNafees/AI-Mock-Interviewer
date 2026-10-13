@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { IconTile, Mascot } from '../components/Art'
+import { useDialogs } from '../components/ConfirmDialog'
 import PublicShell from '../components/PublicShell'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -196,6 +197,7 @@ export default function Decoder({ standalone = false }) {
   const { user } = useAuth()
   const { token } = useParams()
   const navigate = useNavigate()
+  const { confirm, notify } = useDialogs()
   const [text, setText] = useState('')
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
@@ -212,15 +214,18 @@ export default function Decoder({ standalone = false }) {
   useEffect(loadSaved, [loadSaved])
 
   async function remove(s) {
-    if (!window.confirm(`Delete the saved decode for "${s.title}"? Its share link stops working too.`)) return
-    setError('')
-    try {
-      await api(`/decoder/saved/${s.id}`, { method: 'DELETE' })
-      setSaved((list) => list.filter((x) => x.id !== s.id))
-      if (token === s.share_token) navigate(base, { replace: true })
-    } catch (err) {
-      setError(err.message)
-    }
+    const deleted = await confirm({
+      title: 'Delete this saved decode?',
+      message: `The decode for “${s.title}” will be permanently deleted, and its share link stops working.`,
+      confirmLabel: 'Delete',
+      busyLabel: 'Deleting…',
+      danger: true,
+      onConfirm: () => api(`/decoder/saved/${s.id}`, { method: 'DELETE' }),
+    })
+    if (!deleted) return
+    setSaved((list) => list.filter((x) => x.id !== s.id))
+    if (token === s.share_token) navigate(base, { replace: true })
+    notify('Decode deleted')
   }
 
   useEffect(() => {

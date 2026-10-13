@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useDialogs } from '../components/ConfirmDialog'
 import PublicShell from '../components/PublicShell'
 import Recorder from '../components/Recorder'
 import WorkView from '../components/WorkView'
@@ -626,11 +627,11 @@ function ThankYou({ sessionId }) {
 function DebriefKeep({ debrief }) {
   const navigate = useNavigate()
   const [jd, setJd] = useState(debrief.jd)
+  const { confirm, notify } = useDialogs()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  async function act(confirmText, call) {
-    if (confirmText && !window.confirm(confirmText)) return
+  async function act(call) {
     setError('')
     setBusy(true)
     try {
@@ -642,21 +643,37 @@ function DebriefKeep({ debrief }) {
     }
   }
 
-  const removeDebrief = () =>
-    act('Delete this debrief and its report? This cannot be undone.', async () => {
-      await api(`/debriefs/${debrief.id}`, { method: 'DELETE' })
-      navigate('/debrief')
+  async function removeDebrief() {
+    const deleted = await confirm({
+      title: 'Delete this debrief?',
+      message: 'This debrief and its report will be permanently deleted. This can’t be undone.',
+      confirmLabel: 'Delete',
+      busyLabel: 'Deleting…',
+      danger: true,
+      onConfirm: () => api(`/debriefs/${debrief.id}`, { method: 'DELETE' }),
     })
+    if (!deleted) return
+    notify('Debrief deleted')
+    navigate('/debrief')
+  }
   const saveJd = () =>
-    act('', async () => {
+    act(async () => {
       await api(`/documents/${jd.id}/save`, { method: 'POST' })
       setJd({ ...jd, saved: true })
     })
-  const removeJd = () =>
-    act(`Delete the job posting "${jd.title}"? This debrief stays.`, async () => {
-      await api(`/documents/${jd.id}`, { method: 'DELETE' })
-      setJd(null)
+  async function removeJd() {
+    const deleted = await confirm({
+      title: 'Delete this job posting?',
+      message: `“${jd.title}” will be permanently deleted. This debrief stays.`,
+      confirmLabel: 'Delete',
+      busyLabel: 'Deleting…',
+      danger: true,
+      onConfirm: () => api(`/documents/${jd.id}`, { method: 'DELETE' }),
     })
+    if (!deleted) return
+    setJd(null)
+    notify('Job posting deleted')
+  }
 
   return (
     <div className="card space-y-3 p-6">

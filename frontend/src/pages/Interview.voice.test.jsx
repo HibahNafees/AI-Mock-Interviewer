@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -422,7 +422,6 @@ describe('interview controls', () => {
   })
 
   it('skips a question after confirming', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const next = { question_id: 2, interviewer: 'Design a rate limiter.', segments: [{ who: 'interviewer', text: 'Design a rate limiter.' }], answer: null }
     respond({
       'GET /api/auth/me': [200, { user: ADA }],
@@ -437,8 +436,10 @@ describe('interview controls', () => {
     })
     renderInterview()
     await userEvent.click(await screen.findByRole('button', { name: 'Skip question' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Skip this question?' })
+    expect(dialog).toHaveTextContent('listed as unanswered')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Skip question' }))
     expect(await screen.findByText('Design a rate limiter.')).toBeInTheDocument()
-    expect(window.confirm).toHaveBeenCalled()
   })
 
   it('pauses and resumes, hiding the answer controls while paused', async () => {

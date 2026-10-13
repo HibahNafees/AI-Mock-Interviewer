@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -150,7 +150,6 @@ describe('debrief', () => {
   })
 
   it('deletes a past debrief', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const calls = respond({
       'GET /api/auth/me': [200, { user: ADA }],
       'GET /api/documents?kind=job_description': [200, { documents: [] }],
@@ -159,13 +158,12 @@ describe('debrief', () => {
     })
     renderAt('/debrief')
     await userEvent.click(await screen.findByRole('button', { name: 'Delete the debrief Backend Engineer' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }))
     await vi.waitFor(() => expect(screen.queryByText('Past debriefs')).not.toBeInTheDocument())
     expect(calls.some((c) => c.key === 'DELETE /api/debriefs/4')).toBe(true)
-    window.confirm.mockRestore()
   })
 
   it('after a debrief: save its job posting or delete the debrief', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const jd = { id: 9, title: 'Backend role', saved: false }
     const calls = respond({
       'GET /api/auth/me': [200, { user: ADA }],
@@ -180,8 +178,8 @@ describe('debrief', () => {
     expect(await screen.findByText(/saved until you delete it/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete job posting' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Delete debrief' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }))
     expect(await screen.findByText('How did the real one go?')).toBeInTheDocument()
     expect(calls.some((c) => c.key === 'DELETE /api/debriefs/4')).toBe(true)
-    window.confirm.mockRestore()
   })
 })

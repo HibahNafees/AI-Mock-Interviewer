@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { DialogProvider } from './components/ConfirmDialog'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Account from './pages/Account'
@@ -17,35 +18,37 @@ import Stories from './pages/Stories'
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-      {/* Public: the decoder works without an account and its results are shareable. */}
-      <Route path="/decode" element={<Decoder standalone />} />
-      <Route path="/decode/:token" element={<Decoder standalone />} />
-      <Route path="/shared/:token" element={<SharedReport />} />
-      <Route
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="setup" element={<Setup />} />
-        <Route path="account" element={<Account />} />
-        <Route path="admin" element={<Admin />} />
-        <Route path="interview/:id" element={<Interview />} />
-        <Route path="report/:id" element={<Report />} />
-        <Route path="report/:id/cheatsheet" element={<CheatSheet />} />
-        <Route path="stories" element={<Stories />} />
-        <Route path="decoder" element={<Decoder />} />
-        <Route path="decoder/:token" element={<Decoder />} />
-        <Route path="debrief" element={<Debrief />} />
-        <Route path="reverse" element={<ReverseSetup />} />
-        <Route path="reverse/:id" element={<Reverse />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <DialogProvider>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        {/* Public: the decoder works without an account and its results are shareable. */}
+        <Route path="/decode" element={<Decoder standalone />} />
+        <Route path="/decode/:token" element={<Decoder standalone />} />
+        <Route path="/shared/:token" element={<SharedReport />} />
+        <Route
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="setup" element={<Setup />} />
+          <Route path="account" element={<Account />} />
+          <Route path="admin" element={<Admin />} />
+          <Route path="interview/:id" element={<Interview />} />
+          <Route path="report/:id" element={<Report />} />
+          <Route path="report/:id/cheatsheet" element={<CheatSheet />} />
+          <Route path="stories" element={<Stories />} />
+          <Route path="decoder" element={<Decoder />} />
+          <Route path="decoder/:token" element={<Decoder />} />
+          <Route path="debrief" element={<Debrief />} />
+          <Route path="reverse" element={<ReverseSetup />} />
+          <Route path="reverse/:id" element={<Reverse />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </DialogProvider>
   )
 }

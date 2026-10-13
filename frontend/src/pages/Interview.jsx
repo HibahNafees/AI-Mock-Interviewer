@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useDialogs } from '../components/ConfirmDialog'
 import PlanEditor from '../components/PlanEditor'
 import Recorder from '../components/Recorder'
 import { Mascot } from '../components/Art'
@@ -277,6 +278,7 @@ function unsaid(segments) {
 const SEE_WORK = { code: '(My answer is in the code editor.)', whiteboard: '(My answer is on the whiteboard.)' }
 
 function LiveStep({ session, setSession, greeting }) {
+  const { confirm } = useDialogs()
   const [mode, setMode] = useState(answerModePref)
   // Bumped when a question has been asked (and spoken): in speak mode the
   // recorder starts by itself then.
@@ -479,7 +481,12 @@ function LiveStep({ session, setSession, greeting }) {
   }
 
   async function skip() {
-    if (!window.confirm('Skip this question? It will be listed as unanswered in your report.')) return
+    const ok = await confirm({
+      title: 'Skip this question?',
+      message: 'It will be listed as unanswered in your report.',
+      confirmLabel: 'Skip question',
+    })
+    if (!ok) return
     setPhase('thinking')
     try {
       await control('skip')
@@ -575,7 +582,13 @@ function LiveStep({ session, setSession, greeting }) {
   }
 
   async function endEarly() {
-    if (!window.confirm('End the interview now?')) return
+    const ok = await confirm({
+      title: 'End the interview now?',
+      message: 'The interview stops here and can’t be picked up again.',
+      confirmLabel: 'End interview',
+      danger: true,
+    })
+    if (!ok) return
     stopSpeaking()
     setSession((await api(`/sessions/${session.id}/end`, { method: 'POST' })).session)
   }

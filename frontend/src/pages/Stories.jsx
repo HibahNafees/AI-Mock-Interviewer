@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { IconTile, Mascot } from '../components/Art'
+import { useDialogs } from '../components/ConfirmDialog'
 import { api } from '../lib/api'
 
 const PARTS = [
@@ -120,6 +121,7 @@ function StoryEditor({ story, onSave, onCancel }) {
 
 function StoryCard({ story, onChange, onDelete }) {
   const [editing, setEditing] = useState(false)
+  const { confirm, notify } = useDialogs()
 
   async function save(body) {
     const data = await api(`/stories/${story.id}`, { method: 'PUT', body })
@@ -128,9 +130,17 @@ function StoryCard({ story, onChange, onDelete }) {
   }
 
   async function remove() {
-    if (!window.confirm(`Delete "${story.title}" from your story bank?`)) return
-    await api(`/stories/${story.id}`, { method: 'DELETE' })
+    const deleted = await confirm({
+      title: 'Delete this story?',
+      message: `“${story.title}” will be removed from your story bank. This can’t be undone.`,
+      confirmLabel: 'Delete',
+      busyLabel: 'Deleting…',
+      danger: true,
+      onConfirm: () => api(`/stories/${story.id}`, { method: 'DELETE' }),
+    })
+    if (!deleted) return
     onDelete(story.id)
+    notify('Story deleted')
   }
 
   return (

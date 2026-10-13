@@ -1,9 +1,31 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { HeroScene, IconTile, Mascot } from '../components/Art'
+import { useDialogs } from '../components/ConfirmDialog'
 import ScoreChart from '../components/ScoreChart'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+
+// "Your interviews" shows this many when collapsed; the choice is kept per browser (T-137).
+const COLLAPSED_COUNT = 3
+const LIST_KEY = 'mi_interviews_expanded'
+
+function listExpandedPref() {
+  try {
+    return localStorage.getItem(LIST_KEY) !== '0'
+  } catch {
+    return true // Storage unavailable: the full list.
+  }
+}
+
+function setListExpandedPref(expanded) {
+  try {
+    if (expanded) localStorage.removeItem(LIST_KEY)
+    else localStorage.setItem(LIST_KEY, '0')
+  } catch {
+    // Storage unavailable: the choice lasts for this page only.
+  }
+}
 
 const STATUS = {
   planned: ['Plan ready', 'bg-navy-100 text-navy-700'],
@@ -199,7 +221,8 @@ export default function Dashboard() {
   const { user } = useAuth()
   const [sessions, setSessions] = useState([])
   const [stats, setStats] = useState(null)
-  const [deleteError, setDeleteError] = useState('')
+  const [expanded, setExpanded] = useState(listExpandedPref)
+  const { confirm, notify } = useDialogs()
   const [tip] = useState(() => TIPS[Math.floor(Math.random() * TIPS.length)])
   const first = user.name.split(' ')[0]
 
@@ -216,18 +239,26 @@ export default function Dashboard() {
     loadStats()
   }, [])
 
-  async function removeSession(x) {
-    const what = x.role_title || 'this interview'
-    if (!window.confirm(`Delete the interview "${what}"? Its answers and report go with it. This can't be undone.`)) return
-    setDeleteError('')
-    try {
-      await api(`/sessions/${x.id}`, { method: 'DELETE' })
-      setSessions((all) => all.filter((y) => y.id !== x.id))
-      loadStats()
-    } catch (err) {
-      setDeleteError(err.message)
-    }
+  function toggleList(next = !expanded) {
+    setExpanded(next)
+    setListExpandedPref(next)
   }
+
+  async function removeSession(x) {
+    const deleted = await confirm({
+      title: 'Delete this interview?',
+      message: `“${x.role_title || 'Interview'}” and its answers and report will be permanently deleted. This can’t be undone.`,
+      confirmLabel: 'Delete',
+      busyLabel: 'Deleting…',
+      danger: true,
+      onConfirm: () => api(`/sessions/${x.id}`, { method: 'DELETE' }),
+    })
+    if (!deleted) return
+    setSessions((all) => all.filter((y) => y.id !== x.id))
+    notify('Interview deleted')
+    loadStats()
+  }
+
 
   const s = stats
   const hasScores = s?.history?.length > 0
@@ -383,14 +414,31 @@ export default function Dashboard() {
 
       {sessions.length > 0 && (
         <div>
-          <h2 className="text-xl font-bold">Your interviews</h2>
-          {deleteError && (
-            <p role="alert" className="mt-2 text-sm text-red-600">
-              {deleteError}
-            </p>
-          )}
-          <ul className="card mt-3 divide-y divide-line-soft overflow-hidden">
-            {sessions.map((x) => {
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="your-interviews" className="text-xl font-bold">
+              Your interviews
+            </h2>
+            {sessions.length > COLLAPSED_COUNT && (
+              <button
+                type="button"
+                onClick={() => toggleList()}
+                aria-expanded={expanded}
+                aria-controls="interview-list"
+                className="btn-secondary"
+              >
+                {expanded ? 'Show less' : 'Show more'}
+                <span aria-hidden="true" className={`transition ${expanded ? 'rotate-180' : ''}`}>
+                  ▾
+                </span>
+              </button>
+            )}
+          </div>
+          <ul
+            id="interview-list"
+            aria-labelledby="your-interviews"
+            className="card mt-3 divide-y divide-line-soft overflow-hidden"
+          >
+            {(expanded ? sessions : sessions.slice(0, COLLAPSED_COUNT)).map((x) => {
               const [label, color] = MODE_LABEL[x.mode] ?? STATUS[x.status] ?? [x.status, 'bg-slate-100 text-slate-600']
               return (
                 <li key={x.id} className="flex items-center hover:bg-brand-50/60">
@@ -429,6 +477,13 @@ export default function Dashboard() {
               )
             })}
           </ul>
+          {!expanded && sessions.length > COLLAPSED_COUNT && (
+            <div className="mt-3 text-center">
+              <button type="button" onClick={() => toggleList(true)} className="btn-link">
+                Show all ({sessions.length})
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>

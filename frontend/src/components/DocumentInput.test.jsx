@@ -1,7 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render as rtlRender, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DialogProvider } from './ConfirmDialog'
 import DocumentInput from './DocumentInput'
+
+// DocumentInput asks before deleting through the app's dialog provider.
+const render = (ui) => {
+  const out = rtlRender(<DialogProvider>{ui}</DialogProvider>)
+  return { ...out, rerender: (next) => out.rerender(<DialogProvider>{next}</DialogProvider>) }
+}
 
 function respond() {
   const sent = []
@@ -49,7 +56,6 @@ describe('document upload', () => {
 
 describe('saved documents', () => {
   it('deletes the chosen saved job posting and picks the next one', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const deleted = []
     vi.stubGlobal(
       'fetch',
@@ -75,10 +81,11 @@ describe('saved documents', () => {
     await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(1))
     rerender(<DocumentInput kind="job_description" value={1} onChange={onChange} />)
     await userEvent.click(screen.getByRole('button', { name: 'Delete this saved job posting' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }))
     await vi.waitFor(() => expect(onChange).toHaveBeenLastCalledWith(2))
     expect(deleted).toEqual(['/api/documents/1'])
     expect(screen.queryByRole('option', { name: 'Acme backend' })).not.toBeInTheDocument()
-    window.confirm.mockRestore()
+    expect(screen.getByRole('status')).toHaveTextContent('Job posting deleted')
   })
 
   it('saves a document so it is kept past 30 days', async () => {

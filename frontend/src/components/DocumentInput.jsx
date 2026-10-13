@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { useDialogs } from './ConfirmDialog'
 
 const LABELS = { resume: 'Your résumé', job_description: 'Job description' }
 const ICONS = { resume: '📄', job_description: '💼' }
@@ -8,6 +9,7 @@ const ICONS = { resume: '📄', job_description: '💼' }
 // `optional`: nothing is picked until the user picks (onChange(null) = none).
 export default function DocumentInput({ kind, value, onChange, optional = false, hint = '' }) {
   const [docs, setDocs] = useState([])
+  const { confirm, notify } = useDialogs()
   const [mode, setMode] = useState('paste')
   const [text, setText] = useState('')
   const [error, setError] = useState('')
@@ -84,20 +86,21 @@ export default function DocumentInput({ kind, value, onChange, optional = false,
   async function remove() {
     const doc = docs.find((d) => d.id === value)
     if (!doc) return
-    if (!window.confirm(`Delete the saved ${what} "${doc.title}"? Past interview reports stay.`)) return
     setError('')
-    setBusy(true)
-    try {
-      await api(`/documents/${doc.id}`, { method: 'DELETE' })
-      const rest = docs.filter((d) => d.id !== doc.id)
-      setDocs(rest)
-      onChange(optional ? null : (rest[0]?.id ?? null))
-      if (!rest.length) setMode('paste')
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
+    const deleted = await confirm({
+      title: `Delete this saved ${what}?`,
+      message: `“${doc.title}” will be permanently deleted. Past interview reports stay.`,
+      confirmLabel: 'Delete',
+      busyLabel: 'Deleting…',
+      danger: true,
+      onConfirm: () => api(`/documents/${doc.id}`, { method: 'DELETE' }),
+    })
+    if (!deleted) return
+    const rest = docs.filter((d) => d.id !== doc.id)
+    setDocs(rest)
+    onChange(optional ? null : (rest[0]?.id ?? null))
+    if (!rest.length) setMode('paste')
+    notify(`${what[0].toUpperCase()}${what.slice(1)} deleted`)
   }
 
   const current = docs.find((d) => d.id === value)

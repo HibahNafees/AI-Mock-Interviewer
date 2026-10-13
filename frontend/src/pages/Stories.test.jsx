@@ -97,7 +97,6 @@ describe('story bank', () => {
   })
 
   it('deletes a story after confirming', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     respond({
       'GET /api/auth/me': [200, { user: ADA }],
       'GET /api/stories': [200, { stories: [STORY], coverage: COVERAGE }],
@@ -105,7 +104,9 @@ describe('story bank', () => {
     })
     renderAt('/stories')
     await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }))
     expect(await screen.findByText('No stories yet')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Story deleted')
   })
 
   it('explains the empty bank', async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { IconTile } from '../components/Art'
+import { useDialogs } from '../components/ConfirmDialog'
 import DocumentInput from '../components/DocumentInput'
 import Recorder from '../components/Recorder'
 import { api } from '../lib/api'
@@ -94,6 +95,7 @@ function Item({ n, item, onChange, onRemove, canRemove }) {
 
 export default function Debrief() {
   const navigate = useNavigate()
+  const { confirm, notify } = useDialogs()
   const [role, setRole] = useState('')
   const [company, setCompany] = useState('')
   const [round, setRound] = useState('')
@@ -104,13 +106,17 @@ export default function Debrief() {
   const [busy, setBusy] = useState(false)
 
   async function removeDebrief(d) {
-    if (!window.confirm(`Delete the debrief "${d.role}"? Its report goes with it.`)) return
-    try {
-      await api(`/debriefs/${d.id}`, { method: 'DELETE' })
-      setPast((all) => all.filter((x) => x.id !== d.id))
-    } catch (err) {
-      setError(err.message)
-    }
+    const deleted = await confirm({
+      title: 'Delete this debrief?',
+      message: `“${d.role}” and its report will be permanently deleted. This can’t be undone.`,
+      confirmLabel: 'Delete',
+      busyLabel: 'Deleting…',
+      danger: true,
+      onConfirm: () => api(`/debriefs/${d.id}`, { method: 'DELETE' }),
+    })
+    if (!deleted) return
+    setPast((all) => all.filter((x) => x.id !== d.id))
+    notify('Debrief deleted')
   }
 
   useEffect(() => {
