@@ -3,7 +3,7 @@
 from app.extensions import db
 from app.models import Report
 from app.services.interviewer import INTERRUPTIONS, NO_ANSWER_IN_TIME
-from app.services.pressure import LEVEL_NOTES, RESPECT
+from app.services.pressure import LEVEL_NOTES, NO_PRESSURE_NOTE, RESPECT
 from app.services.scoring import CUT_OFF_SILENT, CUT_OFF_TIP
 
 from tests.fakes import PLAN, SCORE
@@ -302,3 +302,52 @@ def test_cut_off_answer_is_scored_on_what_was_said_with_a_time_tip(
         c["prompt"] for c in fire.calls if "Score one question" in c["prompt"]
     )
     assert '"cut_off": true' in score_prompt
+
+
+MIXED_PLAN = {
+    "sections": [
+        {
+            "name": "Background",
+            "module": "behavioral",
+            "minutes": 8,
+            "questions": ["Tell me about a project you led."],
+        },
+        {
+            "name": "Coding",
+            "module": "coding",
+            "minutes": 12,
+            "questions": ["Write a function that rate-limits each user."],
+        },
+    ],
+    "reserve": [],
+}
+
+
+def test_no_pressure_on_coding_and_design_questions(client, auth, docs, fire):
+    # T-134: "it asks me to write a code in 45 sec or design something in 45 sec".
+    fire.plan = MIXED_PLAN
+    r = create(client, auth, docs, pressure_level=4, duration_min=20)
+    assert r.status_code == 201, r.get_json()
+    s = r.get_json()["session"]
+    plan_prompt = next(
+        c["prompt"] for c in fire.calls if NO_PRESSURE_NOTE in c["prompt"]
+    )
+    assert "pressure interview, level 4" in plan_prompt
+    first = started(client, auth, s["id"])["transcript"][0]["interviewer"]
+    assert first.endswith("You have 45 seconds for this one.")  # behavioral: pressure
+
+    fire.turns = [{"action": "next_question", "message": "Okay."}]
+    turn = answer(client, auth, s["id"], "I led the billing API rebuild at Acme.")
+    coding = turn.get_json()["session"]["transcript"][-1]
+    assert coding["section"] == "Coding"
+    assert "seconds" not in coding["interviewer"]  # no time limit announced
+
+    fire.turns = [{"action": "follow_up", "message": "What about many servers?"}]
+    answer(client, auth, s["id"], "A token bucket per user in a dict.")
+    prompt = next(
+        c["prompt"]
+        for c in reversed(fire.calls)
+        if "live practice interview" in c["prompt"]
+    )
+    assert f"- {LEVEL_NOTES[4]}" not in prompt  # no pushback or curveballs
+    assert f"- {LEVEL_NOTES[1]}" not in prompt

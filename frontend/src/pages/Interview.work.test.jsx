@@ -132,3 +132,36 @@ it('sends the code, then the sketch as text, with the answers', async () => {
   })
   expect(sent.every((b) => !('body' in b))).toBe(true)
 })
+
+// T-134: pressure mode put a 45-second limit on writing code and designing systems.
+it('has no answer time limit on coding or design questions in pressure mode', async () => {
+  localStorage.setItem('mi_answer_mode', 'text')
+  localStorage.setItem('mi_token', 'tok')
+  const pressured = (transcript, section) => ({
+    ...session(transcript, section),
+    mode: 'pressure',
+    pressure: { level: 4, start_level: 4, label: '45 s + curveballs', time_limit_sec: 45 },
+  })
+  const routes = {
+    'GET /api/auth/me': [200, { user: ADA }],
+    'GET /api/sessions/7': [200, { session: pressured([ask(1, 'Coding', 'Rate-limit each user.')], 'Coding') }],
+  }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url, opts = {}) => {
+      const hit = routes[`${opts.method || 'GET'} ${url}`]
+      if (!hit) throw new Error(`unexpected ${url}`)
+      return { ok: hit[0] < 400, status: hit[0], json: async () => hit[1] }
+    }),
+  )
+  render(
+    <MemoryRouter initialEntries={['/interview/7']}>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+  expect(await screen.findByLabelText('Monaco')).toBeInTheDocument()
+  expect(screen.getByText('Pressure level 4')).toBeInTheDocument()
+  expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+})

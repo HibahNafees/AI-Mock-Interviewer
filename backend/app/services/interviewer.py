@@ -696,7 +696,9 @@ def take_turn(
                 **common,
             )
         else:
-            tough = session.persona == "tough" or bool(session.pressure_level)
+            # No pressure on coding or design questions (T-134).
+            pressing = pressure.applies(session, current.section)
+            tough = session.persona == "tough" or pressing
             prompt = render(
                 "interviewer_turn",
                 persona=_persona(session, current.section),
@@ -714,7 +716,7 @@ def take_turn(
                     "\n".join(
                         f"- {n}" for n in pressure.notes(session.pressure_level or 0)
                     )
-                    if session.pressure_level
+                    if pressing
                     else "none"
                 ),
                 history=_history(asked[:-1]),
@@ -740,7 +742,11 @@ def take_turn(
                 out.action = next(a for a in EXITS if a in opts)
         # A tough or pressure interviewer doesn't say thanks (T-97), nor right after
         # cutting them off (T-109); that goes for the fallback line too (T-119).
-        plain = session.persona == "tough" or bool(session.pressure_level) or cut_off
+        plain = (
+            session.persona == "tough"
+            or pressure.applies(session, current.section)
+            or cut_off
+        )
         if scenario is None:
             # In character, praise or agreement is part of the role-play.
             out.message = neutralize(out.message, plain=plain)
@@ -1245,7 +1251,12 @@ def _time_note(session: Session, question: Question | None) -> list[tuple[str, s
     """Pressure mode: announce the answer time limit with each new main question
     (not in a role-play, where it would break the conversation)."""
     line = pressure.time_line(session.pressure_level) if pressure.is_on(session) else ""
-    if not line or question is None or scenario_of(session, question.section):
+    if (
+        not line
+        or question is None
+        or scenario_of(session, question.section)
+        or not pressure.applies(session, question.section)  # T-134
+    ):
         return []
     return [(INTERVIEWER, line)]
 

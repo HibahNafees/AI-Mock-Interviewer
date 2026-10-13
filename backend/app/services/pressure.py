@@ -55,7 +55,30 @@ def plan_rule(level: int | None) -> str:
         f"This is a pressure interview, level {level} of 5. "
         + " ".join(notes)
         + " Keep every question fair, job-related and respectful."
+        + NO_PRESSURE_NOTE
     )
+
+
+# Coding and system design questions stay pressure-free: no time limit, no
+# pushback, no tight constraints (T-134: "write code in 45 seconds").
+NO_PRESSURE_MODULES = ("coding", "system_design")
+NO_PRESSURE_NOTE = (
+    " Pressure is for the other sections only: coding problems and system design "
+    "questions stay normal, with no tight time limits or extra constraints."
+)
+
+
+def exempt(session: Session, section: str | None) -> bool:
+    """A coding or system design section: never under pressure."""
+    for s in (session.plan_json or {}).get("sections", []):
+        if s.get("name") == section:
+            return s.get("module") in NO_PRESSURE_MODULES
+    return False
+
+
+def applies(session: Session, section: str | None) -> bool:
+    """Whether pressure applies to a question in this section right now."""
+    return bool(session.pressure_level) and not exempt(session, section)
 
 
 def time_limit(level: int | None) -> int | None:

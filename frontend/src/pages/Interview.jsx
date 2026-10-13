@@ -309,11 +309,13 @@ function LiveStep({ session, setSession, greeting }) {
   const turns = session.transcript.length
   const roleplay = active ? scenarioFor(session.plan, session.timer?.section) : null
   const paused = Boolean(session.timer?.paused)
-  // Pressure mode's per-answer limit (not in small talk, role-plays or Q&A).
+  // Pressure mode's per-answer limit (not in small talk, role-plays or Q&A, and
+  // never on coding or system design questions: T-134).
   const answerLimit =
     session.pressure?.time_limit_sec &&
     !roleplay &&
-    !['Ice-breaker', 'Your questions'].includes(session.transcript.at(-1)?.section)
+    !['Ice-breaker', 'Your questions'].includes(session.transcript.at(-1)?.section) &&
+    !['coding', 'system_design'].includes(moduleOf(session.plan, session.transcript.at(-1)?.section))
       ? session.pressure.time_limit_sec
       : null
   const current = session.transcript.at(-1)

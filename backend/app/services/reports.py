@@ -114,7 +114,8 @@ def threads(session: Session) -> list[Thread]:
                 asked=group,
                 answers={g.id: first[g.id] for g in group if g.id in first},
                 retries=[a for a in rows if a.question_id == q.id and a.attempt_no > 1],
-                timed=pressure.timed(session),
+                timed=pressure.timed(session)
+                and not pressure.exempt(session, q.section),
             )
         )
     return out
@@ -427,7 +428,15 @@ def retry(
             question.section,
             question.budget_sec,
             exchange,
-            [Clip(text, duration_ms, input_mode, pressure.timed(session))],
+            [
+                Clip(
+                    text,
+                    duration_ms,
+                    input_mode,
+                    pressure.timed(session)
+                    and not pressure.exempt(session, question.section),
+                )
+            ],
             question=question.text,
             criteria=criteria or None,
             previous=previous,
