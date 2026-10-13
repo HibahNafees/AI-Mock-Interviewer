@@ -52,7 +52,7 @@ Covers 2026-10-06 (first commit) to 2026-10-13: the API and website are live at 
 | Hosting (planned) | Oracle Cloud Always Free VM (2 cores / 12 GB ARM), Docker Compose, Caddy | Free tier (`SPEC.md`). Oracle refused the sign-up, so this was never used (see §7). |
 | Hosting (actual) | The **devbox** server: Docker Compose (db, api, purge) behind **nginx + certbot**; frontend on **Vercel Hobby** | Free. nginx already owned ports 80/443 on the devbox (`docs/DEPLOY.md` §2b, `commit 27501f6`). |
 | Domain / HTTPS | **DuckDNS** (`intervox.duckdns.org`), Let's Encrypt via certbot (Caddy on the Oracle path) | Free subdomain with automatic HTTPS. Microphone access requires HTTPS (`DEPLOY.md`). |
-| Testing | pytest (409 backend tests), Vitest 5 + Testing Library (133 frontend tests), black, ESLint | `CLAUDE.md` convention: every feature gets a test, and Fire is always mocked. Vitest went from version 3 to 5 to clear npm audit findings (**T-54**). |
+| Testing | pytest (410 backend tests), Vitest 5 + Testing Library (135 frontend tests), black, ESLint | `CLAUDE.md` convention: every feature gets a test, and Fire is always mocked. Vitest went from version 3 to 5 to clear npm audit findings (**T-54**). |
 | Evals | `evals/run.py`: AI candidates (strong, weak and rambling) run through the real API with a simulated clock and a budget guard | Measures whether scores separate good answers from weak ones (`commit c8cc4d4`, **T-72–T-75**). |
 | Coordination | `pm` CLI and `orchestration.tickets` on the devbox; a separate "master" agent session deploys | Every problem gets a ticket. Deploys go through a human approval gate (`/home/hibahnafees/CLAUDE.md`). |
 | Optional, not built | LiveKit Agents (real-time voice), Hume EVI (emotion experiment) | Phases 11–12 in `CLAUDE.md`; listed in the spec as optional. |
@@ -134,7 +134,7 @@ The work happened in 7 days with commits: Oct 6 (2 commits), Oct 8 (1), Oct 9 (2
 | 10-12 | Quality passes | Small talk, off-topic steering, coding difficulty per level, debrief fixes, reports that always finish | `1bebc2d`…`2583cca` | T-98–T-106 |
 | 10-12 | Live checks | Results kept in rewrites, time-up cut-in, gap fit, invented links, off-subject stories, pressure tips | `5df3806`…`40c76f4` | T-107–T-116 |
 | 10-12 | Live checks | Praise filter, summaries, "Thanks" after a cut-off, metric words, leaked token, deleted-account tokens, rewrite repairs | `02e9a54`…`0c71871` | T-117–T-130 |
-| 10-13 | User reports | Project report; panel interviews with pressure mode; reverse-mode candidate voice; no pressure on coding and design questions; no "Thanks" in a pressure panel's handover | `7ebe5b8`, `faa5da5`, `f5e2da4`, `e98fdd5`, `0de7d62` | T-132–T-135 |
+| 10-13 | User reports | Project report; panel interviews with pressure mode; reverse-mode candidate voice; no pressure on coding and design questions; no "Thanks" in a pressure panel's handover; delete an interview from the dashboard | `7ebe5b8`, `faa5da5`, `f5e2da4`, `e98fdd5`, `0de7d62`, `c48ba2d` | T-132–T-136 |
 
 Every server deploy after go-live went through a ticket with a deploy plan, a human `pm approve`, and the master agent pulling and rebuilding (§7).
 
@@ -191,6 +191,7 @@ Every server deploy after go-live went through a ticket with a deploy plan, a hu
 - JWT auth with rate limits on login, signup and delete.
 - **Delete my data**: Fire spend is kept in an anonymous tally, and old tokens are refused straight away (**T-125**).
 - Résumés and JDs are deleted after 30 days unless saved (**T-103**).
+- **Delete an interview** from the dashboard after a confirmation prompt; its answers and report go with it, while its Fire spend and story-bank stories stay (**T-136**).
 - Admin usage page (`ADMIN_EMAILS`).
 - Light theme by default with a dark switch (**T-78, T-86**).
 
